@@ -14,6 +14,8 @@ export default defineConfig({
                 'resources/css/filament/admin/theme.css',
                 'resources/css/filament/public/theme.css',
                 'plugins/cesa/rekrutmen/resources/js/app.js',
+                'plugins/cesa/lead/resources/js/public-lead.js',
+                'plugins/cesa/rekrutmen/resources/js/public-man-power.js',
             ],
             refresh: true,
         }),
@@ -22,7 +24,9 @@ export default defineConfig({
     resolve: {
         alias: {
             '@rekrutmen': '/plugins/cesa/rekrutmen/resources/js',
+            '@lead': '/plugins/cesa/lead/resources/js',
         },
     },
 });
+
 
