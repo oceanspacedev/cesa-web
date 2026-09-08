@@ -315,18 +315,21 @@
       v-if="viewMode === 'table'"
       class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
     >
-      <!-- Bulk Selection Action Bar -->
+      <!-- Bulk Selection Action Bar: Clean, modern, unified styling -->
       <div
         v-if="selectedAppIds.length"
-        class="bg-zinc-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs"
+        class="bg-blue-50/70 border-b border-blue-100 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in duration-150"
       >
-        <div class="flex items-center gap-2">
-          <span class="font-semibold">{{ selectedAppIds.length }} pelamar dipilih</span>
-          <span class="text-zinc-500">&bull;</span>
+        <div class="flex items-center gap-2.5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#0c2340] border border-blue-200/80 shadow-2xs">
+            <CheckSquare class="w-3.5 h-3.5 text-blue-600" />
+            <span>{{ selectedAppIds.length }} pelamar dipilih</span>
+          </div>
+          <span class="text-zinc-300">&bull;</span>
           <button
             type="button"
             @click="selectedAppIds = []"
-            class="text-zinc-400 hover:text-white underline cursor-pointer font-medium"
+            class="text-zinc-500 hover:text-zinc-800 text-xs font-medium cursor-pointer transition-colors hover:underline"
           >
             Batalkan pilihan
           </button>
@@ -334,21 +337,20 @@
         <div class="flex items-center gap-2">
           <Button
             type="button"
-            variant="destructive"
+            variant="outline"
             size="xs"
             @click="bulkRejectSelected"
-            class="gap-1.5 h-7"
+            class="gap-1.5 h-7.5 px-2.5 bg-white text-rose-700 border-rose-200 hover:bg-rose-50 hover:border-rose-300 font-medium shadow-2xs cursor-pointer"
             title="Tolak pelamar terpilih"
           >
-            <UserX class="w-3.5 h-3.5" />
+            <UserX class="w-3.5 h-3.5 text-rose-600" />
             <span>Tolak</span>
           </Button>
           <Button
             type="button"
-            variant="default"
             size="xs"
             @click="openBulkNotificationModal"
-            class="bg-zinc-800 hover:bg-zinc-700 text-white gap-1.5 h-7 border border-zinc-700"
+            class="bg-[#0c2340] hover:bg-[#12335c] text-white gap-1.5 h-7.5 px-3 font-semibold shadow-xs cursor-pointer"
           >
             <Send class="w-3.5 h-3.5" />
             <span>Kirim Notifikasi Massal</span>
@@ -1140,277 +1142,410 @@
       class="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
       @click.self="closeNotificationModal"
     >
-      <div class="bg-white rounded-xl border border-zinc-200 w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col my-6 max-h-[95vh]">
-        <!-- Modal Header -->
-        <div class="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-white sticky top-0 z-10">
-          <div>
-            <h3 class="text-sm font-semibold text-zinc-900">
-              {{ isBulkMode ? 'Kirim Notifikasi Massal' : 'Kirim Undangan / Notifikasi' }}
-            </h3>
-            <p class="text-xs text-zinc-500 mt-0.5">
-              <template v-if="isBulkMode">
-                Target: <strong class="text-zinc-900">{{ selectedAppIds.length }} Pelamar</strong> &bull; Pesan otomatis dipersonalisasi per pelamar
-              </template>
-              <template v-else>
-                Penerima: <strong class="text-zinc-900">{{ sendEmailModalApp.full_name }}</strong>
-                <span v-if="sendEmailModalApp.email" class="text-zinc-500"> ({{ sendEmailModalApp.email }})</span>
-                <span class="text-zinc-300 mx-2">|</span>
-                <span v-if="sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone" class="text-emerald-700 font-medium">WA: {{ sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone }}</span>
-              </template>
-            </p>
+      <!-- Modal Notification: Unified, Modern, Cohesive Design -->
+      <div class="bg-white rounded-2xl border border-zinc-200/90 w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col my-4 max-h-[92vh]">
+        <!-- 1. Modal Header -->
+        <div class="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-white sticky top-0 z-20">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-[#0c2340] text-white flex items-center justify-center shadow-xs shrink-0">
+              <Send class="w-4 h-4" />
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-bold text-zinc-900">
+                  {{ isBulkMode ? 'Kirim Notifikasi Massal' : 'Kirim Undangan / Notifikasi' }}
+                </h3>
+                <span v-if="isBulkMode" class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+                  {{ selectedAppIds.length }} Pelamar
+                </span>
+                <span v-else class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                  1 Penerima
+                </span>
+              </div>
+              <p class="text-xs text-zinc-500 mt-0.5">
+                <template v-if="isBulkMode">
+                  Pesan otomatis dipersonalisasi sesuai profil & jadwal masing-masing pelamar
+                </template>
+                <template v-else>
+                  Penerima: <strong class="text-zinc-800">{{ sendEmailModalApp.full_name }}</strong>
+                  <span v-if="sendEmailModalApp.email" class="text-zinc-400"> ({{ sendEmailModalApp.email }})</span>
+                  <span v-if="sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone" class="text-emerald-600 font-medium ml-1.5">• WA: {{ sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone }}</span>
+                </template>
+              </p>
+            </div>
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
+
+          <button
             type="button"
             @click="closeNotificationModal"
-            class="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-900"
+            class="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
             title="Tutup"
           >
             <X class="w-4 h-4" />
-          </Button>
+          </button>
         </div>
 
-        <!-- Modal Body (Scrollable) -->
-        <div class="p-6 space-y-4 text-xs overflow-y-auto flex-1 no-scrollbar">
-          <!-- Kanal Pengiriman -->
-          <div class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Kanal Pengiriman</label>
-            <div class="border border-zinc-200 rounded-lg bg-white flex flex-wrap sm:flex-nowrap items-center divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 text-xs">
-              <!-- Email Checkbox -->
-              <label class="flex-1 flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-zinc-50 transition-colors select-none">
+        <!-- 2. Modal Body (Scrollable with clean spacing) -->
+        <div class="p-6 space-y-4 text-xs overflow-y-auto flex-1">
+          
+          <!-- Section 1: Saluran & Waktu Pengiriman -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-zinc-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+                Saluran & Waktu Pengiriman
+              </span>
+              <!-- Kirim: Langsung vs Jadwalkan (Segmented Switch) -->
+              <div class="inline-flex p-0.5 bg-zinc-200/70 rounded-lg text-[11px] font-medium">
+                <button
+                  type="button"
+                  @click="sendType = 'immediate'"
+                  :class="[
+                    'px-2.5 py-1 rounded-md transition-all cursor-pointer select-none',
+                    sendType === 'immediate' ? 'bg-white text-zinc-900 shadow-2xs font-semibold' : 'text-zinc-600 hover:text-zinc-900'
+                  ]"
+                >
+                  ⚡ Langsung
+                </button>
+                <button
+                  type="button"
+                  @click="sendType = 'scheduled'"
+                  :class="[
+                    'px-2.5 py-1 rounded-md transition-all cursor-pointer select-none',
+                    sendType === 'scheduled' ? 'bg-white text-zinc-900 shadow-2xs font-semibold' : 'text-zinc-600 hover:text-zinc-900'
+                  ]"
+                >
+                  ⏰ Jadwalkan
+                </button>
+              </div>
+            </div>
+
+            <!-- Delivery Channel Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- Card Email -->
+              <label 
+                :class="[
+                  'relative border rounded-xl p-3 flex items-start gap-3 cursor-pointer transition-all select-none',
+                  selectedChannels.includes('email') 
+                    ? 'border-[#0c2340] bg-white shadow-2xs' 
+                    : 'border-zinc-200 bg-white/70 hover:border-zinc-300'
+                ]"
+              >
                 <input
                   type="checkbox"
                   value="email"
                   v-model="selectedChannels"
-                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-4 h-4 cursor-pointer"
+                  class="sr-only"
                 />
-                <Mail class="w-4 h-4 text-zinc-500" />
-                <span class="font-medium text-zinc-800">Email (Surat Resmi)</span>
+                <div 
+                  :class="[
+                    'w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-colors shrink-0',
+                    selectedChannels.includes('email') ? 'bg-[#0c2340] border-[#0c2340] text-white' : 'border-zinc-300 bg-white'
+                  ]"
+                >
+                  <CheckSquare v-if="selectedChannels.includes('email')" class="w-3.5 h-3.5" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <Mail class="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span class="font-bold text-zinc-900 text-xs">Email (Surat Resmi)</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Format surat HTML resmi dengan lampiran & logo perusahaan.
+                  </p>
+                </div>
               </label>
 
-              <!-- WhatsApp Checkbox -->
-              <label class="flex-1 flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-zinc-50 transition-colors select-none">
+              <!-- Card WhatsApp -->
+              <label 
+                :class="[
+                  'relative border rounded-xl p-3 flex items-start gap-3 cursor-pointer transition-all select-none',
+                  selectedChannels.includes('whatsapp') 
+                    ? 'border-emerald-600 bg-white shadow-2xs' 
+                    : 'border-zinc-200 bg-white/70 hover:border-zinc-300'
+                ]"
+              >
                 <input
                   type="checkbox"
                   value="whatsapp"
                   v-model="selectedChannels"
-                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-4 h-4 cursor-pointer"
+                  class="sr-only"
                 />
-                <svg class="w-4 h-4 text-[#25D366] shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                </svg>
-                <span class="font-medium text-zinc-800">WhatsApp</span>
+                <div 
+                  :class="[
+                    'w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-colors shrink-0',
+                    selectedChannels.includes('whatsapp') ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'
+                  ]"
+                >
+                  <CheckSquare v-if="selectedChannels.includes('whatsapp')" class="w-3.5 h-3.5" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-[#25D366] shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                    </svg>
+                    <span class="font-bold text-zinc-900 text-xs">WhatsApp Message</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Pesan instan langsung ke nomor WhatsApp masing-masing pelamar.
+                  </p>
+                </div>
               </label>
+            </div>
 
-              <!-- Kirim: Langsung vs Jadwalkan -->
-              <div class="px-4 py-2.5 flex items-center gap-3.5 bg-white shrink-0">
-                <span class="font-medium text-zinc-600 text-xs">Kirim:</span>
-                <label class="inline-flex items-center gap-1.5 cursor-pointer text-zinc-800 text-xs font-medium select-none">
-                  <input
-                    type="radio"
-                    value="immediate"
-                    v-model="sendType"
-                    name="modal_send_type"
-                    class="accent-zinc-900 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>Langsung</span>
-                </label>
-                <label class="inline-flex items-center gap-1.5 cursor-pointer text-zinc-800 text-xs font-medium select-none">
-                  <input
-                    type="radio"
-                    value="scheduled"
-                    v-model="sendType"
-                    name="modal_send_type"
-                    class="accent-zinc-900 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>Jadwalkan</span>
-                </label>
+            <div v-if="!selectedChannels.length" class="text-rose-600 text-[11px] font-medium">
+              Pilih minimal salah satu saluran pengiriman (Email atau WhatsApp).
+            </div>
+
+            <!-- WhatsApp Account Selector -->
+            <div v-if="selectedChannels.includes('whatsapp')" class="pt-2 border-t border-zinc-200/60 flex items-center justify-between gap-3 flex-wrap">
+              <span class="text-[11px] font-medium text-zinc-600">Nomor Pengirim WhatsApp:</span>
+              <div class="relative flex-1 max-w-sm">
+                <select
+                  v-model="selectedWhatsappAccountId"
+                  class="w-full h-8 bg-white border border-zinc-200 rounded-lg px-2.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 appearance-none pr-8 cursor-pointer"
+                >
+                  <option v-if="!connectedWhatsappAccounts.length" :value="null">Belum ada nomor terhubung (Scan QR di Pengaturan)</option>
+                  <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
+                    {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
+                  </option>
+                </select>
+                <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-            <div v-if="!selectedChannels.length" class="text-rose-600 text-[11px] font-medium px-1">
-              Pilih minimal salah satu kanal pengiriman (Email atau WhatsApp).
+
+            <!-- Scheduled Sending Inputs -->
+            <div v-if="sendType === 'scheduled'" class="pt-2 border-t border-zinc-200/60 flex items-center gap-2.5 flex-wrap">
+              <span class="text-[11px] font-medium text-zinc-600">Jadwal Kirim Otomatis:</span>
+              <input
+                type="date"
+                v-model="scheduleDate"
+                :min="todayDateString"
+                class="h-8 px-2.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 cursor-pointer"
+              />
+              <input
+                type="time"
+                v-model="scheduleTime"
+                class="h-8 px-2.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 cursor-pointer font-mono"
+              />
+              <span class="text-[11px] font-medium text-zinc-500">WIB</span>
             </div>
           </div>
 
-          <div v-if="selectedChannels.includes('whatsapp')" class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Kirim dari nomor WhatsApp</label>
-            <div class="relative">
-              <select
-                v-model="selectedWhatsappAccountId"
-                class="w-full h-9 bg-white border border-zinc-200 rounded-md px-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 appearance-none pr-8 cursor-pointer"
-              >
-                <option v-if="!connectedWhatsappAccounts.length" :value="null">Belum ada nomor terhubung. Scan QR di Pengaturan Rekrutmen.</option>
-                <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
-                  {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
-                </option>
-              </select>
-              <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          <!-- Jadwalkan Pengiriman Inputs (Horizontal Integrated Bar) -->
-          <div v-if="sendType === 'scheduled'" class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Jadwalkan Pengiriman</label>
-            <div class="border border-zinc-200 rounded-lg bg-white overflow-hidden text-xs">
-              <div class="flex flex-wrap sm:flex-nowrap items-center divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
-                <!-- Date Input -->
-                <div class="flex items-center gap-2 px-3 py-2 flex-1 min-w-[200px]">
-                  <span class="text-zinc-500 whitespace-nowrap text-xs">Kirim otomatis pada</span>
-                  <input
-                    type="date"
-                    v-model="scheduleDate"
-                    :min="todayDateString"
-                    class="bg-transparent text-xs text-zinc-900 focus:outline-none cursor-pointer flex-1"
-                  />
-                </div>
-
-                <!-- Time Input -->
-                <div class="flex items-center gap-2 px-3 py-2 flex-1 min-w-[140px]">
-                  <span class="text-zinc-500 whitespace-nowrap text-xs">Pukul</span>
-                  <input
-                    type="time"
-                    v-model="scheduleTime"
-                    class="bg-transparent text-xs text-zinc-900 focus:outline-none cursor-pointer flex-1"
-                  />
-                </div>
-
-                <!-- Timezone Selector -->
-                <div class="relative flex-1 px-3 py-2">
-                  <select class="w-full bg-transparent text-xs text-zinc-800 focus:outline-none cursor-pointer">
-                    <option value="WIB">WIB (UTC+07:00)</option>
-                    <option value="WITA">WITA (UTC+08:00)</option>
-                    <option value="WIT">WIT (UTC+09:00)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Template Notifikasi (Sesuai Pipeline - New York Style Pills) -->
+          <!-- Section 2: Template Tahapan Pipeline -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <label class="block font-medium text-xs text-zinc-800">Pilih Template Sesuai Tahapan Pipeline</label>
-              <span class="text-[11px] text-zinc-400">Pilihan otomatis mengisi subjek dan draft pesan</span>
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+                Template Sesuai Tahapan Pipeline
+              </span>
+              <span class="text-[11px] text-zinc-400">Otomatis menyusun subjek dan draft pesan</span>
             </div>
-            <div class="flex flex-wrap items-center gap-1.5 p-1.5 bg-zinc-100 rounded-lg border border-zinc-200">
+            
+            <!-- Modern Segmented Tabs -->
+            <div class="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80">
               <button
                 v-for="tpl in pipelineTemplateTabs"
                 :key="tpl.key"
                 type="button"
                 @click="applyEmailTemplate(tpl.key)"
                 :class="[
-                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer select-none flex items-center gap-1.5',
+                  'px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer select-none flex items-center gap-1.5 font-medium',
                   activeEmailTemplateKey === tpl.key
-                    ? 'bg-zinc-900 text-white shadow-2xs font-semibold'
-                    : 'bg-white text-zinc-700 hover:bg-zinc-50 border border-zinc-200'
+                    ? 'bg-[#0c2340] text-white shadow-xs font-semibold'
+                    : 'bg-transparent text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60'
                 ]"
               >
-                <span :class="activeEmailTemplateKey === tpl.key ? 'text-zinc-400' : 'text-zinc-400 font-mono text-[10px]'">{{ tpl.num }}</span>
+                <span :class="activeEmailTemplateKey === tpl.key ? 'text-zinc-300' : 'text-zinc-400 text-[10px] font-mono'">{{ tpl.num }}</span>
                 <span>{{ tpl.label }}</span>
               </button>
             </div>
           </div>
 
-          <!-- Subject Input -->
-          <div>
-            <label class="block font-medium text-xs text-zinc-800 mb-1.5">Subjek Notifikasi</label>
-            <Input
-              type="text"
-              v-model="emailForm.subject"
-              class="h-9 font-medium"
-            />
-          </div>
+          <!-- Section 3: Detail Sesi & Pelaksanaan (Clean Card, Modern Form) -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-zinc-50/50 space-y-3.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <Calendar class="w-3.5 h-3.5 text-zinc-700" />
+                Detail Sesi & Pelaksanaan
+              </span>
 
-          <!-- Body Message Textarea -->
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="block font-medium text-xs text-zinc-800">Isi Pesan Notifikasi</label>
+              <!-- Clean Bulk Individual Schedule Toggle -->
+              <label 
+                v-if="isBulkMode && selectedCandidatesList.length > 1" 
+                class="inline-flex items-center gap-2 cursor-pointer select-none px-2.5 py-1 rounded-lg border border-zinc-200 bg-white hover:border-zinc-300 transition-colors shadow-2xs"
+              >
+                <input
+                  type="checkbox"
+                  v-model="useIndividualSchedules"
+                  @change="onToggleIndividualSchedules"
+                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                />
+                <span class="text-[11.5px] font-semibold text-zinc-800">Atur jam berbeda tiap pelamar</span>
+              </label>
             </div>
-            <textarea
-              ref="bodyTextareaRef"
-              v-model="emailForm.body_message"
-              rows="7"
-              @input="adjustTextareaHeight"
-              class="w-full bg-white border border-zinc-200 rounded-md p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 leading-relaxed font-sans shadow-2xs transition-colors overflow-y-hidden resize-none"
-              style="min-height: 140px;"
-            ></textarea>
-          </div>
 
-          <!-- Detail Pelaksanaan (Table Form Style) -->
-          <div class="space-y-3">
-            <label class="block font-medium text-xs text-zinc-800">Detail Pelaksanaan</label>
-
-            <div class="border border-zinc-200 rounded-lg overflow-hidden text-xs">
-              <!-- Table Header -->
-              <div class="grid grid-cols-12 bg-zinc-50 border-b border-zinc-200 font-medium text-zinc-600 px-3 py-2">
-                <div class="col-span-4">Item</div>
-                <div class="col-span-8">Keterangan</div>
-              </div>
-
-              <!-- Row 1: Jadwal / Batas Waktu -->
-              <div class="grid grid-cols-12 items-center px-3 py-2 border-b border-zinc-100 gap-2">
-                <div class="col-span-4 font-normal text-zinc-700">Jadwal / Batas Waktu</div>
-                <div class="col-span-8">
+            <!-- Single Global Schedule Input (when individual is NOT enabled) -->
+            <div v-if="!useIndividualSchedules" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Jadwal / Waktu Pelaksanaan</label>
+                <div class="relative">
+                  <Clock class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.schedule"
-                    placeholder="Batas Pengerjaan: 3 hari kerja"
-                    class="h-8 text-xs"
+                    placeholder="Contoh: Selasa, 8 September 2026 pukul 09:00 WIB"
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
 
-              <!-- Row 2: Lokasi / Media -->
-              <div class="grid grid-cols-12 items-center px-3 py-2 gap-2">
-                <div class="col-span-4 font-normal text-zinc-700">Lokasi / Media</div>
-                <div class="col-span-8">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Lokasi / Media</label>
+                <div class="relative">
+                  <MapPin class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.venue_or_method"
-                    placeholder="Online Assessment"
-                    class="h-8 text-xs"
+                    placeholder="Contoh: Online (Google Meet) / Ruang Rapat Lt. 2"
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
             </div>
 
-            <!-- Optional 2-col inputs: Tautan Akses & Catatan Tambahan -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Individual Schedule Table (when enabled in bulk mode) -->
+            <div v-else class="space-y-3">
               <div>
-                <label class="block font-medium text-xs text-zinc-800 mb-1.5">Tautan Akses (Opsional)</label>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Lokasi / Media</label>
+                <div class="relative">
+                  <MapPin class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Input
+                    type="text"
+                    v-model="emailForm.venue_or_method"
+                    placeholder="Contoh: Online (Google Meet) / Ruang Rapat Lt. 2"
+                    class="h-8 pl-8 text-xs bg-white"
+                  />
+                </div>
+              </div>
+
+              <!-- Sleek Candidate Schedule Table -->
+              <div class="border border-zinc-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <div class="bg-zinc-100/70 border-b border-zinc-200 px-3 py-2 flex items-center justify-between text-[11px] font-semibold text-zinc-700">
+                  <span>Nama Pelamar ({{ selectedCandidatesList.length }})</span>
+                  <span>Jadwal / Jam Khusus Pelamar</span>
+                </div>
+                <div class="divide-y divide-zinc-100 max-h-56 overflow-y-auto">
+                  <div
+                    v-for="(cand, idx) in selectedCandidatesList"
+                    :key="cand.id"
+                    class="px-3 py-2 flex items-center justify-between gap-3 text-xs hover:bg-zinc-50/60 transition-colors"
+                  >
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <div class="w-5 h-5 rounded-full bg-zinc-800 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                        {{ idx + 1 }}
+                      </div>
+                      <div class="truncate">
+                        <div class="font-semibold text-zinc-900 truncate">{{ cand.full_name }}</div>
+                        <div class="text-[10px] text-zinc-400 truncate">{{ cand.phone || cand.whatsapp_number || cand.email }}</div>
+                      </div>
+                    </div>
+                    <div class="w-60 shrink-0">
+                      <Input
+                        type="text"
+                        v-if="candidateSchedules[cand.id]"
+                        v-model="candidateSchedules[cand.id].schedule"
+                        :placeholder="`Jam ${cand.full_name}`"
+                        class="h-7 text-xs bg-zinc-50/50 border-zinc-200 focus:bg-white font-medium"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Optional Access Link & Special Note -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Tautan Akses (Opsional)</label>
                 <div class="relative">
                   <Link2 class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="url"
                     v-model="emailForm.action_url"
-                    placeholder="https://..."
-                    class="h-8 pl-8 font-mono text-xs"
+                    placeholder="https://meet.google.com/..."
+                    class="h-8 pl-8 font-mono text-xs bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label class="block font-medium text-xs text-zinc-800 mb-1.5">Catatan Tambahan (Opsional)</label>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Catatan Tambahan (Opsional)</label>
                 <div class="relative">
                   <FileText class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.special_note"
-                    placeholder="Pastikan koneksi stabil..."
-                    class="h-8 pl-8 text-xs"
+                    placeholder="Contoh: Hadir 10 menit lebih awal..."
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- Section 4: Draf Notifikasi (Subjek & Pesan) -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-white space-y-3 shadow-2xs">
+            <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+              Draf Notifikasi
+            </span>
+
+            <!-- Subjek -->
+            <div>
+              <label class="block text-[11px] font-medium text-zinc-700 mb-1">Subjek Notifikasi</label>
+              <Input
+                type="text"
+                v-model="emailForm.subject"
+                placeholder="Subjek email atau ringkasan pesan..."
+                class="h-8 text-xs font-semibold"
+              />
+            </div>
+
+            <!-- Isi Pesan -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                <label class="block text-[11px] font-medium text-zinc-700">Isi Pesan Notifikasi</label>
+                
+                <!-- Variable Chips -->
+                <div class="flex items-center gap-1 flex-wrap">
+                  <span class="text-[10px] text-zinc-400 font-medium">Sisipkan:</span>
+                  <button type="button" @click="insertTag('{nama_pelamar}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {nama_pelamar}</button>
+                  <button type="button" @click="insertTag('{jadwal}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {jadwal}</button>
+                  <button type="button" @click="insertTag('{posisi}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {posisi}</button>
+                  <button type="button" @click="insertTag('{perusahaan}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {perusahaan}</button>
+                  <button type="button" @click="insertTag('{link_aksi}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {link_aksi}</button>
+                </div>
+              </div>
+
+              <textarea
+                ref="bodyTextareaRef"
+                v-model="emailForm.body_message"
+                rows="6"
+                @input="adjustTextareaHeight"
+                class="w-full bg-zinc-50/50 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 leading-relaxed font-sans shadow-2xs transition-all overflow-y-hidden resize-none"
+                style="min-height: 130px;"
+                placeholder="Tulis pesan..."
+              ></textarea>
+            </div>
+          </div>
+
           <!-- Offering Letter PDF Upload -->
-          <div v-if="activeEmailTemplateKey === 'offering'" class="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
+          <div v-if="activeEmailTemplateKey === 'offering'" class="p-4 bg-zinc-50/80 rounded-xl border border-zinc-200/80 space-y-2">
             <div class="flex items-center justify-between">
-              <label class="block font-medium text-xs text-zinc-800 flex items-center gap-1.5">
+              <label class="block font-bold text-xs text-zinc-800 flex items-center gap-1.5">
                 <FileText class="w-3.5 h-3.5 text-zinc-900" />
-                <span>Dokumen Lampiran (PDF)</span>
+                <span>Dokumen Lampiran Offering Letter (PDF)</span>
               </label>
               <span class="text-[10.5px] text-zinc-500">Maks. 15MB &bull; Khusus Email</span>
             </div>
@@ -1452,33 +1587,44 @@
           </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="px-6 py-3.5 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between sticky bottom-0 z-10">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            @click="closeNotificationModal"
-            class="h-8 text-xs"
-          >
-            Batal
-          </Button>
+        <!-- 3. Modal Footer -->
+        <div class="px-6 py-3.5 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between sticky bottom-0 z-20">
+          <div class="text-xs text-zinc-500">
+            <template v-if="isBulkMode">
+              Siap dikirim ke <strong class="text-zinc-800">{{ selectedAppIds.length }} pelamar</strong> terpilih.
+            </template>
+            <template v-else>
+              Penerima: <strong class="text-zinc-800">{{ sendEmailModalApp.full_name }}</strong>
+            </template>
+          </div>
 
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            @click="executeSendNotification"
-            :disabled="isSendingEmail || !selectedChannels.length || (sendType === 'scheduled' && (!scheduleDate || !scheduleTime))"
-            class="h-8 text-xs bg-zinc-900 hover:bg-zinc-800 text-white gap-1.5"
-          >
-            <RotateCw v-if="isSendingEmail" class="w-3.5 h-3.5 animate-spin" />
-            <CalendarClock v-else-if="sendType === 'scheduled'" class="w-3.5 h-3.5" />
-            <Send v-else class="w-3.5 h-3.5" />
-            <span>
-              {{ isSendingEmail ? 'Memproses...' : (sendType === 'scheduled' ? (isBulkMode ? `Jadwalkan untuk ${selectedAppIds.length} Pelamar` : 'Jadwalkan Notifikasi') : (isBulkMode ? `Kirim ke ${selectedAppIds.length} Pelamar` : 'Kirim Notifikasi')) }}
-            </span>
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="closeNotificationModal"
+              class="h-8 text-xs cursor-pointer"
+            >
+              Batal
+            </Button>
+
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              @click="executeSendNotification"
+              :disabled="isSendingEmail || !selectedChannels.length || (sendType === 'scheduled' && (!scheduleDate || !scheduleTime))"
+              class="h-8 text-xs bg-[#0c2340] hover:bg-[#12335c] text-white gap-1.5 cursor-pointer shadow-xs font-semibold"
+            >
+              <RotateCw v-if="isSendingEmail" class="w-3.5 h-3.5 animate-spin" />
+              <CalendarClock v-else-if="sendType === 'scheduled'" class="w-3.5 h-3.5" />
+              <Send v-else class="w-3.5 h-3.5" />
+              <span>
+                {{ isSendingEmail ? 'Memproses...' : (sendType === 'scheduled' ? (isBulkMode ? `Jadwalkan untuk ${selectedAppIds.length} Pelamar` : 'Jadwalkan Notifikasi') : (isBulkMode ? `Kirim ke ${selectedAppIds.length} Pelamar` : 'Kirim Notifikasi')) }}
+              </span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1486,7 +1632,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import Swal from 'sweetalert2';
@@ -1530,6 +1676,16 @@ const selectedChannels = ref(['email', 'whatsapp']);
 const whatsappAccounts = ref([]);
 const selectedWhatsappAccountId = ref(null);
 const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => account.is_active && account.status === 'connected'));
+
+// Individual schedules per candidate state (for bulk notifications)
+const useIndividualSchedules = ref(false);
+const candidateSchedules = ref({});
+
+const selectedCandidatesList = computed(() => {
+  return selectedAppIds.value
+    .map(id => applications.value.find(a => a.id === id))
+    .filter(Boolean);
+});
 
 const isAllSelected = computed(() => {
   if (!filteredApplications.value.length) return false;
@@ -2315,9 +2471,29 @@ const openSendEmailModal = async (app) => {
   applyEmailTemplate(defaultKey);
 };
 
+const onToggleIndividualSchedules = () => {
+  if (useIndividualSchedules.value) {
+    const map = {};
+    const baseSchedule = emailForm.value.schedule || '';
+    selectedAppIds.value.forEach((id, idx) => {
+      const hour = 8 + idx;
+      const defaultTime = `${String(hour).padStart(2, '0')}:00 WIB`;
+      map[id] = {
+        schedule: candidateSchedules.value[id]?.schedule || baseSchedule || defaultTime,
+        action_url: '',
+        venue_or_method: '',
+      };
+    });
+    candidateSchedules.value = map;
+  }
+};
+
 const openBulkNotificationModal = async () => {
   if (!selectedAppIds.value.length) return;
   isBulkMode.value = true;
+  useIndividualSchedules.value = false;
+  candidateSchedules.value = {};
+
   sendType.value = 'immediate';
   scheduleDate.value = todayDateString.value;
   const nextHour = new Date();
@@ -2345,6 +2521,8 @@ const openBulkNotificationModal = async () => {
 const closeNotificationModal = () => {
   sendEmailModalApp.value = null;
   isBulkMode.value = false;
+  useIndividualSchedules.value = false;
+  candidateSchedules.value = {};
   sendType.value = 'immediate';
   scheduleDate.value = '';
   scheduleTime.value = '';
@@ -2513,6 +2691,10 @@ const executeSendNotification = async () => {
       selectedAppIds.value.forEach((id) => {
         formData.append('application_ids[]', id);
       });
+
+      if (useIndividualSchedules.value) {
+        formData.append('candidate_schedules', JSON.stringify(candidateSchedules.value));
+      }
 
       const res = await axios.post('/rekrutmen/api/applications/bulk-send-notification', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

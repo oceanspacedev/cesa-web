@@ -85,17 +85,17 @@ class CandidateWhatsAppNotifier
             $actionUrl = 'https://'.$actionUrl;
         }
 
-        $body = $data['body_message'] ?? '';
-        $body = str_replace(
-            ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-            [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
-            $body
-        );
-
         $schedule = trim($data['schedule'] ?? '');
         $venueOrMethod = trim($data['venue_or_method'] ?? '');
         $actionLabel = trim($data['action_label'] ?? '');
         $specialNote = trim($data['special_note'] ?? '');
+
+        $body = $data['body_message'] ?? '';
+        $body = str_replace(
+            ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}', '{jadwal}', '{schedule}'],
+            [$candidateName, $jobTitle, $companyName, $location, $actionUrl, $schedule, $schedule],
+            $body
+        );
 
         $lines = [];
         $lines[] = "Halo *{$candidateName}*,";

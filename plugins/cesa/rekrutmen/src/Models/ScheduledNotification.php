@@ -34,6 +34,7 @@ class ScheduledNotification extends Model
         'subject',
         'body_message',
         'schedule',
+        'candidate_schedules',
         'venue_or_method',
         'action_url',
         'action_label',
@@ -60,6 +61,7 @@ class ScheduledNotification extends Model
         return [
             'application_ids'      => 'array',
             'channels'             => 'array',
+            'candidate_schedules'  => 'array',
             'whatsapp_account_id'  => 'integer',
             'results'              => 'array',
             'scheduled_at'         => 'datetime',

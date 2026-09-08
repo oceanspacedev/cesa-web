@@ -91,6 +91,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 '2026_09_03_140000_rekrutmen_create_mail_settings_table',
                 '2026_09_03_140100_rekrutmen_create_whatsapp_gateway_tables',
                 '2026_09_03_140200_rekrutmen_add_whatsapp_account_id_to_scheduled_notifications_table',
+                '2026_09_08_000001_rekrutmen_add_candidate_schedules_to_scheduled_notifications_table',
             ])
             ->runsMigrations()
             ->runsSeeders()

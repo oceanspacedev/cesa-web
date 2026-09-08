@@ -49,20 +49,21 @@ class ScheduledNotificationService
             'whatsapp_account_id'  => isset($data['whatsapp_account_id']) && is_numeric($data['whatsapp_account_id'])
                 ? (int) $data['whatsapp_account_id']
                 : null,
-            'subject'          => (string) ($data['subject'] ?? ''),
-            'body_message'     => (string) ($data['body_message'] ?? ''),
-            'schedule'         => $data['schedule'] ?? null,
-            'venue_or_method'  => $data['venue_or_method'] ?? null,
-            'action_url'       => $data['action_url'] ?? null,
-            'action_label'     => $data['action_label'] ?? null,
-            'special_note'     => $data['special_note'] ?? null,
-            'badge_text'       => $data['badge_text'] ?? 'Notifikasi Rekrutmen',
-            'info_box_title'   => $data['info_box_title'] ?? 'Detail Informasi',
-            'attachment_path'  => $attachmentPath,
-            'attachment_name'  => $attachmentName,
-            'attachment_mime'  => $attachmentMime,
-            'scheduled_at'     => $scheduledAt,
-            'status'           => ScheduledNotification::STATUS_PENDING,
+            'subject'              => (string) ($data['subject'] ?? ''),
+            'body_message'         => (string) ($data['body_message'] ?? ''),
+            'schedule'             => $data['schedule'] ?? null,
+            'candidate_schedules'  => $data['candidate_schedules'] ?? null,
+            'venue_or_method'      => $data['venue_or_method'] ?? null,
+            'action_url'           => $data['action_url'] ?? null,
+            'action_label'         => $data['action_label'] ?? null,
+            'special_note'         => $data['special_note'] ?? null,
+            'badge_text'           => $data['badge_text'] ?? 'Notifikasi Rekrutmen',
+            'info_box_title'       => $data['info_box_title'] ?? 'Detail Informasi',
+            'attachment_path'      => $attachmentPath,
+            'attachment_name'      => $attachmentName,
+            'attachment_mime'      => $attachmentMime,
+            'scheduled_at'         => $scheduledAt,
+            'status'               => ScheduledNotification::STATUS_PENDING,
         ]);
 
         // If scheduled time has already passed or is right now, execute immediately
@@ -114,26 +115,41 @@ class ScheduledNotificationService
             $attachmentRealPath = Storage::disk('local')->path($notification->attachment_path);
         }
 
+        $candidateSchedules = is_array($notification->candidate_schedules) ? $notification->candidate_schedules : [];
+
         foreach ($applications as $application) {
             $candidateName = $application->full_name;
             $jobTitle = $application->jobPosting?->title ?? ($application->position ?? 'Lowongan Kerja');
             $companyName = 'OCEAN SPACE';
             $location = $application->jobPosting?->location ?? 'Indonesia';
 
+            $appCustom = $candidateSchedules[$application->id] ?? $candidateSchedules[(string) $application->id] ?? null;
+
+            $appSchedule = is_array($appCustom)
+                ? ($appCustom['schedule'] ?? $notification->schedule)
+                : (is_string($appCustom) && ! empty($appCustom) ? $appCustom : $notification->schedule);
+
+            $appVenue = is_array($appCustom) && ! empty($appCustom['venue_or_method'])
+                ? $appCustom['venue_or_method']
+                : $notification->venue_or_method;
+
             $actionUrl = trim($notification->action_url ?? '');
+            if (is_array($appCustom) && ! empty($appCustom['action_url'])) {
+                $actionUrl = trim($appCustom['action_url']);
+            }
             if (! empty($actionUrl) && ! str_starts_with($actionUrl, 'http://') && ! str_starts_with($actionUrl, 'https://')) {
                 $actionUrl = 'https://'.$actionUrl;
             }
 
             $subject = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}'],
-                [$candidateName, $jobTitle, $companyName, $location],
+                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{jadwal}', '{schedule}'],
+                [$candidateName, $jobTitle, $companyName, $location, (string) $appSchedule, (string) $appSchedule],
                 $notification->subject
             );
 
             $bodyMessage = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-                [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
+                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}', '{jadwal}', '{schedule}'],
+                [$candidateName, $jobTitle, $companyName, $location, $actionUrl, (string) $appSchedule, (string) $appSchedule],
                 $notification->body_message
             );
 
@@ -149,8 +165,8 @@ class ScheduledNotificationService
                 $waResult = $waNotifier->send($application, [
                     'subject'              => $subject,
                     'body_message'         => $bodyMessage,
-                    'schedule'             => $notification->schedule,
-                    'venue_or_method'      => $notification->venue_or_method,
+                    'schedule'             => $appSchedule,
+                    'venue_or_method'      => $appVenue,
                     'action_url'           => $actionUrl,
                     'action_label'         => $notification->action_label,
                     'special_note'         => $notification->special_note,
@@ -178,11 +194,11 @@ class ScheduledNotificationService
                     if (! empty($location)) {
                         $infoItems[] = ['label' => 'Penempatan', 'value' => $location];
                     }
-                    if (! empty($notification->schedule)) {
-                        $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $notification->schedule];
+                    if (! empty($appSchedule)) {
+                        $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $appSchedule];
                     }
-                    if (! empty($notification->venue_or_method)) {
-                        $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $notification->venue_or_method];
+                    if (! empty($appVenue)) {
+                        $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $appVenue];
                     }
                     if (! empty($actionUrl)) {
                         $infoItems[] = ['label' => 'Tautan / Link Akses', 'value' => $actionUrl];

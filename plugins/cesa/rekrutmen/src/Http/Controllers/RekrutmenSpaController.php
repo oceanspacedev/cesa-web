@@ -2586,10 +2586,11 @@ PROMPT;
                 $candidateName = $application->full_name;
                 $companyName = 'OCEAN SPACE';
                 $location = $application->jobPosting?->location ?? 'Indonesia';
+                $singleSchedule = (string) $request->input('schedule', '');
 
                 $subject = str_replace(
-                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}'],
-                    [$candidateName, $jobTitle, $companyName, $location],
+                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{jadwal}', '{schedule}'],
+                    [$candidateName, $jobTitle, $companyName, $location, $singleSchedule, $singleSchedule],
                     $request->input('subject')
                 );
 
@@ -2599,8 +2600,8 @@ PROMPT;
                 }
 
                 $bodyMessage = str_replace(
-                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-                    [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
+                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}', '{jadwal}', '{schedule}'],
+                    [$candidateName, $jobTitle, $companyName, $location, $actionUrl, $singleSchedule, $singleSchedule],
                     $request->input('body_message')
                 );
 
@@ -2676,15 +2677,19 @@ PROMPT;
             }
         }
 
+        $allSuccessful = $hasSuccess && ! in_array(false, array_column($results, 'success'), true);
+        $anySuccessful = $hasSuccess;
+
         return response()->json([
-            'success'   => $hasSuccess,
-            'message'   => implode(' | ', $messages),
+            'success'   => $anySuccessful,
+            'message'   => implode(' • ', $messages),
             'results'   => $results,
+            'full_text' => $results['whatsapp']['full_message'] ?? null,
             'new_stage' => $newStage ? [
                 'id'   => $newStage->id,
                 'name' => $newStage->name,
             ] : null,
-        ], $hasSuccess ? 200 : 422);
+        ], $anySuccessful ? 200 : 422);
     }
 
     /**
@@ -2693,13 +2698,14 @@ PROMPT;
     public function bulkSendCandidateNotification(Request $request): JsonResponse
     {
         $request->validate([
-            'application_ids'   => 'required|array|min:1',
-            'application_ids.*' => 'integer',
-            'channels'          => 'required|array|min:1',
-            'subject'           => 'required|string|max:255',
-            'body_message'      => 'required|string',
-            'send_type'         => 'nullable|string|in:immediate,scheduled',
-            'scheduled_at'      => 'required_if:send_type,scheduled|nullable|date',
+            'application_ids'     => 'required|array|min:1',
+            'application_ids.*'   => 'integer',
+            'channels'            => 'required|array|min:1',
+            'subject'             => 'required|string|max:255',
+            'body_message'        => 'required|string',
+            'candidate_schedules' => 'nullable',
+            'send_type'           => 'nullable|string|in:immediate,scheduled',
+            'scheduled_at'        => 'required_if:send_type,scheduled|nullable|date',
         ]);
 
         $applications = JobApplication::with(['jobPosting', 'currentStage'])
@@ -2718,9 +2724,21 @@ PROMPT;
             $this->autoAdvanceApplicationStage($app, $templateKey);
         }
 
+        $candidateSchedules = $request->input('candidate_schedules', []);
+        if (is_string($candidateSchedules)) {
+            $decoded = json_decode($candidateSchedules, true);
+            if (is_array($decoded)) {
+                $candidateSchedules = $decoded;
+            }
+        }
+
         if ($request->input('send_type') === 'scheduled') {
+            $schedulePayload = array_merge($request->all(), [
+                'candidate_schedules' => $candidateSchedules,
+            ]);
+
             $scheduledNotification = app(ScheduledNotificationService::class)->schedule(
-                $request->all(),
+                $schedulePayload,
                 $request->hasFile('attachment') ? $request->file('attachment') : null,
                 auth()->id()
             );
@@ -2762,20 +2780,33 @@ PROMPT;
             $companyName = 'OCEAN SPACE';
             $location = $application->jobPosting?->location ?? 'Indonesia';
 
+            $appCustom = $candidateSchedules[$application->id] ?? $candidateSchedules[(string) $application->id] ?? null;
+
+            $appSchedule = is_array($appCustom)
+                ? ($appCustom['schedule'] ?? $request->input('schedule'))
+                : (is_string($appCustom) && ! empty($appCustom) ? $appCustom : $request->input('schedule'));
+
+            $appVenue = is_array($appCustom) && ! empty($appCustom['venue_or_method'])
+                ? $appCustom['venue_or_method']
+                : $request->input('venue_or_method');
+
             $actionUrl = trim($request->input('action_url', ''));
+            if (is_array($appCustom) && ! empty($appCustom['action_url'])) {
+                $actionUrl = trim($appCustom['action_url']);
+            }
             if (! empty($actionUrl) && ! str_starts_with($actionUrl, 'http://') && ! str_starts_with($actionUrl, 'https://')) {
                 $actionUrl = 'https://'.$actionUrl;
             }
 
             $subject = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}'],
-                [$candidateName, $jobTitle, $companyName, $location],
+                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{jadwal}', '{schedule}'],
+                [$candidateName, $jobTitle, $companyName, $location, (string) $appSchedule, (string) $appSchedule],
                 $request->input('subject')
             );
 
             $bodyMessage = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-                [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
+                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}', '{jadwal}', '{schedule}'],
+                [$candidateName, $jobTitle, $companyName, $location, $actionUrl, (string) $appSchedule, (string) $appSchedule],
                 $request->input('body_message')
             );
 
@@ -2794,9 +2825,11 @@ PROMPT;
             // 1. WhatsApp
             if (in_array('whatsapp', $channels, true)) {
                 $waResult = $waNotifier->send($application, array_merge($request->all(), [
-                    'subject'      => $subject,
-                    'body_message' => $bodyMessage,
-                    'action_url'   => $actionUrl,
+                    'subject'         => $subject,
+                    'body_message'    => $bodyMessage,
+                    'schedule'        => $appSchedule,
+                    'venue_or_method' => $appVenue,
+                    'action_url'      => $actionUrl,
                 ]));
 
                 if ($waResult['success']) {
@@ -2820,11 +2853,11 @@ PROMPT;
                     if (! empty($location)) {
                         $infoItems[] = ['label' => 'Penempatan', 'value' => $location];
                     }
-                    if ($request->filled('schedule')) {
-                        $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $request->input('schedule')];
+                    if (! empty($appSchedule)) {
+                        $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $appSchedule];
                     }
-                    if ($request->filled('venue_or_method')) {
-                        $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $request->input('venue_or_method')];
+                    if (! empty($appVenue)) {
+                        $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $appVenue];
                     }
                     if (! empty($actionUrl)) {
                         $infoItems[] = ['label' => 'Tautan / Link Akses', 'value' => $actionUrl];
