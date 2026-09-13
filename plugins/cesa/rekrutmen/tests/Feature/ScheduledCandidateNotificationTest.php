@@ -8,9 +8,12 @@ use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
 use Cesa\Rekrutmen\Models\ScheduledNotification;
+use Cesa\Rekrutmen\Services\ScheduledNotificationService;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
+use Spatie\Permission\Models\Permission;
 use Webkul\Security\Models\User;
 
 class ScheduledCandidateNotificationTest extends RekrutmenTestCase
@@ -18,6 +21,9 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Queue::fake();
+        config(['rekrutmen.notifications.whatsapp.throttle.enabled' => false]);
 
         Mail::fake();
 
@@ -28,6 +34,8 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
     public function test_can_schedule_single_candidate_notification(): void
     {
         $user = User::factory()->create();
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -68,7 +76,7 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
             'schedule'        => 'Senin, 10:00 WIB',
         ]);
 
-        $response->assertOk();
+        $response->assertAccepted();
         $response->assertJson([
             'success'   => true,
             'scheduled' => true,
@@ -87,6 +95,8 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
     public function test_can_schedule_bulk_candidate_notification(): void
     {
         $user = User::factory()->create();
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -135,7 +145,7 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
             'scheduled_at'    => $scheduledTime,
         ]);
 
-        $response->assertOk();
+        $response->assertAccepted();
         $response->assertJson([
             'success'   => true,
             'scheduled' => true,
@@ -190,6 +200,8 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
             ->expectsOutput('Processed 1 scheduled notification batch(es).')
             ->assertSuccessful();
 
+        Http::assertNothingSent();
+        app(ScheduledNotificationService::class)->executeScheduled($scheduled, true);
         $scheduled->refresh();
         $this->assertSame(ScheduledNotification::STATUS_SENT, $scheduled->status);
         $this->assertNotNull($scheduled->sent_at);
@@ -200,6 +212,8 @@ class ScheduledCandidateNotificationTest extends RekrutmenTestCase
     public function test_auto_advances_stage_when_invitation_is_sent(): void
     {
         $user = User::factory()->create();
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);

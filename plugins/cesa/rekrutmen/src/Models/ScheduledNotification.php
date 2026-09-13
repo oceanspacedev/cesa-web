@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Webkul\Security\Models\User;
 use Webkul\Security\Traits\HasNullableCreator;
@@ -22,11 +23,18 @@ class ScheduledNotification extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_PARTIAL = 'partial';
+
+    public const STATUS_UNKNOWN = 'unknown';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $table = 'rekrutmen_scheduled_notifications';
 
     protected $fillable = [
+        'request_key',
+        'payload_hash',
+        'template_key',
         'creator_id',
         'application_ids',
         'channels',
@@ -42,6 +50,7 @@ class ScheduledNotification extends Model
         'badge_text',
         'info_box_title',
         'attachment_path',
+        'attachment_disk',
         'attachment_name',
         'attachment_mime',
         'scheduled_at',
@@ -95,5 +104,10 @@ class ScheduledNotification extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
+    }
+
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(NotificationDelivery::class, 'scheduled_notification_id');
     }
 }

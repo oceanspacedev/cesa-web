@@ -15,6 +15,7 @@ use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Spatie\Permission\Models\Permission;
 use Webkul\Security\Models\User;
 
 class CommunicationGatewayTest extends RekrutmenTestCase
@@ -132,6 +133,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
         ]);
 
         $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_whatsapp', 'web'));
         $this->actingAs($user);
 
         $this->putJson('/rekrutmen/api/settings/whatsapp', [
@@ -152,7 +154,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
         $connect->assertCreated();
         $this->assertSame('qr', $connect->json('data.status'));
         $this->assertSame('data:image/png;base64,qqq', $connect->json('data.qr'));
-        $this->assertSame('1234-5678', $connect->json('data.pairing_code'));
+        $this->assertNull($connect->json('data.pairing_code'));
         $this->assertArrayNotHasKey('api_key', $connect->json('data'));
 
         $accountId = $connect->json('data.id');
@@ -222,6 +224,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
         ]);
 
         $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_whatsapp', 'web'));
         $this->actingAs($user);
 
         $this->postJson('/rekrutmen/api/settings/whatsapp/accounts/'.$account->id.'/test')

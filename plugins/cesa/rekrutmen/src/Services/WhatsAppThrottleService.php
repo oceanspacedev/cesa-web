@@ -2,69 +2,47 @@
 
 namespace Cesa\Rekrutmen\Services;
 
-use Illuminate\Contracts\Cache\LockTimeoutException;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Throwable;
 
 class WhatsAppThrottleService
 {
-    public function getDispatchDelaySeconds(): int
+    public function getDispatchDelaySeconds(?int $accountId = null): int
+    {
+        return $this->reserve($accountId, true);
+    }
+
+    public function acquireSendSlot(int $accountId): int
+    {
+        return $this->reserve($accountId, false);
+    }
+
+    protected function reserve(?int $accountId, bool $reserveFuture): int
     {
         $config = config('rekrutmen.notifications.whatsapp.throttle', []);
+        $minimum = max(0, (int) ($config['min_interval_seconds'] ?? 2));
+        $maximum = max($minimum, (int) ($config['max_interval_seconds'] ?? $minimum));
 
-        if (! Arr::get($config, 'enabled', true)) {
+        if (! ($config['enabled'] ?? true) || $minimum === 0) {
             return 0;
         }
 
-        $minIntervalSeconds = (int) Arr::get($config, 'min_interval_seconds', 0);
-
-        if ($minIntervalSeconds <= 0) {
-            return 0;
-        }
-
-        $maxIntervalSeconds = Arr::has($config, 'max_interval_seconds')
-            ? (int) Arr::get($config, 'max_interval_seconds', 0)
-            : $minIntervalSeconds;
-
-        if ($maxIntervalSeconds <= 0) {
-            $maxIntervalSeconds = $minIntervalSeconds;
-        }
-
-        if ($maxIntervalSeconds < $minIntervalSeconds) {
-            $maxIntervalSeconds = $minIntervalSeconds;
-        }
-
-        $key = (string) Arr::get($config, 'key', 'global');
-
-        $stateKey = sprintf('notifications:whatsapp:throttle:waghub:%s:next_at', $key);
-        $lockKey = $stateKey.':lock';
+        $key = 'rekrutmen:whatsapp:throttle:'.($config['key'] ?? 'global').':'.($accountId ?? 'global');
 
         try {
-            $lock = Cache::lock($lockKey, max(10, $maxIntervalSeconds * 5));
-        } catch (\Throwable) {
-            return 0;
-        }
+            return (int) Cache::lock($key.':lock', 10)->block(1, function () use ($key, $minimum, $maximum, $reserveFuture): int {
+                $current = now()->timestamp;
+                $next = (int) Cache::get($key, 0);
+                $delay = max(0, $next - $current);
 
-        try {
-            return (int) $lock->block(3, function () use ($stateKey, $minIntervalSeconds, $maxIntervalSeconds): int {
-                $nowTimestamp = now()->timestamp;
-                $nextTimestamp = (int) Cache::get($stateKey, 0);
-                $scheduledTimestamp = max($nowTimestamp, $nextTimestamp);
-
-                $intervalSeconds = $minIntervalSeconds;
-
-                if ($maxIntervalSeconds > $minIntervalSeconds) {
-                    $intervalSeconds = random_int($minIntervalSeconds, $maxIntervalSeconds);
+                if ($delay === 0 || $reserveFuture) {
+                    Cache::put($key, max($next, $current) + random_int($minimum, $maximum), 21600);
                 }
 
-                Cache::put($stateKey, $scheduledTimestamp + $intervalSeconds, 21600);
-
-                return max(0, $scheduledTimestamp - $nowTimestamp);
+                return $delay;
             });
-        } catch (LockTimeoutException) {
-            return 0;
-        } catch (\Throwable) {
-            return 0;
+        } catch (Throwable) {
+            return max(3, $minimum);
         }
     }
 }

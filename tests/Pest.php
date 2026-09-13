@@ -1,6 +1,8 @@
 <?php
 
+use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Tests\TestCase;
 
 /*
 |--------------------------------------------------------------------------
@@ -13,10 +15,18 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 |
 */
 
+$pluginFeatureDirectories = array_values(array_filter(
+    glob(dirname(__DIR__).'/plugins/*/*/tests/Feature', GLOB_ONLYDIR) ?: [],
+    fn (string $directory): bool => ! str_contains($directory, '/cesa/rekrutmen/'),
+));
+
 pest()
-    ->extend(Tests\TestCase::class)
+    ->extend(TestCase::class)
     ->use(DatabaseTransactions::class)
-    ->in('Feature', '../plugins/*/*/tests/Feature');
+    ->in('Feature', ...$pluginFeatureDirectories);
+
+pest()->extend(RekrutmenTestCase::class)
+    ->in('../plugins/cesa/rekrutmen/tests/Feature');
 
 /*
 |--------------------------------------------------------------------------

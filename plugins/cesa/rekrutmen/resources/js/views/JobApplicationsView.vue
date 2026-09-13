@@ -77,6 +77,43 @@
       </div>
     </div>
 
+    <section v-if="notificationProgress" aria-label="Progres pengiriman notifikasi" class="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-zinc-900">{{ notificationProgressTitle }}</h2>
+          <p class="text-xs text-zinc-500">Pengiriman #{{ notificationProgress.id }} · {{ notificationProgress.stats?.total || 0 }} pelamar</p>
+        </div>
+        <Button variant="outline" size="sm" @click="refreshNotificationProgress">Perbarui status</Button>
+      </div>
+      <div class="flex flex-wrap gap-3 text-xs text-zinc-700" aria-live="polite">
+        <span>Email terkirim: {{ notificationProgress.stats?.email_success || 0 }}</span>
+        <span>WhatsApp terkirim: {{ notificationProgress.stats?.whatsapp_success || 0 }}</span>
+        <span>Gagal: {{ (notificationProgress.stats?.email_failed || 0) + (notificationProgress.stats?.whatsapp_failed || 0) }}</span>
+        <span>Menunggu: {{ notificationPendingCount }}</span>
+        <span>Belum pasti: {{ notificationUnknownCount }}</span>
+      </div>
+      <p v-if="notificationProgressError" role="status" class="text-xs text-amber-700">{{ notificationProgressError }}</p>
+      <p v-if="notificationUnknownCount" class="text-xs text-amber-700">Sebagian hasil belum dapat dipastikan. Periksa penerimaan pesan sebelum membuat pengiriman baru.</p>
+      <div v-if="notificationProgress.details?.length" class="max-h-64 overflow-auto">
+        <table class="w-full text-left text-xs">
+          <thead><tr><th class="py-2">Pelamar</th><th>Email</th><th>WhatsApp</th></tr></thead>
+          <tbody>
+            <tr v-for="detail in notificationProgress.details" :key="detail.id" class="border-t border-zinc-100">
+              <td class="py-2 pr-3">{{ detail.name }}</td>
+              <td class="py-2 pr-3" :title="detail.email?.message">
+                {{ deliveryStatusLabel(detail.email) }}
+                <span v-if="detail.email?.stage_error" :title="detail.email.stage_error" class="block text-amber-700">Tahapan belum diperbarui</span>
+              </td>
+              <td class="py-2" :title="detail.whatsapp?.message">
+                {{ deliveryStatusLabel(detail.whatsapp) }}
+                <span v-if="detail.whatsapp?.stage_error" :title="detail.whatsapp.stage_error" class="block text-amber-700">Tahapan belum diperbarui</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Floating Toast Notification -->
     <teleport to="body">
       <transition
@@ -1305,7 +1342,7 @@
                   v-model="selectedWhatsappAccountId"
                   class="w-full h-8 bg-white border border-zinc-200 rounded-lg px-2.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 appearance-none pr-8 cursor-pointer"
                 >
-                  <option v-if="!connectedWhatsappAccounts.length" :value="null">Belum ada nomor terhubung (Scan QR di Pengaturan)</option>
+                  <option v-if="!connectedWhatsappAccounts.length" :value="null">Nomor pengirim belum siap; hubungi pengelola WhatsApp</option>
                   <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
                     {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
                   </option>
@@ -1547,7 +1584,7 @@
                 <FileText class="w-3.5 h-3.5 text-zinc-900" />
                 <span>Dokumen Lampiran Offering Letter (PDF)</span>
               </label>
-              <span class="text-[10.5px] text-zinc-500">Maks. 15MB &bull; Khusus Email</span>
+              <span class="text-[10.5px] text-zinc-500">Maks. 10MB &bull; Khusus Email</span>
             </div>
 
             <div v-if="!emailForm.attachment" class="relative border border-dashed border-zinc-300 hover:border-zinc-400 bg-white rounded-lg p-3 text-center cursor-pointer transition-colors group">
@@ -1632,9 +1669,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
+import { createPoller } from '../lib/polling';
+import { createRequestKey } from '../lib/utils';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -1675,7 +1714,56 @@ const isBulkMode = ref(false);
 const selectedChannels = ref(['email', 'whatsapp']);
 const whatsappAccounts = ref([]);
 const selectedWhatsappAccountId = ref(null);
-const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => account.is_active && account.status === 'connected'));
+const whatsappEngineReady = ref(false);
+const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => whatsappEngineReady.value && account.is_active && account.delivery_ready === true));
+const notificationProgress = ref(null);
+const notificationProgressError = ref('');
+let notificationRequest = null;
+const notificationTerminalStatuses = ['sent', 'partial', 'failed', 'unknown', 'cancelled'];
+const notificationPendingCount = computed(() => notificationProgress.value?.stats?.pending ?? ((notificationProgress.value?.stats?.email_pending || 0) + (notificationProgress.value?.stats?.whatsapp_pending || 0)));
+const notificationUnknownCount = computed(() => notificationProgress.value?.stats?.unknown ?? ((notificationProgress.value?.stats?.email_unknown || 0) + (notificationProgress.value?.stats?.whatsapp_unknown || 0)));
+const notificationProgressTitle = computed(() => ({
+  pending: 'Notifikasi dalam antrean', processing: 'Pengiriman sedang diproses', sending: 'Pengiriman sedang diproses',
+  scheduled: 'Notifikasi dijadwalkan', sent: 'Pengiriman selesai', partial: 'Pengiriman selesai sebagian',
+  failed: 'Pengiriman gagal', unknown: 'Hasil pengiriman belum pasti', cancelled: 'Pengiriman dibatalkan',
+}[notificationProgress.value?.status] || 'Menunggu progres pengiriman'));
+const deliveryStatusLabel = (delivery) => {
+  if (!delivery) return 'Tidak dipilih';
+  return { pending: 'Menunggu', processing: 'Diproses', sending: 'Sedang dikirim', sent: 'Terkirim', failed: 'Gagal', unknown: 'Belum pasti', skipped: 'Dilewati', cancelled: 'Dibatalkan' }[delivery.status] || 'Menunggu';
+};
+const notificationPoller = createPoller({
+  maxDuration: 600000,
+  request: async (id, signal) => (await axios.get(`/rekrutmen/api/notifications/${id}`, { signal, timeout: 10000 })).data,
+  onData: (data) => {
+    notificationProgress.value = data;
+    notificationProgressError.value = '';
+    if (notificationTerminalStatuses.includes(data.status)) {
+      store.fetchApplications('', true).catch(() => {});
+      return false;
+    }
+  },
+  onError: (error) => {
+    notificationProgressError.value = error.response?.status === 403
+      ? 'Anda tidak memiliki akses untuk melihat pengiriman ini.'
+      : 'Progres belum dapat dimuat. Tekan Perbarui status untuk memeriksa pengiriman yang sama.';
+    return false;
+  },
+  onTimeout: () => {
+    notificationProgressError.value = 'Pembaruan otomatis dijeda. Pengiriman tetap berjalan; tekan Perbarui status untuk melihat hasil terbaru.';
+  },
+});
+const refreshNotificationProgress = () => {
+  if (!notificationProgress.value?.id) return;
+  notificationProgressError.value = '';
+  notificationPoller.start(notificationProgress.value.id);
+};
+const trackQueuedNotification = (response, total) => {
+  const waitingForSchedule = response.scheduled && !notificationTerminalStatuses.includes(response.status);
+  notificationProgress.value = { id: response.batch_id, status: waitingForSchedule ? 'scheduled' : (response.status || 'pending'), stats: response.stats || { total }, details: response.details || [] };
+  notificationProgressError.value = waitingForSchedule ? 'Pengiriman akan dimulai sesuai jadwal. Perbarui status setelah waktu pengiriman.' : '';
+  notificationPoller.stop();
+  if (!response.scheduled && !notificationTerminalStatuses.includes(response.status)) refreshNotificationProgress();
+};
 
 // Individual schedules per candidate state (for bulk notifications)
 const useIndividualSchedules = ref(false);
@@ -1755,7 +1843,9 @@ onActivated(() => {
 
 onUnmounted(() => {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
+  notificationPoller.stop();
 });
+onDeactivated(() => notificationPoller.stop());
 
 watch(
   () => activeJobId.value,
@@ -2373,11 +2463,11 @@ const handleAttachmentUpload = (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  if (file.size > 15 * 1024 * 1024) {
+  if (file.size > 10 * 1024 * 1024) {
     Swal.fire({
       icon: 'warning',
       title: 'Ukuran File Terlalu Besar',
-      text: 'Maksimal ukuran file dokumen adalah 15MB.',
+      text: 'Maksimal ukuran file dokumen adalah 10MB.',
       confirmButtonColor: '#0c2340',
     });
     return;
@@ -2402,12 +2492,16 @@ const formatFileSize = (bytes) => {
 
 const fetchWhatsappAccounts = async () => {
   try {
-    const res = await axios.get('/rekrutmen/api/settings/whatsapp');
+    const res = await axios.get('/rekrutmen/api/whatsapp/senders');
     whatsappAccounts.value = res.data?.accounts || [];
+    whatsappEngineReady.value = res.data?.engine_ready === true;
     const current = connectedWhatsappAccounts.value.find((account) => account.id === selectedWhatsappAccountId.value);
     const fallback = connectedWhatsappAccounts.value.find((account) => account.is_default) || connectedWhatsappAccounts.value[0];
     selectedWhatsappAccountId.value = current ? current.id : (fallback ? fallback.id : null);
   } catch (err) {
+    whatsappAccounts.value = [];
+    whatsappEngineReady.value = false;
+    selectedWhatsappAccountId.value = null;
     console.error('Failed to fetch WhatsApp accounts', err);
   }
 };
@@ -2437,6 +2531,7 @@ const pipelineTemplateTabs = [
 
 const openSendEmailModal = async (app) => {
   if (!app) return;
+  notificationRequest = null;
   isBulkMode.value = false;
   sendEmailModalApp.value = app;
   sendType.value = 'immediate';
@@ -2490,6 +2585,7 @@ const onToggleIndividualSchedules = () => {
 
 const openBulkNotificationModal = async () => {
   if (!selectedAppIds.value.length) return;
+  notificationRequest = null;
   isBulkMode.value = true;
   useIndividualSchedules.value = false;
   candidateSchedules.value = {};
@@ -2619,7 +2715,7 @@ const insertTag = (tag) => {
 };
 
 const executeSendNotification = async () => {
-  if (!sendEmailModalApp.value) return;
+  if (!sendEmailModalApp.value || isSendingEmail.value) return;
 
   if (!selectedChannels.value.length) {
     Swal.fire({
@@ -2628,6 +2724,11 @@ const executeSendNotification = async () => {
       text: 'Harap centang minimal salah satu kanal: Email atau WhatsApp.',
       confirmButtonColor: '#0c2340',
     });
+    return;
+  }
+
+  if (selectedChannels.value.includes('whatsapp') && !selectedWhatsappAccountId.value) {
+    Swal.fire({ icon: 'warning', title: 'Nomor WhatsApp Belum Siap', text: 'Pilih nomor pengirim yang siap atau gunakan kanal email.', confirmButtonColor: '#0c2340' });
     return;
   }
 
@@ -2687,152 +2788,68 @@ const executeSendNotification = async () => {
       formData.append('attachment', emailForm.value.attachment);
     }
 
-    if (isBulkMode.value) {
-      selectedAppIds.value.forEach((id) => {
-        formData.append('application_ids[]', id);
-      });
+    const fingerprint = JSON.stringify({
+      fields: [...formData.entries()].map(([key, value]) => [key, value instanceof File ? [value.name, value.size, value.lastModified] : value]),
+      applicationIds: isBulkMode.value ? selectedAppIds.value : [sendEmailModalApp.value.id],
+      candidateSchedules: useIndividualSchedules.value ? candidateSchedules.value : null,
+    });
+    if (!notificationRequest || notificationRequest.fingerprint !== fingerprint) {
+      notificationRequest = { fingerprint, key: createRequestKey() };
+    }
+    formData.append('request_key', notificationRequest.key);
 
+    const bulk = isBulkMode.value;
+    const app = sendEmailModalApp.value;
+    const count = bulk ? selectedAppIds.value.length : 1;
+    if (bulk) {
+      selectedAppIds.value.forEach((id) => formData.append('application_ids[]', id));
       if (useIndividualSchedules.value) {
         formData.append('candidate_schedules', JSON.stringify(candidateSchedules.value));
       }
-
-      const res = await axios.post('/rekrutmen/api/applications/bulk-send-notification', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      const deliveryTimeStr = res.data.formatted_scheduled_at || schedulePreviewText.value;
-      isSendingEmail.value = false;
-      const count = selectedAppIds.value.length;
-      selectedAppIds.value = [];
-      closeNotificationModal();
-
-      // Refresh applications immediately so stage changes reflect in Table & Kanban
-      await store.fetchApplications('', false).catch(() => {});
-
-      if (res.data.scheduled) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Massal Berhasil Dijadwalkan',
-          html: `
-            <div class="text-xs text-slate-600 mt-2 space-y-3">
-              <p class="text-slate-700">Notifikasi untuk <strong>${count} pelamar terpilih</strong> akan dikirim secara otomatis pada:</p>
-              <div class="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-50 text-blue-700 font-semibold rounded-lg border border-blue-100 text-xs shadow-2xs">
-                <span>📅</span>
-                <span>${deliveryTimeStr}</span>
-              </div>
-            </div>
-          `,
-          confirmButtonText: 'Selesai',
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-base font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      } else {
-        const stats = res.data.stats || {};
-        let recapHtml = `
-          <div class="text-xs text-left space-y-1.5 mt-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <div><strong>Total Sasaran:</strong> ${stats.total || count} pelamar</div>
-        `;
-
-        if (selectedChannels.value.includes('email')) {
-          recapHtml += `
-            <div class="text-blue-700">📧 <strong>Email:</strong> ${stats.email_success || 0} berhasil terkirim (Gagal: ${stats.email_failed || 0}, Email Kosong: ${stats.skipped_no_email || 0})</div>
-          `;
-        }
-
-        if (selectedChannels.value.includes('whatsapp')) {
-          recapHtml += `
-            <div class="text-emerald-700">💬 <strong>WhatsApp:</strong> ${stats.whatsapp_success || 0} berhasil terkirim (Gagal: ${stats.whatsapp_failed || 0})</div>
-          `;
-        }
-
-        recapHtml += `</div>`;
-
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Massal Berhasil Dikirim!',
-          html: recapHtml,
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      }
-    } else {
-      // Single candidate notification
-      const app = sendEmailModalApp.value;
-
-      const res = await axios.post(`/rekrutmen/api/applications/${app.id}/send-notification`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      const deliveryTimeStr = res.data.formatted_scheduled_at || schedulePreviewText.value;
-      isSendingEmail.value = false;
-      closeNotificationModal();
-
-      // Update local state and refresh applications list so stage change is immediate
-      if (res.data?.new_stage) {
-        app.current_stage_id = res.data.new_stage.id;
-        const targetStage = stages.value.find(s => String(s.id) === String(res.data.new_stage.id));
-        if (targetStage) {
-          app.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
-        }
-        if (selectedApp.value && String(selectedApp.value.id) === String(app.id)) {
-          selectedApp.value.current_stage_id = res.data.new_stage.id;
-          if (targetStage) {
-            selectedApp.value.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
-          }
-        }
-      }
-      await store.fetchApplications('', false).catch(() => {});
-
-      if (res.data.scheduled) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Berhasil Dijadwalkan',
-          html: `
-            <div class="text-xs text-slate-600 mt-2 space-y-3">
-              <p class="text-slate-700">Notifikasi untuk <strong>${app.full_name}</strong> akan dikirim secara otomatis pada:</p>
-              <div class="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-50 text-blue-700 font-semibold rounded-lg border border-blue-100 text-xs shadow-2xs">
-                <span>📅</span>
-                <span>${deliveryTimeStr}</span>
-              </div>
-            </div>
-          `,
-          confirmButtonText: 'Selesai',
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-base font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      } else {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Berhasil Terkirim!',
-          html: `<div class="text-xs text-slate-600 mt-1">${res.data.message || 'Notifikasi berhasil dikirimkan ke kandidat.'}</div>`,
-          timer: 3000,
-          showConfirmButton: false,
-          iconColor: '#10b981',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-          }
-        });
-      }
     }
+    const endpoint = bulk ? '/rekrutmen/api/applications/bulk-send-notification' : `/rekrutmen/api/applications/${app.id}/send-notification`;
+    const res = await axios.post(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    isSendingEmail.value = false;
+
+    if (res.data.batch_id && (res.status === 202 || res.data.queued || res.data.scheduled)) {
+      trackQueuedNotification(res.data, count);
+      if (bulk) selectedAppIds.value = [];
+      closeNotificationModal();
+      notificationRequest = null;
+      return;
+    }
+
+    if (bulk) {
+      throw new Error('Respons antrean belum lengkap. Periksa status sebelum membuat pengiriman baru.');
+    }
+    if (res.data.batch_id) trackQueuedNotification(res.data, 1);
+    closeNotificationModal();
+    notificationRequest = null;
+    if (res.data?.new_stage) {
+      app.current_stage_id = res.data.new_stage.id;
+      const targetStage = stages.value.find((stage) => String(stage.id) === String(res.data.new_stage.id));
+      if (targetStage) app.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
+    }
+    await store.fetchApplications('', true).catch(() => {});
+    const resultEntries = Object.values(res.data.results || {}).filter((result) => result && typeof result === 'object');
+    const incomplete = res.data.success === false || resultEntries.some((result) => result.success === false || ['failed', 'unknown', 'pending', 'skipped'].includes(result.status));
+    Swal.fire({
+      icon: incomplete ? 'warning' : 'success',
+      title: res.data.status === 'unknown' ? 'Hasil Pengiriman Belum Pasti' : (incomplete ? 'Sebagian notifikasi belum terkirim' : (res.data.scheduled ? 'Notifikasi Dijadwalkan' : 'Notifikasi Terkirim')),
+      text: res.data.message || 'Hasil pengiriman telah diperbarui.',
+      confirmButtonColor: '#2563eb',
+    });
   } catch (err) {
     isSendingEmail.value = false;
+    if (err.response?.data?.batch_id) {
+      trackQueuedNotification(err.response.data, isBulkMode.value ? selectedAppIds.value.length : 1);
+      closeNotificationModal();
+      notificationRequest = null;
+    }
     Swal.fire({
-      icon: 'error',
-      title: sendType.value === 'scheduled' ? 'Gagal Menjadwalkan Notifikasi' : 'Gagal Mengirim Notifikasi',
-      text: err.response?.data?.message || 'Terjadi kesalahan saat memproses notifikasi.',
+      icon: err.response?.data?.status === 'unknown' ? 'warning' : 'error',
+      title: err.response?.data?.status === 'unknown' ? 'Hasil Pengiriman Belum Pasti' : (sendType.value === 'scheduled' ? 'Gagal Menjadwalkan Notifikasi' : 'Gagal Mengirim Notifikasi'),
+      text: err.response?.data?.message || (err.response ? 'Terjadi kesalahan saat memproses notifikasi.' : 'Respons pengiriman belum diterima. Jangan membuat pengiriman baru; mencoba lagi dengan formulir yang sama memakai permintaan yang sama.'),
       confirmButtonColor: '#e11d48',
       customClass: {
         popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',

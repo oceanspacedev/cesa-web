@@ -12,6 +12,8 @@ use Cesa\Rekrutmen\Services\ScheduledNotificationService;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
+use Spatie\Permission\Models\Permission;
 use Webkul\Security\Models\User;
 
 class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
@@ -19,6 +21,9 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Queue::fake();
+        config(['rekrutmen.notifications.whatsapp.throttle.enabled' => false]);
 
         Mail::fake();
         $this->fakeRekrutmenWhatsAppEngine();
@@ -28,6 +33,8 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
     public function test_bulk_send_notification_with_individual_schedules(): void
     {
         $user = User::factory()->create();
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -83,12 +90,15 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
             ],
         ]);
 
-        $response->assertOk();
+        $response->assertAccepted();
         $response->assertJson([
             'success' => true,
         ]);
-        $response->assertJsonPath('stats.email_success', 2);
-        $response->assertJsonPath('stats.whatsapp_success', 2);
+        $response->assertJsonPath('stats.email_pending', 2);
+        $response->assertJsonPath('stats.whatsapp_pending', 2);
+        Http::assertNothingSent();
+        $batch = ScheduledNotification::query()->findOrFail($response->json('batch_id'));
+        app(ScheduledNotificationService::class)->executeScheduled($batch, true);
 
         // Verify WhatsApp gateway was called with distinct messages containing individual schedules
         Http::assertSent(function ($request) {
@@ -113,6 +123,8 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
     public function test_bulk_scheduled_notification_with_individual_schedules(): void
     {
         $user = User::factory()->create();
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -170,7 +182,7 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
             ],
         ]);
 
-        $response->assertOk();
+        $response->assertAccepted();
         $response->assertJson([
             'success'   => true,
             'scheduled' => true,
@@ -183,10 +195,11 @@ class BulkCandidateCustomScheduleNotificationTest extends RekrutmenTestCase
         $this->assertEquals('09:00 - 10:00 WIB', $notification->candidate_schedules[$salsa->id]['schedule']);
 
         // Execute scheduled notification
-        $results = app(ScheduledNotificationService::class)->executeScheduled($notification);
+        $this->travelTo(Carbon::parse($scheduledTime)->addSecond());
+        $results = app(ScheduledNotificationService::class)->executeScheduled($notification, true);
 
-        $this->assertEquals(2, $results['email_success'] ?? 0);
-        $this->assertEquals(2, $results['whatsapp_success'] ?? 0);
+        $this->assertEquals(2, $results['stats']['email_success'] ?? 0);
+        $this->assertEquals(2, $results['stats']['whatsapp_success'] ?? 0);
 
         Http::assertSent(function ($request) {
             $data = $request->data();

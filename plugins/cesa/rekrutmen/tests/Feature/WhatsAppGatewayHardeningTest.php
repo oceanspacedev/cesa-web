@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 
 class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
 {
-    public function test_transient_send_failure_does_not_mark_account_disconnected(): void
+    public function test_ambiguous_send_failure_is_not_retried_or_marked_disconnected(): void
     {
         config([
             'rekrutmen.notifications.whatsapp.engine_url' => 'http://127.0.0.1:3318',
@@ -41,12 +41,13 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
 
         $result = app(WhatsAppGateway::class)->sendText($account, '6281299990000', 'Tes hardening');
 
-        $this->assertTrue($result['success']);
+        $this->assertFalse($result['success']);
+        $this->assertSame('unknown', $result['status']);
         $this->assertSame(WhatsAppAccountStatus::Connected, $account->fresh()?->status);
-        $this->assertSame(2, $attempts);
+        $this->assertSame(1, $attempts);
     }
 
-    public function test_dead_session_send_marks_account_disconnected_after_retry(): void
+    public function test_unavailable_session_is_returned_to_queue_without_inline_retry(): void
     {
         config([
             'rekrutmen.notifications.whatsapp.engine_url' => 'http://127.0.0.1:3318',
@@ -63,8 +64,10 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
 
             if (str_contains($request->url(), '/send')) {
                 return Http::response([
-                    'ok'      => false,
-                    'message' => 'Nomor WhatsApp belum terhubung. Scan QR atau minta kode pairing di pengaturan rekrutmen.',
+                    'ok'        => false,
+                    'status'    => 'failed',
+                    'retryable' => true,
+                    'message'   => 'Nomor WhatsApp belum terhubung. Scan QR atau minta kode pairing di pengaturan rekrutmen.',
                 ], 409);
             }
 
@@ -74,10 +77,11 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
         $result = app(WhatsAppGateway::class)->sendText($account, '6281299990000', 'Tes hardening');
 
         $this->assertFalse($result['success']);
-        $this->assertSame(WhatsAppAccountStatus::Disconnected, $account->fresh()?->status);
+        $this->assertSame('failed', $result['status']);
+        $this->assertTrue($result['retryable']);
     }
 
-    public function test_brief_disconnected_engine_status_does_not_drop_connected_account(): void
+    public function test_authoritative_disconnected_status_is_not_hidden_by_a_cached_connection(): void
     {
         $this->fakeRekrutmenWhatsAppEngine([
             'status' => 'disconnected',
@@ -91,8 +95,9 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
 
         $payload = app(WhatsAppGateway::class)->session($account);
 
-        $this->assertSame(WhatsAppAccountStatus::Connected, $account->fresh()?->status);
+        $this->assertSame(WhatsAppAccountStatus::Disconnected, $account->fresh()?->status);
+        $this->assertFalse($payload['delivery_ready']);
         $this->assertSame('6287815742597', $account->fresh()?->phone_number);
-        $this->assertSame('connected', $payload['status']);
+        $this->assertSame('disconnected', $payload['status']);
     }
 }

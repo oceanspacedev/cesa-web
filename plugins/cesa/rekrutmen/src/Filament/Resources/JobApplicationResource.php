@@ -8,6 +8,7 @@ use Cesa\Rekrutmen\Enums\JobApplicationStatus;
 use Cesa\Rekrutmen\Filament\Resources\JobApplicationResource\Pages;
 use Cesa\Rekrutmen\Filament\Resources\JobApplicationResource\RelationManagers\HistoriesRelationManager;
 use Cesa\Rekrutmen\Models\JobApplication;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -27,9 +28,11 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Js;
-use League\Flysystem\UnableToCheckFileExistence;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Throwable;
 use Webkul\Security\Traits\HasResourcePermissionQuery;
 
 class JobApplicationResource extends Resource
@@ -155,25 +158,29 @@ class JobApplicationResource extends Resource
                                     ->dehydrated(fn (string $operation): bool => $operation === 'create'),
                                 Forms\Components\FileUpload::make('photo_path')
                                     ->label(__('rekrutmen::filament/resources/job-application.form.fields.photo_path'))
-                                    ->disk(JobApplication::resumeDisk())
+                                    ->disk(fn (?JobApplication $record): string => $record?->resolveAttachmentDisk('photo') ?? JobApplication::resumeDisk())
                                     ->directory(JobApplication::PHOTO_DIRECTORY)
                                     ->image()
                                     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                                     ->maxSize(5120)
-                                    ->visibility('private')
+                                    ->visibility(fn (Forms\Components\FileUpload $component): string => app(RekrutmenStorage::class)->visibility($component->getDiskName()))
+                                    ->fetchFileInformation(false)
                                     ->downloadable()
                                     ->openable()
-                                    ->getUploadedFileUsing(fn (?JobApplication $record, string $file, string|array|null $storedFileNames, $component): ?array => self::resolveUploadedFileMetadata($record, $file, $storedFileNames, $component, 'photo')),
+                                    ->getUploadedFileUsing(fn (?JobApplication $record, string $file): ?array => self::resolveUploadedFileMetadata($record, $file, 'photo'))
+                                    ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file, ?JobApplication $record): string => self::saveAttachment($file, $record, 'photo')),
                                 Forms\Components\FileUpload::make('resume_path')
                                     ->label(__('rekrutmen::filament/resources/job-application.form.fields.resume_path'))
-                                    ->disk(JobApplication::resumeDisk())
+                                    ->disk(fn (?JobApplication $record): string => $record?->resolveAttachmentDisk('resume') ?? JobApplication::resumeDisk())
                                     ->directory(JobApplication::RESUME_DIRECTORY)
                                     ->acceptedFileTypes(['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
                                     ->maxSize(5120) // 5MB
-                                    ->visibility('private')
+                                    ->visibility(fn (Forms\Components\FileUpload $component): string => app(RekrutmenStorage::class)->visibility($component->getDiskName()))
+                                    ->fetchFileInformation(false)
                                     ->downloadable()
                                     ->openable()
-                                    ->getUploadedFileUsing(fn (?JobApplication $record, string $file, string|array|null $storedFileNames, $component): ?array => self::resolveUploadedFileMetadata($record, $file, $storedFileNames, $component, 'resume')),
+                                    ->getUploadedFileUsing(fn (?JobApplication $record, string $file): ?array => self::resolveUploadedFileMetadata($record, $file, 'resume'))
+                                    ->saveUploadedFileUsing(fn (TemporaryUploadedFile $file, ?JobApplication $record): string => self::saveAttachment($file, $record, 'resume')),
                             ])->columns(1),
                     ])->columnSpan(1),
                 ])->columnSpanFull(),
@@ -235,8 +242,7 @@ class JobApplicationResource extends Resource
                                     ->badge(),
                                 ImageEntry::make('photo_path')
                                     ->label(__('rekrutmen::filament/resources/job-application.form.fields.photo_path'))
-                                    ->disk(JobApplication::resumeDisk())
-                                    ->visibility('private')
+                                    ->state(fn (JobApplication $record): ?string => self::resolveAttachmentDownloadUrl($record, 'photo'))
                                     ->height(100)
                                     ->visible(fn ($record) => filled($record->photo_path)),
                                 TextEntry::make('resume_path')
@@ -485,30 +491,40 @@ class JobApplicationResource extends Resource
         return $value !== '' ? $value : '-';
     }
 
-    private static function resolveUploadedFileMetadata(?JobApplication $record, string $file, string|array|null $storedFileNames, mixed $component, string $attachment): ?array
+    private static function saveAttachment(TemporaryUploadedFile $file, ?JobApplication $record, string $attachment): string
     {
-        if (! $record?->getKey()) {
+        $disk = JobApplication::resumeDisk();
+        $directory = $attachment === 'photo' ? JobApplication::PHOTO_DIRECTORY : JobApplication::RESUME_DIRECTORY;
+        $path = app(RekrutmenStorage::class)->storeUploadedFile($file, $directory, $disk);
+        $record?->setAttribute($attachment.'_disk', $disk);
+
+        return $path;
+    }
+
+    private static function resolveUploadedFileMetadata(?JobApplication $record, string $file, string $attachment): ?array
+    {
+        $isSavedAttachment = $record?->getKey() && $record->resolveAttachmentPath($attachment) === $file;
+        $disk = $isSavedAttachment
+            ? $record->resolveAttachmentDisk($attachment)
+            : app(RekrutmenStorage::class)->resolveDisk($file, JobApplication::resumeDisk());
+
+        if ($disk === null) {
             return null;
         }
 
-        $storage = $component->getDisk();
-        $shouldFetchFileInformation = $component->shouldFetchFileInformation();
+        try {
+            $storage = Storage::disk($disk);
 
-        if ($shouldFetchFileInformation) {
-            try {
-                if (! $storage->exists($file)) {
-                    return null;
-                }
-            } catch (UnableToCheckFileExistence) {
-                return null;
-            }
+            return [
+                'name' => basename($file),
+                'size' => $storage->size($file),
+                'type' => $storage->mimeType($file),
+                'url'  => $isSavedAttachment
+                    ? self::resolveAttachmentDownloadUrl($record, $attachment)
+                    : app(RekrutmenStorage::class)->url($file, $disk),
+            ];
+        } catch (Throwable) {
+            return null;
         }
-
-        return [
-            'name' => ($component->isMultiple() ? ($storedFileNames[$file] ?? null) : $storedFileNames) ?? basename($file),
-            'size' => $shouldFetchFileInformation ? $storage->size($file) : 0,
-            'type' => $shouldFetchFileInformation ? $storage->mimeType($file) : null,
-            'url'  => self::resolveAttachmentDownloadUrl($record, $attachment),
-        ];
     }
 }

@@ -10,6 +10,8 @@ use Cesa\Rekrutmen\Services\CandidateWhatsAppNotifier;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
+use Spatie\Permission\Models\Permission;
 use Webkul\Security\Models\User;
 
 class CandidateNotificationWhatsAppTest extends RekrutmenTestCase
@@ -17,6 +19,9 @@ class CandidateNotificationWhatsAppTest extends RekrutmenTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Queue::fake();
+        config(['rekrutmen.notifications.whatsapp.throttle.enabled' => false]);
 
         $this->fakeRekrutmenWhatsAppEngine();
         $this->makeConnectedWhatsAppAccount();
@@ -78,6 +83,8 @@ class CandidateNotificationWhatsAppTest extends RekrutmenTestCase
         Mail::fake();
 
         $user = User::factory()->create(['is_active' => true]);
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -126,6 +133,8 @@ class CandidateNotificationWhatsAppTest extends RekrutmenTestCase
         Mail::fake();
 
         $user = User::factory()->create(['is_active' => true]);
+        $user->forceFill(['resource_permission' => 'global'])->save();
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -170,13 +179,15 @@ class CandidateNotificationWhatsAppTest extends RekrutmenTestCase
             'schedule'        => 'Batas: 3 Hari',
         ]);
 
-        $response->assertOk();
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+        $response->assertAccepted();
         $response->assertJson([
             'success' => true,
             'stats'   => [
                 'total'            => 2,
-                'email_success'    => 2,
-                'whatsapp_success' => 2,
+                'email_pending'    => 2,
+                'whatsapp_pending' => 2,
             ],
         ]);
     }

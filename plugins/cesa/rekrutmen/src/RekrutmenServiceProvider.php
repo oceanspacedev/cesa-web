@@ -40,6 +40,7 @@ use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
 use Webkul\PluginManager\Package;
 use Webkul\PluginManager\PackageServiceProvider;
+use Webkul\Security\Models\User;
 
 class RekrutmenServiceProvider extends PackageServiceProvider
 {
@@ -92,6 +93,10 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 '2026_09_03_140100_rekrutmen_create_whatsapp_gateway_tables',
                 '2026_09_03_140200_rekrutmen_add_whatsapp_account_id_to_scheduled_notifications_table',
                 '2026_09_08_000001_rekrutmen_add_candidate_schedules_to_scheduled_notifications_table',
+                '2026_09_13_175849_rekrutmen_create_notification_deliveries_table',
+                '2026_09_13_180128_rekrutmen_add_whatsapp_management_permission',
+                '2026_09_13_181639_rekrutmen_add_connection_request_key_to_whatsapp_accounts',
+                '2026_09_13_225310_rekrutmen_add_file_disks_to_recruitment_tables',
             ])
             ->runsMigrations()
             ->runsSeeders()
@@ -113,6 +118,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
+        Gate::define('manage_rekrutmen_whatsapp', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_whatsapp'));
         Panel::configureUsing(function (Panel $panel): void {
             $panel->plugin(RekrutmenPlugin::make());
         });
@@ -170,6 +176,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 'rekrutmen_job_applications',
                 'rekrutmen_job_application_histories',
                 'rekrutmen_scheduled_notifications',
+                'rekrutmen_notification_deliveries',
                 'rekrutmen_mail_settings',
                 'rekrutmen_whatsapp_settings',
                 'rekrutmen_whatsapp_accounts',

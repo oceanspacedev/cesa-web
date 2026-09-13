@@ -11,6 +11,9 @@ return [
 
     'notifications' => [
         'queue'    => env('REKRUTMEN_NOTIFICATION_QUEUE', 'notifications'),
+        'delivery' => [
+            'lease_seconds' => 120,
+        ],
         'mail'     => [
             'throttle' => [
                 'enabled'              => env('NOTIFICATION_MAIL_THROTTLE_ENABLED', env('REKRUTMEN_MAIL_THROTTLE_ENABLED', true)),
@@ -34,11 +37,13 @@ return [
                 'max_interval_seconds' => (int) env('WHATSAPP_THROTTLE_MAX_INTERVAL', 3),
                 'key'                  => env('WHATSAPP_THROTTLE_KEY', 'global'),
             ],
-            'queue'      => env('WHATSAPP_QUEUE', 'whatsapp'),
-            'connection' => env('WHATSAPP_CONNECTION'),
-            'timeout'    => (int) env('WHATSAPP_TIMEOUT', 20),
-            'tries'      => (int) env('WHATSAPP_TRIES', 3),
-            'backoff'    => array_values(array_filter(
+            'queue'        => env('WHATSAPP_QUEUE', 'whatsapp'),
+            'connection'   => env('WHATSAPP_CONNECTION'),
+            'timeout'      => (int) env('WHATSAPP_TIMEOUT', 20),
+            'http_timeout' => (int) env('REKRUTMEN_WHATSAPP_HTTP_TIMEOUT', env('WHATSAPP_TIMEOUT', 20)),
+            'job_timeout'  => (int) env('REKRUTMEN_WHATSAPP_JOB_TIMEOUT', 60),
+            'tries'        => (int) env('WHATSAPP_TRIES', 3),
+            'backoff'      => array_values(array_filter(
                 array_map('intval', explode(',', env('WHATSAPP_BACKOFF', '10,30,60'))),
                 static fn (int $interval): bool => $interval >= 0
             )),

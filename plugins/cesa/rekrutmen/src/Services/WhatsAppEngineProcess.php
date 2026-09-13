@@ -30,7 +30,7 @@ class WhatsAppEngineProcess
             return $this->waitUntilReady(8);
         }
 
-        if (! $this->installDependencies()) {
+        if (! is_file($this->workingDirectory().'/node_modules/@whiskeysockets/baileys/package.json')) {
             return false;
         }
 
@@ -125,7 +125,7 @@ class WhatsAppEngineProcess
     {
         $nodeModules = $this->workingDirectory().DIRECTORY_SEPARATOR.'node_modules';
 
-        if (is_dir($nodeModules)) {
+        if (is_file($nodeModules.'/@whiskeysockets/baileys/package.json') && is_file($nodeModules.'/pino/package.json') && is_file($nodeModules.'/qrcode/package.json')) {
             return true;
         }
 
@@ -135,7 +135,7 @@ class WhatsAppEngineProcess
 
         try {
             $process = new Process(
-                [$this->npmBinary(), 'install', '--omit=dev'],
+                [$this->npmBinary(), 'ci', '--omit=dev'],
                 $this->workingDirectory(),
             );
             $process->setTimeout(180);

@@ -15,6 +15,7 @@ class WhatsAppAccount extends Model
 
     protected $fillable = [
         'name',
+        'connection_request_key',
         'phone_number',
         'route_key',
         'endpoint',
@@ -27,6 +28,7 @@ class WhatsAppAccount extends Model
     ];
 
     protected $hidden = [
+        'connection_request_key',
         'api_key',
     ];
 
@@ -112,12 +114,8 @@ class WhatsAppAccount extends Model
 
     public static function resolveForSend(?int $id = null): ?self
     {
-        if ($id) {
-            $selected = static::query()->active()->whereKey($id)->first();
-
-            if ($selected) {
-                return $selected;
-            }
+        if ($id !== null) {
+            return static::query()->active()->whereKey($id)->first();
         }
 
         return static::query()->connected()->where('is_default', true)->first()

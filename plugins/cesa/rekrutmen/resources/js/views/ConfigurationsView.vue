@@ -604,6 +604,8 @@
         v-else-if="activeTab === 'whatsapp_gateway'"
         class="space-y-6 max-w-4xl"
       >
+        <p v-if="whatsappAccessError" role="alert" class="text-sm text-rose-700">{{ whatsappAccessError }}</p>
+        <template v-else>
         <Card>
           <CardHeader class="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
@@ -658,7 +660,7 @@
                   variant="outline"
                   size="sm"
                   @click="startWhatsappConnect('qr')"
-                  :disabled="isConnectingWhatsapp"
+                  :disabled="isConnectingWhatsapp || isChangingWhatsappAccount"
                   class="h-9"
                 >
                   {{ isConnectingWhatsapp ? 'Menyiapkan...' : 'Scan QR' }}
@@ -668,7 +670,7 @@
                   variant="default"
                   size="sm"
                   @click="startWhatsappConnect('pairing')"
-                  :disabled="isConnectingWhatsapp"
+                  :disabled="isConnectingWhatsapp || isChangingWhatsappAccount"
                   class="h-9 bg-[#0c2340] hover:bg-[#153459] text-white shadow-xs"
                 >
                   {{ isConnectingWhatsapp ? 'Membuat kode...' : 'Dapatkan Kode Pairing' }}
@@ -683,7 +685,7 @@
           <CardHeader class="border-b border-zinc-100 pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle class="text-sm font-semibold text-zinc-900">
-                {{ whatsappConnect.pairingCode ? 'Masukkan Kode Pairing' : 'Scan QR Code untuk Menautkan' }}
+                {{ whatsappConnect.mode === 'pairing' ? 'Masukkan Kode Pairing' : 'Scan QR Code untuk Menautkan' }}
               </CardTitle>
               <CardDescription>
                 WhatsApp di HP → Perangkat tertaut → Tautkan perangkat{{ whatsappConnect.pairingCode ? ' → tautkan dengan nomor telepon' : '' }}.
@@ -702,7 +704,7 @@
                   class="w-52 h-52 rounded-xl border border-zinc-200 bg-white p-2 shadow-2xs"
                 />
                 <div v-else class="w-52 h-52 rounded-xl border border-dashed border-zinc-300 flex items-center justify-center text-xs text-zinc-400 text-center px-4">
-                  {{ whatsappConnect.status === 'connecting' ? 'Menyiapkan QR...' : 'Menunggu QR atau kode pairing' }}
+                  {{ whatsappConnect.mode === 'pairing' ? 'Menyiapkan kode pairing...' : 'Menyiapkan QR...' }}
                 </div>
               </div>
               <div class="space-y-3">
@@ -758,12 +760,12 @@
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex items-center justify-end gap-1.5">
-                    <Button v-if="account.status === 'connected'" variant="outline" size="xs" @click="openWhatsappTest(account)" class="h-7 text-xs">Tes</Button>
-                    <Button v-if="account.status !== 'connected'" variant="outline" size="xs" @click="startWhatsappConnect(account, 'qr')" class="h-7 text-xs">Scan</Button>
-                    <Button v-if="account.status !== 'connected'" variant="outline" size="xs" @click="startWhatsappConnect(account, 'pairing')" class="h-7 text-xs">Kode</Button>
-                    <Button v-else variant="ghost" size="xs" @click="disconnectWhatsappAccount(account)" class="h-7 text-xs text-zinc-600">Putuskan</Button>
-                    <Button v-if="!account.is_default" variant="ghost" size="xs" @click="makeDefaultWhatsappAccount(account)" class="h-7 text-xs text-blue-700">Default</Button>
-                    <Button variant="ghost" size="xs" @click="deleteWhatsappAccount(account)" class="h-7 text-xs text-rose-600 hover:bg-rose-50">Hapus</Button>
+                    <Button v-if="account.status === 'connected' && account.is_active" :disabled="isTestingWhatsapp || !whatsappSettings.engine_ready || account.delivery_ready === false" variant="outline" size="xs" @click="openWhatsappTest(account)" class="h-7 text-xs">Tes</Button>
+                    <Button v-if="account.status !== 'connected'" :disabled="isConnectingWhatsapp || isChangingWhatsappAccount" variant="outline" size="xs" @click="startWhatsappConnect(account, 'qr')" class="h-7 text-xs">Scan</Button>
+                    <Button v-if="account.status !== 'connected'" :disabled="isConnectingWhatsapp || isChangingWhatsappAccount" variant="outline" size="xs" @click="startWhatsappConnect(account, 'pairing')" class="h-7 text-xs">Kode</Button>
+                    <Button v-else :disabled="isConnectingWhatsapp || isChangingWhatsappAccount" variant="ghost" size="xs" @click="disconnectWhatsappAccount(account)" class="h-7 text-xs text-zinc-600">Putuskan</Button>
+                    <Button v-if="!account.is_default" :disabled="isConnectingWhatsapp || isChangingWhatsappAccount" variant="ghost" size="xs" @click="makeDefaultWhatsappAccount(account)" class="h-7 text-xs text-blue-700">Default</Button>
+                    <Button :disabled="isConnectingWhatsapp || isChangingWhatsappAccount" variant="ghost" size="xs" @click="deleteWhatsappAccount(account)" class="h-7 text-xs text-rose-600 hover:bg-rose-50">Hapus</Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -827,6 +829,7 @@
             </div>
           </CardContent>
         </Card>
+        </template>
       </div>
 
       <!-- MAIL TEMPLATES TAB -->
@@ -1080,8 +1083,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, onDeactivated } from 'vue';
 import { useRekrutmenStore } from '../stores/rekrutmen';
+import { createPoller } from '../lib/polling';
+import { createRequestKey } from '../lib/utils';
 import LoadingState from '../components/LoadingState.vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -1158,6 +1163,7 @@ const isSavingMail = ref(false);
 const isTestingMail = ref(false);
 
 const whatsappSettings = ref({ enabled: true, engine_ready: false });
+const whatsappAccessError = ref('');
 const whatsappForm = ref({
   enabled: true,
 });
@@ -1176,15 +1182,19 @@ const whatsappConnect = ref({
 });
 const isSavingWhatsapp = ref(false);
 const isConnectingWhatsapp = ref(false);
+const isChangingWhatsappAccount = ref(false);
 const isTestingWhatsapp = ref(false);
 const whatsappTest = ref({
   accountId: null,
   recipient: '',
 });
 const connectedWhatsappAccounts = computed(() =>
-  (whatsappAccounts.value || []).filter((account) => account.status === 'connected' && account.is_active !== false)
+  (whatsappAccounts.value || []).filter((account) => whatsappSettings.value.engine_ready && account.delivery_ready !== false && account.status === 'connected' && account.is_active !== false)
 );
-let whatsappPollTimer = null;
+let whatsappConnectController = null;
+let whatsappConnectGeneration = 0;
+let failedWhatsappConnect = null;
+let whatsappCreateRequest = null;
 
 const currentMailTemplate = computed(() => {
   return mailTemplates.value[selectedTemplateKey.value] || null;
@@ -1450,6 +1460,7 @@ const testMailSettings = async () => {
 const fetchWhatsappSettings = async () => {
   try {
     const res = await axios.get('/rekrutmen/api/settings/whatsapp');
+    whatsappAccessError.value = '';
     whatsappSettings.value = res.data.gateway || { enabled: true, engine_ready: false };
     whatsappForm.value.enabled = !!res.data.gateway?.enabled;
     whatsappAccounts.value = res.data.accounts || [];
@@ -1462,7 +1473,12 @@ const fetchWhatsappSettings = async () => {
       }
     }
   } catch (err) {
-    console.error('Failed fetching WhatsApp settings', err);
+    if (err.response?.status === 403) {
+      whatsappAccessError.value = 'Anda tidak memiliki izin untuk mengelola gateway WhatsApp. Hubungi administrator.';
+      closeWhatsappConnect();
+    } else {
+      whatsappAccessError.value = 'Pengaturan WhatsApp belum dapat dimuat. Muat ulang halaman untuk mencoba lagi.';
+    }
   }
 };
 
@@ -1493,7 +1509,7 @@ const saveWhatsappSettings = async () => {
   }
 };
 
-const applyWhatsappSession = (data) => {
+const applyWhatsappSession = (data, mode = whatsappConnect.value.mode) => {
   if (!data) return;
   whatsappConnect.value = {
     open: true,
@@ -1501,36 +1517,45 @@ const applyWhatsappSession = (data) => {
     qr: data.qr || null,
     pairingCode: data.pairing_code || null,
     status: data.status,
+    mode,
+    engine_ready: data.engine_ready === true,
     engine_error: data.engine_error || null,
   };
 };
 
-const startWhatsappPoll = (accountId) => {
-  stopWhatsappPoll();
-  whatsappPollTimer = setInterval(async () => {
-    try {
-      const res = await axios.get(`/rekrutmen/api/settings/whatsapp/accounts/${accountId}/session`);
-      applyWhatsappSession(res.data);
-      if (res.data.status === 'connected') {
-        stopWhatsappPoll();
-        await fetchWhatsappSettings();
-        Swal.fire({
-          title: 'WhatsApp Terhubung',
-          text: res.data.phone_number ? `Nomor ${res.data.phone_number} siap dipakai.` : 'Nomor WhatsApp berhasil ditautkan.',
-          icon: 'success',
-          confirmButtonColor: '#0c2340',
-        });
-      }
-    } catch (_) {}
-  }, 2000);
-};
+const whatsappPoller = createPoller({
+  request: async (accountId, signal) => (await axios.get(`/rekrutmen/api/settings/whatsapp/accounts/${accountId}/session`, { signal, timeout: 10000 })).data,
+  onData: (data) => {
+    if (!whatsappConnect.value.open || data.id !== whatsappConnect.value.accountId) return false;
+    applyWhatsappSession(data);
+    if (data.engine_ready === false) {
+      whatsappConnect.value.engine_error = data.engine_error || 'Engine WhatsApp belum tersedia. Coba hubungkan kembali setelah engine siap.';
+      return false;
+    }
+    if (data.status === 'connected' && data.engine_ready === true) {
+      fetchWhatsappSettings();
+      Swal.fire({ title: 'WhatsApp Terhubung', text: data.phone_number ? `Nomor ${data.phone_number} siap dipakai.` : 'Nomor WhatsApp berhasil ditautkan.', icon: 'success', confirmButtonColor: '#0c2340' });
+      return false;
+    }
+    if (data.status === 'disconnected') {
+      whatsappConnect.value.engine_error = data.engine_error || 'Koneksi terputus. Pilih Scan atau Kode untuk mencoba lagi.';
+      fetchWhatsappSettings();
+      return false;
+    }
+  },
+  onError: (error) => {
+    whatsappConnect.value.engine_error = error.response?.status === 403
+      ? 'Izin mengelola WhatsApp tidak tersedia.'
+      : (error.response?.data?.message || 'Status koneksi tidak dapat dimuat. Pilih Scan atau Kode untuk mencoba lagi.');
+    return false;
+  },
+  onTimeout: () => {
+    whatsappConnect.value.engine_error = 'Waktu penautan habis. Pilih Scan atau Kode untuk mendapatkan sesi terbaru.';
+  },
+});
 
-const stopWhatsappPoll = () => {
-  if (whatsappPollTimer) {
-    clearInterval(whatsappPollTimer);
-    whatsappPollTimer = null;
-  }
-};
+const startWhatsappPoll = (accountId) => whatsappPoller.start(accountId);
+const stopWhatsappPoll = () => whatsappPoller.stop();
 
 const copyPairingCode = async () => {
   const code = whatsappConnect.value.pairingCode;
@@ -1549,10 +1574,17 @@ const copyPairingCode = async () => {
 };
 
 const startWhatsappConnect = async (modeOrAccount = 'qr', maybeMode = null) => {
-  const account = typeof modeOrAccount === 'object' && modeOrAccount ? modeOrAccount : null;
-  const mode = account ? (maybeMode || (whatsappConnectForm.value.phone_number ? 'pairing' : 'qr')) : (modeOrAccount || 'qr');
+  if (isConnectingWhatsapp.value || isChangingWhatsappAccount.value || whatsappAccessError.value) return;
+  let account = typeof modeOrAccount === 'object' && modeOrAccount ? modeOrAccount : null;
+  const reconnectingExistingAccount = !!account;
+  const mode = account ? (maybeMode || 'qr') : (modeOrAccount || 'qr');
+  const fingerprint = JSON.stringify(whatsappConnectForm.value);
+  if (!account && failedWhatsappConnect?.fingerprint === fingerprint) {
+    account = failedWhatsappConnect.account;
+  }
+  const phone = reconnectingExistingAccount ? account.phone_number : (whatsappConnectForm.value.phone_number || account?.phone_number);
 
-  if (mode === 'pairing' && !whatsappConnectForm.value.phone_number && !account?.phone_number) {
+  if (mode === 'pairing' && !phone) {
     Swal.fire({
       title: 'Isi Nomor HP',
       text: 'Kode pairing butuh nomor WhatsApp yang akan ditautkan, misalnya 0812xxxxxxx.',
@@ -1562,39 +1594,73 @@ const startWhatsappConnect = async (modeOrAccount = 'qr', maybeMode = null) => {
     return;
   }
 
+  closeWhatsappConnect();
+  const generation = whatsappConnectGeneration;
+  whatsappConnectController = new AbortController();
   isConnectingWhatsapp.value = true;
   try {
     const payload = {
-      name: whatsappConnectForm.value.name,
-      phone_number: whatsappConnectForm.value.phone_number || account?.phone_number,
+      name: account ? account.name : whatsappConnectForm.value.name,
+      phone_number: mode === 'pairing' ? phone : undefined,
       mode,
     };
+    if (!account) {
+      if (!whatsappCreateRequest || whatsappCreateRequest.fingerprint !== fingerprint) {
+        whatsappCreateRequest = { fingerprint, key: createRequestKey() };
+      }
+      payload.request_key = whatsappCreateRequest.key;
+    }
+    const requestOptions = { signal: whatsappConnectController.signal, timeout: 45000 };
     const res = account
-      ? await axios.post(`/rekrutmen/api/settings/whatsapp/accounts/${account.id}/connect`, payload)
-      : await axios.post('/rekrutmen/api/settings/whatsapp/accounts/connect', payload);
+      ? await axios.post(`/rekrutmen/api/settings/whatsapp/accounts/${account.id}/connect`, payload, requestOptions)
+      : await axios.post('/rekrutmen/api/settings/whatsapp/accounts/connect', payload, requestOptions);
+    if (generation !== whatsappConnectGeneration) return;
 
     const data = res.data.data || res.data;
-    applyWhatsappSession(data);
+    failedWhatsappConnect = null;
+    whatsappCreateRequest = null;
+    applyWhatsappSession(data, mode);
     startWhatsappPoll(data.id);
     await fetchWhatsappSettings();
   } catch (err) {
+    if (generation !== whatsappConnectGeneration) return;
+    if (!account && err.response?.status === 409) {
+      whatsappCreateRequest = null;
+    }
+    const savedAccount = err.response?.data?.data;
+    if (!account && savedAccount?.id) {
+      failedWhatsappConnect = { account: savedAccount, fingerprint };
+      whatsappAccounts.value = [...whatsappAccounts.value.filter((item) => item.id !== savedAccount.id), savedAccount];
+    }
+    if (err.response?.status === 403) {
+      whatsappAccessError.value = 'Anda tidak memiliki izin untuk mengelola gateway WhatsApp.';
+    }
     Swal.fire({
       title: 'Gagal Menghubungkan',
-      text: err.response?.data?.message || 'Engine WhatsApp belum siap. Jalankan php artisan rekrutmen:whatsapp-engine',
+      text: err.response?.data?.message || 'Respons koneksi belum diterima. Coba lagi dengan formulir yang sama untuk melanjutkan sesi ini.',
       icon: 'error',
       confirmButtonColor: '#e11d48',
     });
   } finally {
-    isConnectingWhatsapp.value = false;
+    if (generation === whatsappConnectGeneration) {
+      isConnectingWhatsapp.value = false;
+      whatsappConnectController = null;
+    }
   }
 };
 
 const closeWhatsappConnect = () => {
+  whatsappConnectGeneration += 1;
+  whatsappConnectController?.abort();
+  whatsappConnectController = null;
+  isConnectingWhatsapp.value = false;
   stopWhatsappPoll();
   whatsappConnect.value.open = false;
 };
 
 const makeDefaultWhatsappAccount = async (account) => {
+  if (isChangingWhatsappAccount.value) return;
+  isChangingWhatsappAccount.value = true;
   try {
     await axios.post(`/rekrutmen/api/settings/whatsapp/accounts/${account.id}/default`);
     await fetchWhatsappSettings();
@@ -1605,6 +1671,8 @@ const makeDefaultWhatsappAccount = async (account) => {
       icon: 'error',
       confirmButtonColor: '#e11d48',
     });
+  } finally {
+    isChangingWhatsappAccount.value = false;
   }
 };
 
@@ -1615,6 +1683,7 @@ const openWhatsappTest = (account) => {
 };
 
 const sendWhatsappTest = async (account = null) => {
+  if (isTestingWhatsapp.value) return;
   const accountId = account?.id || whatsappTest.value.accountId;
   if (!accountId) {
     Swal.fire({
@@ -1680,20 +1749,27 @@ const sendWhatsappTest = async (account = null) => {
 };
 
 const disconnectWhatsappAccount = async (account) => {
+  if (isChangingWhatsappAccount.value) return;
+  isChangingWhatsappAccount.value = true;
+  closeWhatsappConnect();
   try {
     await axios.post(`/rekrutmen/api/settings/whatsapp/accounts/${account.id}/disconnect`);
     await fetchWhatsappSettings();
   } catch (err) {
+    await fetchWhatsappSettings();
     Swal.fire({
       title: 'Gagal',
       text: err.response?.data?.message || 'Tidak dapat memutuskan nomor.',
       icon: 'error',
       confirmButtonColor: '#e11d48',
     });
+  } finally {
+    isChangingWhatsappAccount.value = false;
   }
 };
 
 const deleteWhatsappAccount = async (account) => {
+  if (isChangingWhatsappAccount.value) return;
   const result = await Swal.fire({
     title: `Hapus ${account.name}?`,
     text: 'Nomor ini tidak bisa dipakai lagi sebagai pengirim WhatsApp rekrutmen.',
@@ -1707,21 +1783,28 @@ const deleteWhatsappAccount = async (account) => {
   });
   if (!result.isConfirmed) return;
 
+  isChangingWhatsappAccount.value = true;
+  closeWhatsappConnect();
   try {
     await axios.delete(`/rekrutmen/api/settings/whatsapp/accounts/${account.id}`);
+    if (failedWhatsappConnect?.account.id === account.id) failedWhatsappConnect = null;
     await fetchWhatsappSettings();
   } catch (err) {
+    await fetchWhatsappSettings();
     Swal.fire({
       title: 'Gagal Menghapus',
       text: err.response?.data?.message || 'Tidak dapat menghapus nomor.',
       icon: 'error',
       confirmButtonColor: '#e11d48',
     });
+  } finally {
+    isChangingWhatsappAccount.value = false;
   }
 };
 
 const whatsappStatusLabel = (account) => {
   if (account.is_active === false) return 'Nonaktif';
+  if (account.engine_ready === false) return 'Engine tidak tersedia';
   if (account.status === 'connected') return 'Terhubung';
   if (account.status === 'qr') return 'Menunggu scan';
   if (account.status === 'pairing') return 'Menunggu kode pairing';
@@ -1747,7 +1830,11 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  stopWhatsappPoll();
+  closeWhatsappConnect();
+});
+onDeactivated(() => closeWhatsappConnect());
+watch(activeTab, (tab) => {
+  if (tab !== 'whatsapp_gateway') closeWhatsappConnect();
 });
 
 const divisions = computed(() => store.configurations?.divisions || []);

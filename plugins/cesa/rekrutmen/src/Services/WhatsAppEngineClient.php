@@ -16,13 +16,13 @@ class WhatsAppEngineClient
     public function health(): array
     {
         try {
-            $response = $this->http()->get($this->url('/health'));
+            $response = $this->http()->timeout(2)->get($this->url('/health'));
 
             if (! $response->successful()) {
                 return ['ok' => false];
             }
 
-            return $response->json() ?? ['ok' => true];
+            return is_array($response->json()) ? $response->json() : ['ok' => false];
         } catch (Throwable) {
             return ['ok' => false];
         }
@@ -36,10 +36,11 @@ class WhatsAppEngineClient
     /**
      * @return array<string, mixed>
      */
-    public function startSession(string $sessionId, ?string $phone = null): array
+    public function startSession(string $sessionId, string $mode = 'qr', ?string $phone = null): array
     {
         return $this->json($this->http()->timeout(25)->post($this->url('/sessions'), array_filter([
             'id'    => $sessionId,
+            'mode'  => $mode,
             'phone' => $phone,
         ], fn ($value): bool => $value !== null && $value !== '')));
     }
@@ -67,12 +68,46 @@ class WhatsAppEngineClient
     /**
      * @return array<string, mixed>
      */
-    public function sendText(string $sessionId, string $phone, string $text): array
+    public function sendText(string $sessionId, string $phone, string $text, string $idempotencyKey): array
     {
-        return $this->json($this->http()->post($this->url('/sessions/'.$sessionId.'/send'), [
-            'phone' => $phone,
-            'text'  => $text,
-        ]));
+        $response = $this->http()->post($this->url('/sessions/'.$sessionId.'/send'), [
+            'phone'           => $phone,
+            'text'            => $text,
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        return $this->sendResult($response);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function message(string $sessionId, string $idempotencyKey): ?array
+    {
+        $response = $this->http()->timeout(3)->get($this->url('/sessions/'.$sessionId.'/messages/'.rawurlencode($idempotencyKey)));
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        return $this->sendResult($response);
+    }
+
+    /** @return array<string, mixed> */
+    protected function sendResult(Response $response): array
+    {
+        $payload = $response->json();
+
+        if (is_array($payload) && in_array($payload['status'] ?? null, ['sent', 'unknown', 'failed'], true)) {
+            if (($payload['status'] ?? null) !== 'sent' || ($response->successful() && ($payload['ok'] ?? false))) {
+                return $payload;
+            }
+        }
+
+        return [
+            'ok'        => false,
+            'status'    => 'unknown',
+            'retryable' => false,
+            'message'   => 'Hasil pengiriman belum dapat dipastikan. Periksa status sebelum mengirim ulang.',
+        ];
     }
 
     public function baseUrl(): string
@@ -87,9 +122,9 @@ class WhatsAppEngineClient
 
     protected function http(): PendingRequest
     {
-        $timeout = (int) config('rekrutmen.notifications.whatsapp.timeout', 20);
+        $timeout = (int) config('rekrutmen.notifications.whatsapp.http_timeout', 20);
 
-        return Http::timeout(max(5, $timeout))
+        return Http::connectTimeout(2)->timeout(max(5, $timeout))
             ->acceptJson()
             ->asJson();
     }
