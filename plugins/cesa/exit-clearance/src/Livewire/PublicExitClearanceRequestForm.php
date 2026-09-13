@@ -21,11 +21,13 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Throwable;
 use Webkul\PluginManager\Package;
+use Webkul\Support\Models\Company;
 
 class PublicExitClearanceRequestForm extends Component implements HasForms
 {
@@ -143,6 +145,7 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
                 'data.phone'          => 'required',
                 'data.position'       => 'required',
                 'data.placement'      => 'required',
+                'data.company_id'     => $this->getCompanyValidationRules(),
                 'data.department_id'  => 'required',
                 'data.join_date'      => 'required',
                 'data.departure_date' => 'required',
@@ -178,6 +181,11 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
         return $rules;
     }
 
+    protected function getCompanyValidationRules(): array
+    {
+        return ['required', 'integer', Rule::exists(Company::class, 'id')->withoutTrashed()];
+    }
+
     protected function getValidationAttributes(): array
     {
         return [
@@ -186,6 +194,7 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
             'data.phone'                          => __('exit-clearance::filament/resources/request.fields.phone'),
             'data.position'                       => __('exit-clearance::filament/resources/request.fields.position'),
             'data.placement'                      => __('exit-clearance::filament/resources/request.fields.placement'),
+            'data.company_id'                     => __('exit-clearance::filament/resources/request.fields.company'),
             'data.department_id'                  => __('exit-clearance::filament/resources/request.fields.department'),
             'data.join_date'                      => __('exit-clearance::filament/resources/request.fields.join_date'),
             'data.departure_date'                 => __('exit-clearance::filament/resources/request.fields.departure_date'),
@@ -280,6 +289,13 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
                             ->required()
                             ->placeholder(__('exit-clearance::livewire/public-exit-clearance-request-form.placeholders.answer'))
                             ->maxLength(255),
+                        Select::make('company_id')
+                            ->label(__('exit-clearance::filament/resources/request.fields.company'))
+                            ->options(fn (): array => Company::query()->orderBy('name')->pluck('name', 'id')->all())
+                            ->searchable()
+                            ->required()
+                            ->rules(fn (): array => $this->getCompanyValidationRules())
+                            ->placeholder(__('exit-clearance::livewire/public-exit-clearance-request-form.placeholders.choose')),
                         Select::make('department_id')
                             ->label(__('exit-clearance::filament/resources/request.fields.department'))
                             ->options(fn (): array => Department::query()
@@ -421,6 +437,8 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
         $this->dispatch('form-processing-started');
 
         try {
+            $this->validate(['data.company_id' => $this->getCompanyValidationRules()]);
+
             $state = $this->form->getState();
         } catch (ValidationException $exception) {
             $this->setErrorBag($exception->validator->errors());
@@ -438,6 +456,7 @@ class PublicExitClearanceRequestForm extends Component implements HasForms
         }
 
         $payload = Arr::only($state, [
+            'company_id',
             'department_id',
             'name',
             'email',

@@ -18,6 +18,7 @@ test('exit clearance exporter defines expected columns', function () {
         'phone',
         'position',
         'placement',
+        'company.name',
         'department.name',
         'join_date',
         'request_date',
@@ -47,11 +48,25 @@ test('exit clearance exporter defines expected columns', function () {
     ]);
 });
 
-test('exit clearance exporter eager loads department and approvers', function () {
+test('exit clearance exporter eager loads company department and approvers', function () {
     $eagerLoads = RequestExporter::modifyQuery(Request::query())->getEagerLoads();
 
-    expect($eagerLoads)->toHaveKey('department')->toHaveKey('approvers');
+    expect($eagerLoads)->toHaveKey('company')->toHaveKey('department')->toHaveKey('approvers');
 });
+
+test('exit clearance company labels are localized', function (string $locale, string $label) {
+    app()->setLocale($locale);
+
+    $companyColumn = collect(RequestExporter::getColumns())
+        ->first(fn ($column): bool => $column->getName() === 'company.name');
+
+    expect($companyColumn->getLabel())->toBe($label)
+        ->and(__('exit-clearance::filament/resources/request.fields.company'))->toBe($label)
+        ->and(__('exit-clearance::filament/resources/request.infolist_fields.company'))->toBe($label);
+})->with([
+    'English'    => ['en', 'Company'],
+    'Indonesian' => ['id', 'Badan Usaha'],
+]);
 
 test('exit clearance exporter normalizes form status and dates', function () {
     $formStatusColumn = collect(RequestExporter::getColumns())

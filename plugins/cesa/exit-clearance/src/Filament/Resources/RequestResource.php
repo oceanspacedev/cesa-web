@@ -37,10 +37,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
 use League\Flysystem\UnableToCheckFileExistence;
+use Webkul\Support\Models\Company;
 
 class RequestResource extends ExitClearanceResource
 {
     protected static ?string $model = Request::class;
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('company');
+    }
 
     public static function getNavigationSort(): ?int
     {
@@ -139,6 +145,18 @@ class RequestResource extends ExitClearanceResource
                                         ->label(__('exit-clearance::filament/resources/request.fields.placement'))
                                         ->required()
                                         ->maxLength(255),
+                                    Select::make('company_id')
+                                        ->label(__('exit-clearance::filament/resources/request.fields.company'))
+                                        ->options(fn (?Request $record): array => Company::query()
+                                            ->withTrashed()
+                                            ->where(fn (Builder $query): Builder => $query
+                                                ->whereNull('deleted_at')
+                                                ->orWhere('id', $record?->getRawOriginal('company_id')))
+                                            ->orderBy('name')
+                                            ->pluck('name', 'id')
+                                            ->all())
+                                        ->searchable()
+                                        ->required(fn (?Request $record): bool => ! $record?->exists || $record->getRawOriginal('company_id') !== null),
                                     Select::make('department_id')
                                         ->label(__('exit-clearance::filament/resources/request.fields.department'))
                                         ->relationship('department', 'name')
@@ -376,6 +394,10 @@ class RequestResource extends ExitClearanceResource
                                             TextEntry::make('name')->label(__('exit-clearance::filament/resources/request.infolist_fields.name'))->icon('heroicon-o-user'),
                                             TextEntry::make('email')->label(__('exit-clearance::filament/resources/request.infolist_fields.email'))->icon('heroicon-o-envelope'),
                                             TextEntry::make('phone')->label(__('exit-clearance::filament/resources/request.infolist_fields.phone'))->icon('heroicon-o-phone'),
+                                            TextEntry::make('company.name')
+                                                ->label(__('exit-clearance::filament/resources/request.infolist_fields.company'))
+                                                ->icon('heroicon-o-building-office')
+                                                ->placeholder('—'),
                                             TextEntry::make('department.name')->label(__('exit-clearance::filament/resources/request.infolist_fields.department'))->icon('heroicon-o-building-office-2')
                                                 ->formatStateUsing(function ($state, Request $record): string {
                                                     $department = $record->department;
@@ -590,6 +612,11 @@ class RequestResource extends ExitClearanceResource
                             ],
                         )
                         : null),
+                Tables\Columns\TextColumn::make('company.name')
+                    ->label(__('exit-clearance::filament/resources/request.table.company'))
+                    ->placeholder('—')
+                    ->searchable()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('department.name')
                     ->label(__('exit-clearance::filament/resources/request.table.department'))
                     ->searchable()

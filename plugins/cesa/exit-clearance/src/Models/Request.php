@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Webkul\Security\Traits\HasNullableCreator;
+use Webkul\Support\Models\Company;
 
 class Request extends Model
 {
@@ -22,6 +23,7 @@ class Request extends Model
     protected $table = 'exit_clearance_requests';
 
     protected $fillable = [
+        'company_id',
         'department_id',
         'name',
         'email',
@@ -57,6 +59,7 @@ class Request extends Model
     ];
 
     protected $casts = [
+        'company_id'     => 'integer',
         'join_date'      => 'date',
         'request_date'   => 'date',
         'departure_date' => 'date',
@@ -101,6 +104,11 @@ class Request extends Model
                 )
             );
         });
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class)->withTrashed();
     }
 
     public function department(): BelongsTo

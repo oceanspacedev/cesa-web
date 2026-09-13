@@ -70,7 +70,7 @@ class ExitClearanceRequestPdfService
 
     protected function renderPdf(Request $record): string
     {
-        $record->loadMissing(['department', 'approvers']);
+        $record->loadMissing(['company', 'department', 'approvers']);
 
         return Pdf::loadView('exit-clearance::pdf.request', [
             'record' => $record,

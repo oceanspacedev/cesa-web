@@ -44,6 +44,7 @@ class ExitClearanceServiceProvider extends PackageServiceProvider
                 '2026_01_17_090000_exit_clearance_create_ec_request_approver_table',
                 '2026_05_15_011100_exit_clearance_rename_legacy_creator_columns',
                 '2026_08_11_170000_exit_clearance_drop_email_unique_from_ec_approvers_table',
+                '2026_09_13_173706_exit_clearance_add_company_id_to_ec_requests_table',
             ])
             ->runsMigrations()
             ->runsSeeders()
