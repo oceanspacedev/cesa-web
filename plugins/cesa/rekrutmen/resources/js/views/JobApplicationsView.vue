@@ -1711,7 +1711,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, onActivated, onDeactiv
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
-import { createRequestKey } from '../lib/utils';
+import { createRequestKey, escapeHtml } from '../lib/utils';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -2144,7 +2144,7 @@ const startSyncCvs = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Pencocokan CV Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Berkas CV berhasil dicocokkan ke kandidat.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Berkas CV berhasil dicocokkan ke kandidat.')}</div>`,
       confirmButtonText: 'Evaluasi Sekarang',
       showCancelButton: true,
       cancelButtonText: 'Tutup',
@@ -2176,9 +2176,9 @@ const rescreenSelectedCandidates = async () => {
     const candidateName = targetApp ? targetApp.full_name : 'Pelamar Terpilih';
 
     const confirm = await Swal.fire({
-      title: `Evaluasi AI: ${candidateName}?`,
+      titleText: `Evaluasi AI: ${candidateName}?`,
       html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-        Sistem AI hanya akan mengevaluasi kualifikasi CV untuk kandidat <b>${candidateName}</b> saja.<br><br>
+        Sistem AI hanya akan mengevaluasi kualifikasi CV untuk kandidat <b>${escapeHtml(candidateName)}</b> saja.<br><br>
         Apakah Anda ingin melanjutkan evaluasi AI kandidat ini?
       </div>`,
       icon: 'question',
@@ -2218,7 +2218,7 @@ const rescreenSelectedCandidates = async () => {
         Swal.fire({
           icon: 'success',
           title: 'Evaluasi Berhasil',
-          html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Evaluasi kualifikasi berhasil diperbarui.'}</div>`,
+          html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
           timer: 2000,
           showConfirmButton: false,
           iconColor: '#10b981',
@@ -2298,7 +2298,7 @@ const rescreenSelectedCandidates = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || `Evaluasi kualifikasi ${count} pelamar berhasil diperbarui.`}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi kualifikasi ${count} pelamar berhasil diperbarui.`)}</div>`,
       timer: 3000,
       showConfirmButton: false,
       iconColor: '#10b981',
@@ -2353,8 +2353,8 @@ const startRescreening = async () => {
   const jobTitle = activeJobTitle.value;
   isScreening.value = true;
   Swal.fire({
-    title: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${jobTitle}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
+    titleText: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${escapeHtml(jobTitle)}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
            <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
@@ -2380,7 +2380,7 @@ const startRescreening = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Evaluasi kualifikasi berhasil diperbarui.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
       timer: 3000,
       showConfirmButton: false,
       iconColor: '#10b981',
@@ -2410,7 +2410,7 @@ const rescreenSingleCandidate = async (app) => {
   isScreening.value = true;
   Swal.fire({
     title: 'Mengevaluasi Pelamar',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${app.full_name}</b>...</div>`,
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${escapeHtml(app.full_name)}</b>...</div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
     showConfirmButton: false,
@@ -2432,7 +2432,7 @@ const rescreenSingleCandidate = async (app) => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Berhasil',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`)}</div>`,
       timer: 2000,
       showConfirmButton: false,
       iconColor: '#10b981',
