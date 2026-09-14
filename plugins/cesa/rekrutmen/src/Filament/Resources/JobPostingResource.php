@@ -8,6 +8,7 @@ use Cesa\Rekrutmen\Filament\Resources\JobPostingResource\Pages;
 use Cesa\Rekrutmen\Filament\Resources\JobPostingResource\RelationManagers\RequestManPowersRelationManager;
 use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RequestManPower;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -24,8 +25,11 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Throwable;
 use Webkul\Security\Traits\HasResourcePermissionQuery;
 
 class JobPostingResource extends Resource
@@ -171,14 +175,23 @@ class JobPostingResource extends Resource
                                     ->default(false),
                                 Forms\Components\FileUpload::make('thumbnail_path')
                                     ->label(__('rekrutmen::filament/resources/job-posting.form.fields.thumbnail_path'))
-                                    ->disk(JobPosting::thumbnailDisk())
+                                    ->disk(fn (?JobPosting $record): string => $record?->resolveThumbnailDisk() ?? JobPosting::thumbnailDisk())
                                     ->directory(JobPosting::THUMBNAIL_DIRECTORY)
                                     ->image()
                                     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                                     ->maxSize(5120)
-                                    ->visibility('public')
+                                    ->visibility(fn (Forms\Components\FileUpload $component): string => app(RekrutmenStorage::class)->visibility($component->getDiskName()))
+                                    ->fetchFileInformation(false)
                                     ->imagePreviewHeight('160')
-                                    ->openable(),
+                                    ->openable()
+                                    ->getUploadedFileUsing(fn (?JobPosting $record, string $file): ?array => self::resolveThumbnailMetadata($record, $file))
+                                    ->saveUploadedFileUsing(function (TemporaryUploadedFile $file, ?JobPosting $record): string {
+                                        $disk = JobPosting::thumbnailDisk();
+                                        $path = app(RekrutmenStorage::class)->storeUploadedFile($file, JobPosting::THUMBNAIL_DIRECTORY, $disk);
+                                        $record?->setAttribute('thumbnail_disk', $disk);
+
+                                        return $path;
+                                    }),
                             ])->columns(1),
                     ])->columnSpan(1),
                 ])->columnSpanFull(),
@@ -252,7 +265,7 @@ class JobPostingResource extends Resource
                     ->sortable(),
                 Tables\Columns\ImageColumn::make('thumbnail_path')
                     ->label(__('rekrutmen::filament/resources/job-posting.table.columns.thumbnail_path'))
-                    ->disk(JobPosting::thumbnailDisk())
+                    ->state(fn (JobPosting $record): ?string => $record->thumbnail_url)
                     ->circular()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('location')
@@ -348,6 +361,33 @@ class JobPostingResource extends Resource
                 ]),
             ])
             ->recordUrl(fn (JobPosting $record): string => static::getUrl('edit', ['record' => $record]));
+    }
+
+    private static function resolveThumbnailMetadata(?JobPosting $record, string $file): ?array
+    {
+        $storage = app(RekrutmenStorage::class);
+        $disk = $file === $record?->thumbnail_path
+            ? $record->resolveThumbnailDisk()
+            : $storage->resolveDisk($file, JobPosting::thumbnailDisk());
+
+        if ($disk === null) {
+            $url = filter_var($file, FILTER_VALIDATE_URL) ? $storage->url($file) : null;
+
+            return $url === null ? null : ['name' => basename($file), 'size' => 0, 'type' => null, 'url' => $url];
+        }
+
+        try {
+            $filesystem = Storage::disk($disk);
+
+            return [
+                'name' => basename($file),
+                'size' => $filesystem->size($file),
+                'type' => $filesystem->mimeType($file),
+                'url'  => $storage->url($file, $disk),
+            ];
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     public static function getRelations(): array

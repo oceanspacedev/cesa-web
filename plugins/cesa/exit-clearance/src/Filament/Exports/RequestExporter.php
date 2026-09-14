@@ -19,6 +19,7 @@ class RequestExporter extends Exporter
     public static function modifyQuery(Builder $query): Builder
     {
         return $query->with([
+            'company',
             'department',
             'approvers',
         ]);
@@ -42,6 +43,9 @@ class RequestExporter extends Exporter
                 ->label(__('exit-clearance::filament/resources/request.table.position')),
             ExportColumn::make('placement')
                 ->label(__('exit-clearance::filament/resources/request.table.placement')),
+            ExportColumn::make('company.name')
+                ->label(__('exit-clearance::filament/resources/request.table.company'))
+                ->state(fn (Request $record): string => $record->company?->name ?? '—'),
             ExportColumn::make('department.name')
                 ->label(__('exit-clearance::filament/resources/request.table.department'))
                 ->state(fn (Request $record): string => static::formatDepartmentName($record)),

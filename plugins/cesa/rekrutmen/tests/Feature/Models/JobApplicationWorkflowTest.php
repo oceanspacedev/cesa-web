@@ -6,7 +6,6 @@ use Cesa\Rekrutmen\Enums\ActivityEntryResult;
 use Cesa\Rekrutmen\Enums\JobApplicationGender;
 use Cesa\Rekrutmen\Enums\JobApplicationMaritalStatus;
 use Cesa\Rekrutmen\Enums\JobApplicationStatus;
-use Cesa\Rekrutmen\Filament\Resources\JobApplicationResource\Pages\CreateJobApplication;
 use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
@@ -146,6 +145,7 @@ class JobApplicationWorkflowTest extends RekrutmenTestCase
         ]);
     }
 
+    public function test_hired_candidate_can_be_marked_withdrawn_before_onboarding(): void
     {
         [$jobPosting, $firstStage, $secondStage] = $this->createPipelineFixture('Hired Withdrawn');
 

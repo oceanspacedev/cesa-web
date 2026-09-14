@@ -1,5 +1,10 @@
 <?php
 
+use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
+use Filament\Pages\Dashboard;
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
+
 return [
 
     /*
@@ -21,7 +26,7 @@ return [
             'pages'              => true,
             'widgets'            => true,
             'resources'          => true,
-            'custom_permissions' => false,
+            'custom_permissions' => true,
         ],
     ],
 
@@ -173,7 +178,7 @@ return [
         'subject' => 'model',
         'manage'  => [],
         'exclude' => [
-            \BezhanSalleh\FilamentShield\Resources\Roles\RoleResource::class,
+            RoleResource::class,
         ],
     ],
 
@@ -192,7 +197,7 @@ return [
         'subject' => 'class',
         'prefix'  => 'view',
         'exclude' => [
-            \Filament\Pages\Dashboard::class,
+            Dashboard::class,
         ],
     ],
 
@@ -211,8 +216,8 @@ return [
         'subject' => 'class',
         'prefix'  => 'view',
         'exclude' => [
-            \Filament\Widgets\AccountWidget::class,
-            \Filament\Widgets\FilamentInfoWidget::class,
+            AccountWidget::class,
+            FilamentInfoWidget::class,
         ],
     ],
 
@@ -227,7 +232,9 @@ return [
     |
     */
 
-    'custom_permissions' => [],
+    'custom_permissions' => [
+        'manage_rekrutmen_whatsapp' => 'Kelola WhatsApp Rekrutmen',
+    ],
 
     /*
     |--------------------------------------------------------------------------

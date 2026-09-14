@@ -7,45 +7,35 @@ use Cesa\Rekrutmen\Jobs\SendWhatsAppNotification;
 use Cesa\Rekrutmen\Models\RequestManPower;
 use Cesa\Rekrutmen\Models\RequestManPowerApproval;
 use Cesa\Rekrutmen\Services\RequestManPowerApprovalWhatsAppNotifier;
+use Cesa\Rekrutmen\Services\WhatsAppGateway;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 use Webkul\Support\Models\Company;
 
 class SendWhatsAppNotificationTest extends RekrutmenTestCase
 {
-    public function test_rekrutmen_waghub_job_uses_correct_payload(): void
+    public function test_rekrutmen_whatsapp_job_sends_through_local_engine(): void
     {
-
-
-        Http::fake([
-            'https://waghub.mekayastudio.com/api/v1/messages' => Http::response(['status' => 'queued'], 200),
-        ]);
+        $this->fakeRekrutmenWhatsAppEngine();
+        $account = $this->makeConnectedWhatsAppAccount();
 
         $job = new SendWhatsAppNotification(
-            '+628123456789',
+            $account->id,
+            '628123456789',
             'Test message',
-            'https://waghub.mekayastudio.com',
-            'test-token',
-            '',
         );
 
-        $job->handle();
+        $job->handle(app(WhatsAppGateway::class));
 
-        Http::assertSent(function (HttpRequest $request): bool {
-            $body = $request->json();
+        Http::assertSent(function (HttpRequest $request) use ($account): bool {
+            $body = $request->data();
 
-            return $request->url() === 'https://waghub.mekayastudio.com/api/v1/messages'
-                && $request->hasHeader('Authorization', 'Bearer test-token')
-                && $request->hasHeader('Idempotency-Key')
-                && $body['recipient']['value'] === '+628123456789'
-                && $body['message']['text'] === 'Test message'
-                && $body['purpose'] === 'notification';
+            return str_contains($request->url(), '/sessions/rekrutmen-'.$account->id.'/send')
+                && ($body['phone'] ?? null) === '628123456789'
+                && ($body['text'] ?? null) === 'Test message';
         });
     }
-
-
 
     public function test_rekrutmen_whatsapp_message_uses_professional_consistent_copy_without_progress(): void
     {

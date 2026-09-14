@@ -60,7 +60,7 @@ class PublicExitClearanceApprovalPage extends SimplePage
         }
 
         $requestRecord = ExitClearanceRequest::query()
-            ->with(['approvers', 'department'])
+            ->with(['approvers', 'company', 'department'])
             ->find($request);
 
         $approverRecord = Approver::query()->find($approver);
@@ -209,7 +209,7 @@ class PublicExitClearanceApprovalPage extends SimplePage
 
     protected function refreshDisplayState(): void
     {
-        $this->requestRecord->loadMissing('approvers', 'department');
+        $this->requestRecord->loadMissing('approvers', 'company', 'department');
 
         $pivot = $this->requestRecord->approvers->firstWhere('id', $this->approverRecord->id)?->pivot;
         $this->currentApproval = [

@@ -403,7 +403,8 @@ class RequestManPowerResource extends Resource
             ->modifyQueryUsing(fn ($query) => $query->with([
                 'approver',
                 'currentPendingApproval',
-                'division',
+                'company',
+                'division.company',
                 'jobPosting.applications:id,job_posting_id,status',
                 'jobPosting.requestManPowers',
                 'jobPosting.rekrutmenPipeline',
@@ -429,6 +430,7 @@ class RequestManPowerResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('division.name')
                     ->label(__('rekrutmen::filament/resources/request-man-power.table.columns.division_id'))
+                    ->description(fn (RequestManPower $record): ?string => $record->company?->name ?: $record->division?->company?->name)
                     ->placeholder(__('rekrutmen::filament/resources/request-man-power.table.placeholders.division_id'))
                     ->searchable()
                     ->sortable()
@@ -513,7 +515,12 @@ class RequestManPowerResource extends Resource
                     ->query(fn (Builder $query, array $data): Builder => $query
                         ->whereFulfillmentStatus($data['value'] ?? null)),
                 Tables\Filters\SelectFilter::make('division_id')
-                    ->relationship('division', 'name')
+                    ->relationship(
+                        name: 'division',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query->with('company')->orderBy('name'),
+                    )
+                    ->getOptionLabelFromRecordUsing(fn (Division $record): string => $record->nameWithCompany())
                     ->label(__('rekrutmen::filament/resources/request-man-power.table.filters.division_id'))
                     ->searchable()
                     ->preload(),
@@ -717,7 +724,7 @@ class RequestManPowerResource extends Resource
         return implode(' | ', array_filter([
             'MPP #'.$requestManPower->getKey(),
             trim((string) $requestManPower->lokasi_penempatan) ?: null,
-            $requestManPower->division?->name ?: null,
+            $requestManPower->division?->nameWithCompany() ?: null,
             $requestManPower->status_kebutuhan?->getLabel() ?? null,
             trim((string) $requestManPower->nama_pengaju) ?: null,
             is_numeric($requestManPower->job_posting_id) ? 'Lowongan #'.$requestManPower->job_posting_id : null,

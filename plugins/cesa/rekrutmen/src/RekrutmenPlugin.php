@@ -3,6 +3,7 @@
 namespace Cesa\Rekrutmen;
 
 use Filament\Contracts\Plugin;
+use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use ReflectionClass;
 use Webkul\PluginManager\Package;
@@ -27,11 +28,29 @@ class RekrutmenPlugin implements Plugin
 
         $panel
             ->when($panel->getId() === 'admin', function (Panel $panel) {
-                $panel
-                    ->discoverClusters(in: $this->getPluginBasePath('/Filament/Clusters'), for: 'Cesa\\Rekrutmen\\Filament\\Clusters')
-                    ->discoverResources(in: $this->getPluginBasePath('/Filament/Resources'), for: 'Cesa\\Rekrutmen\\Filament\\Resources')
-                    ->discoverPages(in: $this->getPluginBasePath('/Filament/Pages'), for: 'Cesa\\Rekrutmen\\Filament\\Pages')
-                    ->discoverWidgets(in: $this->getPluginBasePath('/Filament/Widgets'), for: 'Cesa\\Rekrutmen\\Filament\\Widgets');
+                // Register high-level navigation items for Rekrutmen in Filament topbar pointing to Vue SPA
+                $panel->navigationItems([
+                    NavigationItem::make('Manpower Requests')
+                        ->url('/admin/request-man-powers')
+                        ->group('Rekrutmen')
+                        ->sort(1),
+                    NavigationItem::make('Job Postings')
+                        ->url('/admin/job-postings')
+                        ->group('Rekrutmen')
+                        ->sort(2),
+                    NavigationItem::make('Job Applications')
+                        ->url('/admin/job-applications')
+                        ->group('Rekrutmen')
+                        ->sort(3),
+                    NavigationItem::make('Recruitment Progress')
+                        ->url('/admin/recruitment-progress')
+                        ->group('Rekrutmen')
+                        ->sort(4),
+                    NavigationItem::make('Configurations')
+                        ->url('/admin/configurations')
+                        ->group('Rekrutmen')
+                        ->sort(5),
+                ]);
             });
     }
 

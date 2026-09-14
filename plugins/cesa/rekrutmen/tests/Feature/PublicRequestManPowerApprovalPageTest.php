@@ -5,9 +5,10 @@ namespace Cesa\Rekrutmen\Tests\Feature;
 use Cesa\Rekrutmen\Enums\RequestManPowerApprovalStatus;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
 use Cesa\Rekrutmen\Enums\StatusKebutuhan;
-use Cesa\Rekrutmen\Jobs\SendWhatsAppNotification;
+use Cesa\Rekrutmen\Jobs\SendNotificationDeliveryJob;
 use Cesa\Rekrutmen\Models\Approver;
 use Cesa\Rekrutmen\Models\Division;
+use Cesa\Rekrutmen\Models\NotificationDelivery;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RequestManPower;
 use Cesa\Rekrutmen\Models\RequestManPowerApprovalRequestedNotification;
@@ -22,6 +23,13 @@ use Webkul\Support\Models\Company;
 
 class PublicRequestManPowerApprovalPageTest extends RekrutmenTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeRekrutmenWhatsAppEngine();
+        $this->makeConnectedWhatsAppAccount();
+    }
+
     public function test_public_approval_route_is_accessible(): void
     {
         $request = $this->createRequestWithApprovers();
@@ -66,7 +74,7 @@ class PublicRequestManPowerApprovalPageTest extends RekrutmenTestCase
         ): bool {
             return ($notifiable->routes['mail'] ?? null) === 'first.approver@example.com';
         });
-        Queue::assertPushed(SendWhatsAppNotification::class, 1);
+        Queue::assertPushed(SendNotificationDeliveryJob::class, 1);
 
         $firstApproval = $request->currentPendingApproval()->firstOrFail();
 
@@ -88,7 +96,7 @@ class PublicRequestManPowerApprovalPageTest extends RekrutmenTestCase
         ): bool {
             return ($notifiable->routes['mail'] ?? null) === 'second.approver@example.com';
         });
-        Queue::assertPushed(SendWhatsAppNotification::class, 2);
+        Queue::assertPushed(SendNotificationDeliveryJob::class, 2);
 
         $secondApproval = $request->currentPendingApproval()->firstOrFail();
 
@@ -181,15 +189,15 @@ class PublicRequestManPowerApprovalPageTest extends RekrutmenTestCase
                 new AnonymousNotifiable,
                 RequestManPowerApprovalRequestedNotification::class
             )->values();
-            $whatsAppJobs = Queue::pushed(SendWhatsAppNotification::class)->values();
+            $whatsAppJobs = Queue::pushed(SendNotificationDeliveryJob::class)->values();
 
             $this->assertCount(2, $mailNotifications);
             $this->assertNull($mailNotifications[0]->delay);
             $this->assertSame('2026-04-22 10:00:04', $mailNotifications[1]->delay?->format('Y-m-d H:i:s'));
 
             $this->assertCount(2, $whatsAppJobs);
-            $this->assertNull($whatsAppJobs[0]->delay);
-            $this->assertSame(7, $whatsAppJobs[1]->delay);
+            $this->assertSame('2026-04-22 10:00:00', $whatsAppJobs[0]->delay?->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-04-22 10:00:00', $whatsAppJobs[1]->delay?->format('Y-m-d H:i:s'));
 
             $this->assertNotSame($initialToken, $resentApproval->action_token);
         } finally {
@@ -211,6 +219,10 @@ class PublicRequestManPowerApprovalPageTest extends RekrutmenTestCase
 
         Notification::assertSentOnDemandTimes(RequestManPowerApprovalRequestedNotification::class, 2);
         Queue::assertNothingPushed();
+        $this->assertSame(2, NotificationDelivery::query()
+            ->where('status', NotificationDelivery::STATUS_SKIPPED)
+            ->where('error_message', 'Pengiriman WhatsApp rekrutmen sedang nonaktif.')
+            ->count());
     }
 
     private function createRequestWithApprovers(?string $emailAddress = 'requester@example.com'): RequestManPower

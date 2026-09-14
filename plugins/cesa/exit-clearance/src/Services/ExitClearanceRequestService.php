@@ -87,7 +87,7 @@ class ExitClearanceRequestService
      */
     public function buildSummary(Request $request): array
     {
-        $request->loadMissing('department');
+        $request->loadMissing(['company', 'department']);
 
         $resignationUrl = $this->resolveResignationLetterUrl($request);
 
@@ -98,6 +98,7 @@ class ExitClearanceRequestService
             ['label' => 'Email', 'value' => $request->email],
             ['label' => 'No HP', 'value' => $request->phone],
             ['label' => 'Posisi Pekerjaan', 'value' => $request->position],
+            ['label' => __('exit-clearance::filament/resources/request.fields.company'), 'value' => $request->company?->name ?? '—'],
             ['label' => 'Divisi', 'value' => $request->department?->name],
             ['label' => 'Penempatan', 'value' => $request->placement],
             ['label' => 'Tanggal Masuk Kerja', 'value' => $this->formatDate($request->join_date)],
@@ -134,7 +135,7 @@ class ExitClearanceRequestService
      */
     public function buildCategorizedSummary(Request $request): array
     {
-        $request->loadMissing('department');
+        $request->loadMissing(['company', 'department']);
 
         $resignationUrl = $this->resolveResignationLetterUrl($request);
 
@@ -146,6 +147,7 @@ class ExitClearanceRequestService
                 ['label' => 'Email', 'value' => $request->email],
                 ['label' => 'No HP', 'value' => $request->phone],
                 ['label' => 'Posisi Pekerjaan', 'value' => $request->position],
+                ['label' => __('exit-clearance::filament/resources/request.fields.company'), 'value' => $request->company?->name ?? '—'],
                 ['label' => 'Divisi', 'value' => $request->department?->name],
                 ['label' => 'Penempatan', 'value' => $request->placement],
                 ['label' => 'Tanggal Masuk Kerja', 'value' => $this->formatDate($request->join_date)],

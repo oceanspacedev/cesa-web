@@ -2,6 +2,7 @@
 
 namespace Cesa\Rekrutmen\Models;
 
+use Cesa\Rekrutmen\Concerns\ConfiguresRekrutmenMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class RequestManPowerSubmittedNotification extends Notification implements ShouldQueue
 {
+    use ConfiguresRekrutmenMail;
     use Queueable;
 
     public function __construct(private readonly RequestManPower $requestManPower)
@@ -23,17 +25,19 @@ class RequestManPowerSubmittedNotification extends Notification implements Shoul
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject(__('rekrutmen::mail/request-man-power-submitted.subject'))
-            ->action(
-                __('rekrutmen::mail/request-man-power-submitted.view_progress'),
-                $this->requestManPower->getPublicProgressUrl(),
-            )
-            ->view('rekrutmen::mail.request-man-power-submitted', [
-                'request'     => $this->requestManPower,
-                'summary'     => $this->buildSummary(),
-                'progressUrl' => $this->requestManPower->getPublicProgressUrl(),
-            ]);
+        return $this->configureRekrutmenMail(
+            (new MailMessage)
+                ->subject(__('rekrutmen::mail/request-man-power-submitted.subject'))
+                ->action(
+                    __('rekrutmen::mail/request-man-power-submitted.view_progress'),
+                    $this->requestManPower->getPublicProgressUrl(),
+                )
+                ->view('rekrutmen::mail.request-man-power-submitted', [
+                    'request'     => $this->requestManPower,
+                    'summary'     => $this->buildSummary(),
+                    'progressUrl' => $this->requestManPower->getPublicProgressUrl(),
+                ])
+        );
     }
 
     /**

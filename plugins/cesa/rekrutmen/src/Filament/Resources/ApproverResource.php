@@ -133,6 +133,7 @@ class ApproverResource extends RekrutmenConfigurationResource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['company', 'division.company']))
             ->defaultSort('approval_order')
             ->columns([
                 Tables\Columns\TextColumn::make('approval_order')
@@ -155,6 +156,7 @@ class ApproverResource extends RekrutmenConfigurationResource
                     ->placeholder(__('rekrutmen::filament/resources/approver.table.placeholders.company_id')),
                 Tables\Columns\TextColumn::make('division.name')
                     ->label(__('rekrutmen::filament/resources/approver.table.columns.division_id'))
+                    ->description(fn (Approver $record): ?string => $record->company?->name ?: $record->division?->company?->name)
                     ->placeholder(__('rekrutmen::filament/resources/approver.table.placeholders.division_id')),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label(__('rekrutmen::filament/resources/approver.table.columns.is_active'))
@@ -167,7 +169,12 @@ class ApproverResource extends RekrutmenConfigurationResource
                     ->searchable()
                     ->preload(),
                 Tables\Filters\SelectFilter::make('division_id')
-                    ->relationship('division', 'name')
+                    ->relationship(
+                        name: 'division',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query): Builder => $query->with('company')->orderBy('name'),
+                    )
+                    ->getOptionLabelFromRecordUsing(fn (Division $record): string => $record->nameWithCompany())
                     ->label(__('rekrutmen::filament/resources/approver.table.filters.division_id'))
                     ->searchable()
                     ->preload(),

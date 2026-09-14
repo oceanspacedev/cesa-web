@@ -2,6 +2,7 @@
 
 namespace Cesa\Rekrutmen\Models;
 
+use Cesa\Rekrutmen\Concerns\ConfiguresRekrutmenMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class RequestManPowerApprovalRequestedNotification extends Notification implements ShouldQueue
 {
+    use ConfiguresRekrutmenMail;
     use Queueable;
 
     public function __construct(
@@ -25,19 +27,21 @@ class RequestManPowerApprovalRequestedNotification extends Notification implemen
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject(__('rekrutmen::mail/request-man-power-approval-request.subject'))
-            ->action(
-                __('rekrutmen::mail/request-man-power-approval-request.action'),
-                $this->approval->buildApprovalUrl(),
-            )
-            ->view('rekrutmen::mail.request-man-power-approval-request', [
-                'request'      => $this->requestManPower,
-                'approverName' => $this->approval->approver_name,
-                'summary'      => $this->buildSummary(),
-                'actionUrl'    => $this->approval->buildApprovalUrl(),
-                'progressUrl'  => $this->requestManPower->getPublicProgressUrl(),
-            ]);
+        return $this->configureRekrutmenMail(
+            (new MailMessage)
+                ->subject(__('rekrutmen::mail/request-man-power-approval-request.subject'))
+                ->action(
+                    __('rekrutmen::mail/request-man-power-approval-request.action'),
+                    $this->approval->buildApprovalUrl(),
+                )
+                ->view('rekrutmen::mail.request-man-power-approval-request', [
+                    'request'      => $this->requestManPower,
+                    'approverName' => $this->approval->approver_name,
+                    'summary'      => $this->buildSummary(),
+                    'actionUrl'    => $this->approval->buildApprovalUrl(),
+                    'progressUrl'  => $this->requestManPower->getPublicProgressUrl(),
+                ])
+        );
     }
 
     /**

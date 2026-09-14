@@ -39,6 +39,17 @@ class Division extends Model
         return $this->belongsTo(Company::class, 'company_id')->withTrashed();
     }
 
+    public function nameWithCompany(): string
+    {
+        $companyName = trim((string) ($this->company?->name ?? ''));
+
+        if ($companyName === '') {
+            return (string) $this->name;
+        }
+
+        return "{$this->name} — {$companyName}";
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

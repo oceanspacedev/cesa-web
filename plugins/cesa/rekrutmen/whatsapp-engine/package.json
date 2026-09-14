@@ -1,0 +1,14 @@
+{
+    "name": "cesa-rekrutmen-whatsapp-engine",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "node server.mjs",
+        "test": "node --test *.test.mjs"
+    },
+    "dependencies": {
+        "@whiskeysockets/baileys": "^6.7.21",
+        "pino": "^9.6.0",
+        "qrcode": "^1.5.4"
+    }
+}

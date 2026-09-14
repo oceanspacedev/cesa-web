@@ -280,9 +280,9 @@
     direction: rtl;
 }
 
-/* Transition for smooth direction changes */
-* {
-    transition: margin 0.2s ease, padding 0.2s ease, transform 0.2s ease;
+/* Prevent radix popper and floating UI wrappers from animating position shifts */
+[data-radix-popper-content-wrapper] {
+    transition: none !important;
 }
 
 /* Ensure numbers stay LTR */

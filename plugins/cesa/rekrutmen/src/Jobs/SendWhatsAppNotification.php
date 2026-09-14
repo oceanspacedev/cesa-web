@@ -2,117 +2,53 @@
 
 namespace Cesa\Rekrutmen\Jobs;
 
+use Cesa\Rekrutmen\Models\NotificationDelivery;
+use Cesa\Rekrutmen\Services\NotificationDeliveryService;
+use Cesa\Rekrutmen\Services\WhatsAppGateway;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class SendWhatsAppNotification implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries;
+    public int $tries = 1;
 
-    protected int $timeout;
-
-    /**
-     * @var array<int, int>
-     */
-    protected array $backoff;
+    public int $timeout;
 
     public function __construct(
+        protected int $accountId,
         protected string $phone,
         protected string $message,
-        protected string $endpoint,
-        protected string $apiKey,
-        ?int $timeout = null,
     ) {
-        $queue = config('rekrutmen.notifications.whatsapp.queue')
-            ?? config('rekrutmen.notifications.queue')
-            ?? 'whatsapp';
-
-        $this->onQueue($queue);
-
-        if ($connection = config('rekrutmen.notifications.whatsapp.connection')) {
-            $this->onConnection($connection);
-        }
-
-        $this->tries = (int) (config('rekrutmen.notifications.whatsapp.tries') ?? 3);
-        $this->timeout = $timeout ?? (int) (config('rekrutmen.notifications.whatsapp.timeout') ?? 10);
-        $this->backoff = $this->resolveBackoff();
+        $this->onQueue(config('rekrutmen.notifications.whatsapp.queue', 'whatsapp'));
+        $this->onConnection(app(NotificationDeliveryService::class)->queueConnection());
+        $this->timeout = app(NotificationDeliveryService::class)->jobTimeout();
     }
 
-    public function handle(): void
+    public function handle(WhatsAppGateway $gateway): void
     {
-        try {
-            $idempotencyKey = 'rekrutmen-' . ($this->job ? $this->job->getJobId() : (string) str()->uuid());
+        $delivery = NotificationDelivery::query()->firstOrCreate([
+            'request_key' => hash('sha256', 'legacy-approval:'.$this->accountId.':'.$this->phone.':'.$this->message),
+        ], [
+            'channel'             => 'whatsapp',
+            'recipient'           => $this->phone,
+            'whatsapp_account_id' => $this->accountId,
+            'payload'             => ['text' => $this->message],
+            'status'              => NotificationDelivery::STATUS_PENDING,
+            'available_at'        => now(),
+        ]);
 
-            $response = Http::timeout($this->timeout)
-                ->acceptJson()
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . $this->apiKey,
-                    'Idempotency-Key' => $idempotencyKey,
-                ])
-                ->post(rtrim($this->endpoint, '/') . '/api/v1/messages', [
-                    'recipient' => [
-                        'type' => 'phone',
-                        'value' => $this->phone,
-                    ],
-                    'message' => [
-                        'type' => 'text',
-                        'text' => $this->message,
-                    ],
-                    'purpose' => 'notification',
-                    'mode' => 'async',
-                    'route_key' => 'default',
-                    'client_reference' => 'rekrutmen',
-                ]);
-
-            $response->throw();
-        } catch (Throwable $exception) {
-            Log::error('Failed to send WhatsApp notification for recruitment approval.', [
-                'provider' => 'waghub',
-                'phone'    => $this->phone,
-                'error'    => $exception->getMessage(),
-            ]);
-
-            throw $exception;
-        }
+        app(NotificationDeliveryService::class)->execute($delivery);
     }
 
-    /**
-     * @return array<int, int>
-     */
     public function backoff(): array
     {
-        return $this->backoff;
+        return config('rekrutmen.notifications.whatsapp.backoff', [10, 30, 60]);
     }
 
-    /**
-     * @return array<int, string>
-     */
     public function tags(): array
     {
-        return [
-            'rekrutmen',
-            'whatsapp',
-            'request-man-power-approval',
-        ];
+        return ['rekrutmen', 'whatsapp', 'request-man-power-approval'];
     }
-
-    /**
-     * @return array<int, int>
-     */
-    protected function resolveBackoff(): array
-    {
-        $backoff = config('rekrutmen.notifications.whatsapp.backoff');
-
-        if (is_array($backoff) && ! empty($backoff)) {
-            return array_map(static fn ($interval): int => (int) $interval, $backoff);
-        }
-
-        return [10, 30, 60];
-    }
-
 }

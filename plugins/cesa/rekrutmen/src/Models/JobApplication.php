@@ -7,16 +7,13 @@ use Cesa\Rekrutmen\Enums\JobApplicationGender;
 use Cesa\Rekrutmen\Enums\JobApplicationMaritalStatus;
 use Cesa\Rekrutmen\Enums\JobApplicationStatus;
 use Cesa\Rekrutmen\Services\MailThrottleService;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,9 +35,14 @@ class JobApplication extends Model
     public const PHOTO_DIRECTORY = 'rekrutmen/photos';
 
     /**
-     * @var array<string, ?string>
+     * @var array<string, array{path: ?string, disk: ?string}>
      */
     protected array $originalAttachmentPaths = [];
+
+    /**
+     * @var array<string, bool>
+     */
+    protected array $explicitAttachmentDisks = [];
 
     /**
      * @var array{job_posting_id: int, active_email: string}|null
@@ -74,8 +76,14 @@ class JobApplication extends Model
         'email',
         'source',
         'photo_path',
+        'photo_disk',
         'resume_path',
+        'resume_disk',
         'status',
+        'ai_match_score',
+        'ai_recommendation',
+        'ai_summary',
+        'ai_analyzed_at',
     ];
 
     protected function casts(): array
@@ -85,6 +93,8 @@ class JobApplication extends Model
             'birth_date'     => 'date',
             'marital_status' => JobApplicationMaritalStatus::class,
             'status'         => JobApplicationStatus::class,
+            'ai_match_score' => 'integer',
+            'ai_analyzed_at' => 'datetime',
             'position'       => 'decimal:10',
             'created_at'     => 'datetime',
             'updated_at'     => 'datetime',
@@ -117,6 +127,7 @@ class JobApplication extends Model
 
             $application->deleteRemovedAttachmentFile('resume_path');
             $application->deleteRemovedAttachmentFile('photo_path');
+            $application->explicitAttachmentDisks = [];
             $application->reassignOriginalActiveEmailIfNeeded();
             $application->reassignOriginalActiveWhatsappIfNeeded();
         });
@@ -162,10 +173,10 @@ class JobApplication extends Model
         static::forceDeleted(function (JobApplication $application): void {
             $application->deleteManagedFile($application->normalizeManagedFilePath(
                 $application->getRawOriginal('resume_path') ?? $application->resume_path
-            ));
+            ), $application->normalizeAttachmentDisk($application->getRawOriginal('resume_disk')));
             $application->deleteManagedFile($application->normalizeManagedFilePath(
                 $application->getRawOriginal('photo_path') ?? $application->photo_path
-            ));
+            ), $application->normalizeAttachmentDisk($application->getRawOriginal('photo_disk')));
         });
     }
 
@@ -540,9 +551,19 @@ class JobApplication extends Model
 
     public static function resumeDisk(): string
     {
-        $disk = config('filament.default_filesystem_disk', config('filesystems.default', 'local'));
+        return app(RekrutmenStorage::class)->disk();
+    }
 
-        return is_string($disk) && $disk !== '' ? $disk : 'local';
+    public function setResumeDiskAttribute(mixed $disk): void
+    {
+        $this->attributes['resume_disk'] = $this->normalizeAttachmentDisk($disk);
+        $this->explicitAttachmentDisks['resume_disk'] = true;
+    }
+
+    public function setPhotoDiskAttribute(mixed $disk): void
+    {
+        $this->attributes['photo_disk'] = $this->normalizeAttachmentDisk($disk);
+        $this->explicitAttachmentDisks['photo_disk'] = true;
     }
 
     /**
@@ -1149,21 +1170,41 @@ class JobApplication extends Model
             return;
         }
 
-        $this->originalAttachmentPaths = [
-            'resume_path' => $this->normalizeManagedFilePath($this->getRawOriginal('resume_path')),
-            'photo_path'  => $this->normalizeManagedFilePath($this->getRawOriginal('photo_path')),
-        ];
+        foreach (['resume_path', 'photo_path'] as $attribute) {
+            $path = $this->normalizeManagedFilePath($this->getRawOriginal($attribute));
+            $disk = $this->normalizeAttachmentDisk($this->getRawOriginal($this->attachmentDiskAttribute($attribute)));
+
+            $this->originalAttachmentPaths[$attribute] = [
+                'path' => $path,
+                'disk' => $disk ?? ($path ? $this->resolveManagedFileDisk($path) : null),
+            ];
+        }
     }
 
     protected function prepareManagedAttachmentPathForPersistence(string $attribute, string $directory, string $prefix): void
     {
-        if (! $this->exists) {
+        $path = $this->normalizeManagedFilePath($this->{$attribute});
+        $diskAttribute = $this->attachmentDiskAttribute($attribute);
+        $disk = $this->normalizeAttachmentDisk($this->{$diskAttribute});
+        $this->attributes[$attribute] = $path;
+
+        if (! $path || filter_var($path, FILTER_VALIDATE_URL)) {
+            $this->attributes[$diskAttribute] = null;
+
             return;
         }
 
-        $path = $this->normalizeManagedFilePath($this->{$attribute});
+        if (! $this->exists || $this->isDirty($attribute)) {
+            if (! $disk || (! isset($this->explicitAttachmentDisks[$diskAttribute]) && ! $this->isDirty($diskAttribute))) {
+                $disk = self::resumeDisk();
+            }
+        } elseif (! $disk) {
+            $disk = $this->originalAttachmentPaths[$attribute]['disk'] ?? null;
+        }
 
-        if (! $path) {
+        $this->attributes[$diskAttribute] = $disk;
+
+        if (! $this->exists || ! $disk) {
             return;
         }
 
@@ -1171,6 +1212,8 @@ class JobApplication extends Model
             $path,
             $directory,
             $prefix.'-'.$this->getKey(),
+            $disk,
+            $this->originalAttachmentPaths[$attribute] ?? null,
         );
 
         if ($renamedPath !== $path) {
@@ -1190,6 +1233,8 @@ class JobApplication extends Model
             $path,
             $directory,
             $prefix.'-'.$this->getKey(),
+            $this->normalizeAttachmentDisk($this->{$this->attachmentDiskAttribute($attribute)}),
+            $this->originalAttachmentPaths[$attribute] ?? null,
         );
 
         if ($renamedPath === $path) {
@@ -1209,16 +1254,27 @@ class JobApplication extends Model
             return;
         }
 
-        $originalPath = $this->originalAttachmentPaths[$attribute];
+        $original = $this->originalAttachmentPaths[$attribute];
         $currentPath = $this->normalizeManagedFilePath($this->{$attribute});
+        $currentDisk = $this->normalizeAttachmentDisk($this->{$this->attachmentDiskAttribute($attribute)});
 
         unset($this->originalAttachmentPaths[$attribute]);
 
-        if ($originalPath === $currentPath) {
+        if (! $original['disk'] || ($original['path'] === $currentPath && $original['disk'] === $currentDisk)) {
             return;
         }
 
-        $this->deleteManagedFile($originalPath);
+        $this->deleteManagedFile($original['path'], $original['disk']);
+    }
+
+    protected function attachmentDiskAttribute(string $pathAttribute): string
+    {
+        return str_replace('_path', '_disk', $pathAttribute);
+    }
+
+    protected function normalizeAttachmentDisk(mixed $disk): ?string
+    {
+        return is_string($disk) && trim($disk) !== '' ? trim($disk) : null;
     }
 
     protected function normalizeManagedFilePath(mixed $path): ?string
@@ -1338,7 +1394,10 @@ class JobApplication extends Model
         return DecimalPosition::after(DecimalPosition::normalize($lastPosition));
     }
 
-    protected function renameManagedFile(string $path, string $directory, string $prefix): string
+    /**
+     * @param  array{path: ?string, disk: ?string}|null  $original
+     */
+    protected function renameManagedFile(string $path, string $directory, string $prefix, ?string $storedDisk, ?array $original = null): string
     {
         if (filter_var($path, FILTER_VALIDATE_URL)) {
             return $path;
@@ -1358,20 +1417,20 @@ class JobApplication extends Model
             return $path;
         }
 
-        $disk = $this->resolveManagedFileDisk($path);
+        $disk = $this->resolveManagedFileDisk($path, $storedDisk);
 
         if (! $disk) {
             return $path;
         }
 
         try {
-            if (Storage::disk($disk)->exists($targetPath)) {
-                Storage::disk($disk)->delete($targetPath);
+            if (Storage::disk($disk)->exists($targetPath)
+                && ($original === null || $original['path'] !== $targetPath || $original['disk'] !== $disk)) {
+                $targetPath = $canonicalDirectory.'/'.pathinfo($targetPath, PATHINFO_FILENAME).'-'.Str::uuid()
+                    .($extension !== '' ? '.'.$extension : '');
             }
 
-            Storage::disk($disk)->move($path, $targetPath);
-
-            return $targetPath;
+            return Storage::disk($disk)->move($path, $targetPath) ? $targetPath : $path;
         } catch (Throwable) {
             return $path;
         }
@@ -1402,13 +1461,13 @@ class JobApplication extends Model
         return Str::limit($slug, 80, '');
     }
 
-    protected function deleteManagedFile(?string $path): void
+    protected function deleteManagedFile(?string $path, ?string $storedDisk = null): void
     {
         if (! $path || filter_var($path, FILTER_VALIDATE_URL)) {
             return;
         }
 
-        $disk = $this->resolveManagedFileDisk($path);
+        $disk = $this->resolveManagedFileDisk($path, $storedDisk);
 
         if (! $disk) {
             return;
@@ -1421,30 +1480,9 @@ class JobApplication extends Model
         }
     }
 
-    protected function resolveManagedFileDisk(string $path): ?string
+    protected function resolveManagedFileDisk(string $path, ?string $storedDisk = null): ?string
     {
-        $candidateDisks = array_values(array_unique(array_filter([
-            config('filament.default_filesystem_disk'),
-            config('filesystems.default'),
-            'public',
-            'local',
-        ], fn (mixed $disk): bool => is_string($disk) && $disk !== '')));
-
-        foreach ($candidateDisks as $disk) {
-            if (! config()->has("filesystems.disks.{$disk}")) {
-                continue;
-            }
-
-            try {
-                if (Storage::disk($disk)->exists($path)) {
-                    return $disk;
-                }
-            } catch (Throwable) {
-                continue;
-            }
-        }
-
-        return null;
+        return app(RekrutmenStorage::class)->resolveDisk($path, $storedDisk);
     }
 
     public function resolveAttachmentPath(string $attachment): ?string
@@ -1454,6 +1492,35 @@ class JobApplication extends Model
             'photo'  => $this->photo_path,
             default  => null,
         };
+    }
+
+    public function resolveAttachmentDisk(string $attachment): ?string
+    {
+        $path = $this->resolveAttachmentPath($attachment);
+
+        if (! $path) {
+            return null;
+        }
+
+        $pathAttribute = $attachment.'_path';
+        $diskAttribute = $attachment.'_disk';
+        $storedDisk = $this->normalizeAttachmentDisk($this->{$diskAttribute});
+        $disk = $this->resolveManagedFileDisk($path, $storedDisk);
+
+        if ($disk && $storedDisk === null && $this->exists
+            && ! $this->isDirty($pathAttribute) && ! $this->isDirty($diskAttribute)) {
+            $persisted = static::query()->withoutGlobalScopes()->whereKey($this->getKey())
+                ->where($pathAttribute, $this->getRawOriginal($pathAttribute))
+                ->whereNull($diskAttribute)
+                ->update([$diskAttribute => $disk]);
+
+            if ($persisted) {
+                $this->attributes[$diskAttribute] = $disk;
+                $this->syncOriginalAttribute($diskAttribute);
+            }
+        }
+
+        return $disk;
     }
 
     protected function recordHistory(
@@ -1505,5 +1572,3 @@ class JobApplication extends Model
             ->value('id');
     }
 }
-
-

@@ -2,6 +2,7 @@
 
 namespace Cesa\Rekrutmen\Models;
 
+use Cesa\Rekrutmen\Concerns\ConfiguresRekrutmenMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class JobApplicationSubmittedNotification extends Notification implements ShouldQueue
 {
+    use ConfiguresRekrutmenMail;
     use Queueable;
 
     public function __construct(private readonly JobApplication $jobApplication)
@@ -42,27 +44,7 @@ class JobApplicationSubmittedNotification extends Notification implements Should
                 'footerNote'     => __('rekrutmen::mail/job-application-submitted.footer_note'),
             ]);
 
-        $mailer = config('rekrutmen.mail.job_application.mailer');
-
-        if (is_string($mailer) && $mailer !== '') {
-            $message->mailer($mailer);
-        }
-
-        $fromAddress = config('rekrutmen.mail.job_application.from.address');
-        $fromName = config('rekrutmen.mail.job_application.from.name');
-
-        if (is_string($fromAddress) && $fromAddress !== '') {
-            $message->from($fromAddress, is_string($fromName) && $fromName !== '' ? $fromName : null);
-        }
-
-        $replyToAddress = config('rekrutmen.mail.job_application.reply_to.address');
-        $replyToName = config('rekrutmen.mail.job_application.reply_to.name');
-
-        if (is_string($replyToAddress) && $replyToAddress !== '') {
-            $message->replyTo($replyToAddress, is_string($replyToName) && $replyToName !== '' ? $replyToName : null);
-        }
-
-        return $message;
+        return $this->configureRekrutmenMail($message);
     }
 
     /**

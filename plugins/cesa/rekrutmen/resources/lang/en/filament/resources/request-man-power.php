@@ -24,7 +24,7 @@ return [
             'tanggal_pengajuan'          => 'Submission Date',
             'divisi'                     => 'Division Snapshot',
             'division_id'                => 'Division',
-            'company_id'                 => 'Company',
+            'company_id'                 => 'Business Entity',
             'badan_usaha'                => 'Business Entity',
             'posisi_dibutuhkan'          => 'Requested Position',
             'lokasi_penempatan'          => 'Placement Location',

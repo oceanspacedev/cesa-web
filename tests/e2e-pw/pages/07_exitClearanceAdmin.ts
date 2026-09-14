@@ -83,11 +83,15 @@ export class ExitClearanceAdminPage {
 
     async assertRequestDetails(input: {
         applicantName: string;
+        company?: string;
         email: string;
         uid: string;
         status: string;
     }): Promise<void> {
         await expect(this.page.getByText(input.applicantName).first()).toBeVisible();
+        if (input.company) {
+            await expect(this.page.getByText(input.company, { exact: true })).toBeVisible();
+        }
         await expect(this.page.getByText(input.email).first()).toBeVisible();
         await expect(this.page.getByText(input.uid).first()).toBeVisible();
         await expect(this.page.getByText(input.status).first()).toBeVisible();

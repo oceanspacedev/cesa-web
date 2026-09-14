@@ -37,7 +37,7 @@ return [
         'tanggal_pengajuan'          => 'Submission Date',
         'divisi'                     => 'Division',
         'division_id'                => 'Division',
-        'company_id'                 => 'Company',
+        'company_id'                 => 'Business Entity',
         'posisi_dibutuhkan'          => 'Requested Position',
         'lokasi_penempatan'          => 'Placement Location',
         'status_kebutuhan'           => 'Requirement Status',

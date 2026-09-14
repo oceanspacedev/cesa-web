@@ -13,19 +13,19 @@ return [
             'identity' => 'Division Identity',
         ],
         'fields' => [
-            'company_id' => 'Company',
+            'company_id' => 'Business Entity',
             'name'       => 'Division Name',
             'is_active'  => 'Active',
         ],
     ],
     'table' => [
         'columns' => [
-            'company_id' => 'Company',
+            'company_id' => 'Business Entity',
             'name'       => 'Division Name',
             'is_active'  => 'Active',
         ],
         'filters' => [
-            'company_id' => 'Company',
+            'company_id' => 'Business Entity',
             'is_active'  => 'Active Status',
         ],
     ],

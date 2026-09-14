@@ -4,6 +4,7 @@ namespace Cesa\Rekrutmen\Models;
 
 use Cesa\Rekrutmen\Enums\JobApplicationStatus;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 use Webkul\Security\Traits\HasNullableCreator;
+use Webkul\Support\Models\Company;
 
 class JobPosting extends Model
 {
@@ -21,7 +24,10 @@ class JobPosting extends Model
 
     protected $table = 'rekrutmen_job_postings';
 
+    protected bool $thumbnailDiskWasAssigned = false;
+
     protected $fillable = [
+        'company_id',
         'request_man_power_id',
         'rekrutmen_pipeline_id',
         'title',
@@ -30,11 +36,13 @@ class JobPosting extends Model
         'requirements',
         'location',
         'thumbnail_path',
+        'thumbnail_disk',
         'is_published',
         'closing_date',
     ];
 
     protected $casts = [
+        'company_id'   => 'integer',
         'is_published' => 'boolean',
         'closing_date' => 'date',
         'created_at'   => 'datetime',
@@ -44,7 +52,52 @@ class JobPosting extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $jobPosting): void {
+            if (blank($jobPosting->thumbnail_path)) {
+                $jobPosting->thumbnail_disk = null;
+
+                return;
+            }
+
+            if ($jobPosting->isDirty('thumbnail_path') && ! $jobPosting->thumbnailDiskWasAssigned) {
+                $jobPosting->thumbnail_disk = null;
+            }
+
+            if (! $jobPosting->isDirty('thumbnail_path') && $jobPosting->thumbnail_disk === null) {
+                $jobPosting->thumbnail_disk = $jobPosting->getOriginal('thumbnail_disk');
+            }
+
+            $jobPosting->thumbnail_disk ??= $jobPosting->resolveThumbnailDisk();
+        });
+
+        static::updated(function (self $jobPosting): void {
+            if (! $jobPosting->wasChanged(['thumbnail_path', 'thumbnail_disk'])) {
+                return;
+            }
+
+            $oldPath = $jobPosting->getOriginal('thumbnail_path');
+            $oldDisk = $jobPosting->getOriginal('thumbnail_disk');
+
+            if (! is_string($oldPath) || $oldPath === '') {
+                return;
+            }
+
+            $oldDisk = app(RekrutmenStorage::class)->resolveDisk($oldPath, $oldDisk, self::thumbnailDisk());
+
+            if ($oldDisk === null || ($oldPath === $jobPosting->thumbnail_path && $oldDisk === $jobPosting->thumbnail_disk)) {
+                return;
+            }
+
+            try {
+                Storage::disk($oldDisk)->delete($oldPath);
+            } catch (Throwable) {
+                return;
+            }
+        });
+
         static::saved(function (self $jobPosting): void {
+            $jobPosting->thumbnailDiskWasAssigned = false;
+
             if (! is_numeric($jobPosting->request_man_power_id)) {
                 return;
             }
@@ -59,6 +112,11 @@ class JobPosting extends Model
         });
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'company_id')->withTrashed();
+    }
+
     public function requestManPower(): BelongsTo
     {
         return $this->belongsTo(RequestManPower::class, 'request_man_power_id')->withTrashed();
@@ -67,6 +125,62 @@ class JobPosting extends Model
     public function requestManPowers(): HasMany
     {
         return $this->hasMany(RequestManPower::class, 'job_posting_id')->withTrashed();
+    }
+
+    public function resolveCompany(): ?Company
+    {
+        if ($this->relationLoaded('company') && $this->company) {
+            return $this->company;
+        }
+
+        if ($this->company_id) {
+            $company = $this->company()->first();
+            if ($company) {
+                return $company;
+            }
+        }
+
+        $requests = $this->relationLoaded('requestManPowers')
+            ? $this->requestManPowers->filter(fn (RequestManPower $r): bool => $r->deleted_at === null)->values()
+            : $this->requestManPowers()->with('company')->whereNull('deleted_at')->get();
+
+        $sourceRequest = $this->relationLoaded('requestManPower')
+            ? $this->requestManPower
+            : $this->requestManPower()->with('company')->first();
+
+        if ($requests->isEmpty() && $sourceRequest && ! $sourceRequest->trashed()) {
+            $requests = collect([$sourceRequest]);
+        }
+
+        $approved = $requests->first(
+            fn (RequestManPower $r): bool => $r->status === RequestManPowerStatus::APPROVED && $r->company !== null
+        );
+
+        if ($approved?->company) {
+            return $approved->company;
+        }
+
+        $withCompany = $requests->first(fn (RequestManPower $r): bool => $r->company !== null);
+
+        if ($withCompany?->company) {
+            return $withCompany->company;
+        }
+
+        if ($sourceRequest && ! $sourceRequest->trashed() && $sourceRequest->company) {
+            return $sourceRequest->company;
+        }
+
+        return null;
+    }
+
+    public function resolveCompanyName(): string
+    {
+        return $this->resolveCompany()?->name ?? 'PT Complete Selular Group';
+    }
+
+    public function getCompanyNameAttribute(): string
+    {
+        return $this->resolveCompanyName();
     }
 
     public function rekrutmenPipeline(): BelongsTo
@@ -103,7 +217,37 @@ class JobPosting extends Model
 
     public static function thumbnailDisk(): string
     {
-        return 'public';
+        return app(RekrutmenStorage::class)->thumbnailDisk();
+    }
+
+    public function setThumbnailDiskAttribute(mixed $disk): void
+    {
+        $this->attributes['thumbnail_disk'] = is_string($disk) && trim($disk) !== '' ? trim($disk) : null;
+        $this->thumbnailDiskWasAssigned = true;
+    }
+
+    public function resolveThumbnailDisk(): ?string
+    {
+        if (! is_string($this->thumbnail_path) || $this->thumbnail_path === '') {
+            return null;
+        }
+
+        $disk = app(RekrutmenStorage::class)->resolveDisk($this->thumbnail_path, $this->thumbnail_disk, self::thumbnailDisk());
+
+        if ($disk !== null && $this->thumbnail_disk === null && $this->exists
+            && ! $this->isDirty(['thumbnail_path', 'thumbnail_disk'])) {
+            $persisted = static::query()->withoutGlobalScopes()->whereKey($this->getKey())
+                ->where('thumbnail_path', $this->getRawOriginal('thumbnail_path'))
+                ->whereNull('thumbnail_disk')
+                ->update(['thumbnail_disk' => $disk]);
+
+            if ($persisted) {
+                $this->attributes['thumbnail_disk'] = $disk;
+                $this->syncOriginalAttribute('thumbnail_disk');
+            }
+        }
+
+        return $disk;
     }
 
     public function getThumbnailUrlAttribute(): ?string
@@ -112,11 +256,9 @@ class JobPosting extends Model
             return null;
         }
 
-        if (filter_var($this->thumbnail_path, FILTER_VALIDATE_URL)) {
-            return $this->thumbnail_path;
-        }
+        $disk = $this->resolveThumbnailDisk();
 
-        return Storage::disk(self::thumbnailDisk())->url($this->thumbnail_path);
+        return app(RekrutmenStorage::class)->url($this->thumbnail_path, $this->thumbnail_disk ?? $disk, self::thumbnailDisk());
     }
 
     public function isAcceptingApplications(): bool

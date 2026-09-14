@@ -1,12 +1,19 @@
 <?php
 
 return [
+    'disk' => env('REKRUTMEN_FILESYSTEM_DISK', 's3'),
+
+    'thumbnail_disk' => env('REKRUTMEN_THUMBNAIL_DISK', env('REKRUTMEN_FILESYSTEM_DISK', 's3')),
+
     'default_pipeline_id' => env('REKRUTMEN_DEFAULT_PIPELINE_ID'),
 
     'default_pipeline_name' => env('REKRUTMEN_DEFAULT_PIPELINE_NAME', 'Default Recruitment Pipeline'),
 
     'notifications' => [
         'queue'    => env('REKRUTMEN_NOTIFICATION_QUEUE', 'notifications'),
+        'delivery' => [
+            'lease_seconds' => 120,
+        ],
         'mail'     => [
             'throttle' => [
                 'enabled'              => env('NOTIFICATION_MAIL_THROTTLE_ENABLED', env('REKRUTMEN_MAIL_THROTTLE_ENABLED', true)),
@@ -16,7 +23,10 @@ return [
             ],
         ],
         'whatsapp' => [
-            'enabled'      => ! empty(env('WAG_URL')) && ! empty(env('WAG_TOKEN')),
+            'enabled'      => env('REKRUTMEN_WHATSAPP_ENABLED', true),
+            'engine_url'   => env('REKRUTMEN_WHATSAPP_ENGINE_URL', 'http://127.0.0.1:3318'),
+            'auto_start'   => env('REKRUTMEN_WHATSAPP_ENGINE_AUTO_START', true),
+            'node_binary'  => env('REKRUTMEN_WHATSAPP_NODE_BINARY', 'node'),
             'endpoint'     => env('WAG_URL', 'https://waghub.mekayastudio.com'),
             'api_key'      => env('WAG_TOKEN'),
 
@@ -27,11 +37,13 @@ return [
                 'max_interval_seconds' => (int) env('WHATSAPP_THROTTLE_MAX_INTERVAL', 3),
                 'key'                  => env('WHATSAPP_THROTTLE_KEY', 'global'),
             ],
-            'queue'      => env('WHATSAPP_QUEUE', 'whatsapp'),
-            'connection' => env('WHATSAPP_CONNECTION'),
-            'timeout'    => (int) env('WHATSAPP_TIMEOUT', 10),
-            'tries'      => (int) env('WHATSAPP_TRIES', 3),
-            'backoff'    => array_values(array_filter(
+            'queue'        => env('WHATSAPP_QUEUE', 'whatsapp'),
+            'connection'   => env('WHATSAPP_CONNECTION'),
+            'timeout'      => (int) env('WHATSAPP_TIMEOUT', 20),
+            'http_timeout' => (int) env('REKRUTMEN_WHATSAPP_HTTP_TIMEOUT', env('WHATSAPP_TIMEOUT', 20)),
+            'job_timeout'  => (int) env('REKRUTMEN_WHATSAPP_JOB_TIMEOUT', 60),
+            'tries'        => (int) env('WHATSAPP_TRIES', 3),
+            'backoff'      => array_values(array_filter(
                 array_map('intval', explode(',', env('WHATSAPP_BACKOFF', '10,30,60'))),
                 static fn (int $interval): bool => $interval >= 0
             )),

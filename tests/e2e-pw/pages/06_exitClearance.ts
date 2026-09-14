@@ -6,6 +6,7 @@ export type ExitClearancePersonalData = {
     phone: string;
     position: string;
     placement: string;
+    company: string;
     department: string;
     joinDate: string;
     departureDate: string;
@@ -17,6 +18,7 @@ export class ExitClearancePage {
     readonly pageTitle: Locator;
     readonly nextButton: Locator;
     readonly submitButton: Locator;
+    readonly companyTrigger: Locator;
     readonly departmentTrigger: Locator;
 
     readonly progressPageTitle: Locator;
@@ -30,6 +32,11 @@ export class ExitClearancePage {
         this.pageTitle = page.getByRole("heading", { name: "FORM EXIT CLEARANCE" });
         this.nextButton = page.getByRole("button", { name: "Berikutnya" });
         this.submitButton = page.getByRole("button", { name: "Kirim" });
+        this.companyTrigger = page
+            .locator(
+                '[wire\\:key*="form.company_id"] button.fi-select-input-btn, [wire\\:key*="company_id"] button.fi-select-input-btn'
+            )
+            .first();
         this.departmentTrigger = page
             .locator(
                 '[wire\\:key*="form.department_id"] button.fi-select-input-btn, [wire\\:key*="department_id"] button.fi-select-input-btn'
@@ -77,6 +84,7 @@ export class ExitClearancePage {
         await this.page.locator('#form\\.phone').fill(personalData.phone);
         await this.page.locator('#form\\.position').fill(personalData.position);
         await this.page.locator('#form\\.placement').fill(personalData.placement);
+        await this.selectCompany(personalData.company);
         await this.selectDepartment(personalData.department);
         await this.page.locator('#form\\.join_date').fill(personalData.joinDate);
         await this.page.locator('#form\\.departure_date').fill(personalData.departureDate);
@@ -194,6 +202,7 @@ export class ExitClearancePage {
 
     async assertProgressPageShowsSubmission(submission: {
         applicantName: string;
+        company: string;
         department: string;
         questionnaireAnswer: string;
         clearanceAnswer: string;
@@ -201,6 +210,7 @@ export class ExitClearancePage {
         await expect(
             this.page.locator("span.font-medium.text-gray-900").filter({ hasText: submission.applicantName }).first()
         ).toBeVisible();
+        await expect(this.page.getByText(submission.company, { exact: true })).toBeVisible();
         await expect(this.page.getByText(`(${submission.department})`).first()).toBeVisible();
         await expect(this.page.locator("span.font-mono").filter({ hasText: /^EXC-\d{5}$/ })).toBeVisible();
         await expect(
@@ -222,6 +232,18 @@ export class ExitClearancePage {
     async assertProgressPageShowsApprovedState(note: string): Promise<void> {
         await expect(this.page.locator("span.rounded-full").filter({ hasText: "Approved" }).first()).toBeVisible();
         await expect(this.page.getByText(note).first()).toBeVisible();
+    }
+
+    private async selectCompany(company: string): Promise<void> {
+        await this.companyTrigger.click();
+        await this.page.getByRole("textbox", { name: "Search", exact: true }).fill(company);
+        const option = this.page
+            .locator('[role="option"]:visible, li.fi-select-input-option:visible')
+            .filter({ hasText: new RegExp(`^${this.escapeRegExp(company)}$`, "i") })
+            .first();
+
+        await expect(option).toBeVisible();
+        await option.click();
     }
 
     private async selectDepartment(department: string): Promise<void> {
