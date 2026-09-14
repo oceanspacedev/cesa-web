@@ -42,11 +42,16 @@
           size="sm"
           @click="startRescreening"
           :disabled="isScreening"
-          class="h-8 text-xs gap-1.5"
-          title="Jalankan evaluasi kualifikasi otomatis untuk pelamar"
+          class="h-8 text-xs gap-1.5 transition-all cursor-pointer"
+          :class="[
+            selectedAppIds.length
+              ? 'border-blue-400 bg-blue-50 text-blue-900 font-semibold shadow-xs ring-1 ring-blue-200'
+              : 'text-zinc-700 hover:bg-zinc-50'
+          ]"
+          :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI khusus untuk 1 pelamar terpilih' : (selectedAppIds.length > 1 ? `Jalankan evaluasi kualifikasi AI khusus untuk ${selectedAppIds.length} pelamar terpilih` : 'Jalankan evaluasi kualifikasi otomatis untuk pelamar')"
         >
-          <RotateCw class="w-3.5 h-3.5 text-zinc-500" :class="{ 'animate-spin': isScreening }" />
-          <span>Evaluasi Kualifikasi</span>
+          <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isScreening, 'text-blue-600': selectedAppIds.length, 'text-zinc-500': !selectedAppIds.length }" />
+          <span>{{ selectedAppIds.length === 1 ? 'Evaluasi AI (1 Terpilih)' : (selectedAppIds.length > 1 ? `Evaluasi AI (${selectedAppIds.length} Terpilih)` : 'Evaluasi Kualifikasi') }}</span>
         </Button>
 
         <!-- View Switcher (Table / Kanban) -->
@@ -376,6 +381,18 @@
             type="button"
             variant="outline"
             size="xs"
+            @click="rescreenSelectedCandidates"
+            :disabled="isScreening"
+            class="gap-1.5 h-7.5 px-2.5 bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:border-blue-300 font-medium shadow-2xs cursor-pointer disabled:opacity-50"
+            :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI hanya untuk 1 pelamar terpilih' : 'Jalankan evaluasi kualifikasi AI hanya untuk kandidat terpilih'"
+          >
+            <RotateCw class="w-3.5 h-3.5 text-blue-600" :class="{ 'animate-spin': isScreening }" />
+            <span>{{ selectedAppIds.length === 1 ? 'Evaluasi AI (1 Terpilih)' : `Evaluasi AI (${selectedAppIds.length})` }}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
             @click="bulkRejectSelected"
             class="gap-1.5 h-7.5 px-2.5 bg-white text-rose-700 border-rose-200 hover:bg-rose-50 hover:border-rose-300 font-medium shadow-2xs cursor-pointer"
             title="Tolak pelamar terpilih"
@@ -483,7 +500,18 @@
                   </Badge>
                 </button>
               </div>
-              <div v-else class="text-[11px] text-zinc-400 italic text-center">Menunggu evaluasi</div>
+              <div v-else class="flex items-center justify-center">
+                <button
+                  type="button"
+                  @click.stop="rescreenSingleCandidate(app)"
+                  :disabled="isScreening"
+                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-blue-700 bg-blue-50/80 hover:bg-blue-100 hover:text-blue-900 border border-blue-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                  title="Klik untuk evaluasi kualifikasi kandidat ini dengan AI"
+                >
+                  <RotateCw class="w-3 h-3 text-blue-600" :class="{ 'animate-spin': isScreening }" />
+                  <span>Evaluasi AI</span>
+                </button>
+              </div>
             </TableCell>
 
             <!-- Stage (Centered, Clean Dropdown) -->
@@ -529,6 +557,16 @@
             <!-- Action Buttons -->
             <TableCell class="text-right whitespace-nowrap pr-6">
               <div class="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  @click.stop="rescreenSingleCandidate(app)"
+                  :disabled="isScreening"
+                  class="h-7 w-7 p-0 text-blue-600 hover:text-blue-900 hover:bg-blue-50 cursor-pointer"
+                  title="Evaluasi Kualifikasi AI Kandidat Ini"
+                >
+                  <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isScreening }" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="xs"
@@ -1673,7 +1711,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, onActivated, onDeactiv
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
-import { createRequestKey } from '../lib/utils';
+import { createRequestKey, escapeHtml } from '../lib/utils';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -2106,7 +2144,7 @@ const startSyncCvs = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Pencocokan CV Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Berkas CV berhasil dicocokkan ke kandidat.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Berkas CV berhasil dicocokkan ke kandidat.')}</div>`,
       confirmButtonText: 'Evaluasi Sekarang',
       showCancelButton: true,
       cancelButtonText: 'Tutup',
@@ -2128,19 +2166,179 @@ const startSyncCvs = async () => {
   }
 };
 
+const rescreenSelectedCandidates = async () => {
+  if (!selectedAppIds.value.length) return;
+  const count = selectedAppIds.value.length;
+
+  if (count === 1) {
+    const targetId = selectedAppIds.value[0];
+    const targetApp = applications.value.find(a => Number(a.id) === Number(targetId));
+    const candidateName = targetApp ? targetApp.full_name : 'Pelamar Terpilih';
+
+    const confirm = await Swal.fire({
+      titleText: `Evaluasi AI: ${candidateName}?`,
+      html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
+        Sistem AI hanya akan mengevaluasi kualifikasi CV untuk kandidat <b>${escapeHtml(candidateName)}</b> saja.<br><br>
+        Apakah Anda ingin melanjutkan evaluasi AI kandidat ini?
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Evaluasi Sekarang',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#0c2340',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+      }
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    if (targetApp) {
+      await rescreenSingleCandidate(targetApp);
+    } else {
+      isScreening.value = true;
+      Swal.fire({
+        title: 'Mengevaluasi Pelamar',
+        html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi kandidat...</div>`,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+          title: 'text-sm font-bold text-slate-900',
+        },
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      try {
+        const res = await store.analyzeCandidateWithAi(targetId);
+        Swal.fire({
+          icon: 'success',
+          title: 'Evaluasi Berhasil',
+          html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
+          timer: 2000,
+          showConfirmButton: false,
+          iconColor: '#10b981',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+            title: 'text-sm font-bold text-slate-900',
+          }
+        });
+      } catch (err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          html: '<div class="text-xs text-slate-600 mt-1">Gagal mengevaluasi data pelamar.</div>',
+          confirmButtonColor: '#739ec5',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+            title: 'text-sm font-bold text-slate-900',
+            confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
+          }
+        });
+      } finally {
+        isScreening.value = false;
+      }
+    }
+    selectedAppIds.value = [];
+    return;
+  }
+
+  const confirm = await Swal.fire({
+    title: `Evaluasi ${count} Pelamar Terpilih?`,
+    html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
+      Sistem AI hanya akan mengevaluasi kualifikasi CV untuk <b>${count} pelamar yang Anda centang</b>.<br><br>
+      Apakah Anda ingin melanjutkan evaluasi ulang AI?
+    </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: `Evaluasi ${count} Pelamar`,
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#0c2340',
+    cancelButtonColor: '#64748b',
+    customClass: {
+      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+      title: 'text-sm font-bold text-slate-900',
+    }
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  isScreening.value = true;
+  Swal.fire({
+    title: `Evaluasi AI: ${count} Pelamar Terpilih`,
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Mengevaluasi kualifikasi pelamar yang dipilih...</div>
+           <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    customClass: {
+      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+      title: 'text-sm font-bold text-slate-900',
+    },
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  try {
+    const res = await store.batchAnalyzeWithAi(activeJobId.value, ({ processed, total }) => {
+      const el = document.getElementById('swal-progress');
+      if (el) {
+        const pct = total ? Math.round((processed / total) * 100) : 0;
+        el.textContent = `Memproses ${processed} dari ${total} kandidat (${pct}%)`;
+      }
+    }, [...selectedAppIds.value]);
+
+    isScreening.value = false;
+    selectedAppIds.value = [];
+    Swal.fire({
+      icon: 'success',
+      title: 'Evaluasi Selesai',
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi kualifikasi ${count} pelamar berhasil diperbarui.`)}</div>`,
+      timer: 3000,
+      showConfirmButton: false,
+      iconColor: '#10b981',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+      }
+    });
+  } catch (e) {
+    isScreening.value = false;
+    Swal.fire({
+      icon: 'error',
+      title: 'Gagal Evaluasi',
+      html: '<div class="text-xs text-slate-600 mt-1">Terjadi kesalahan saat memproses evaluasi kualifikasi pelamar terpilih.</div>',
+      confirmButtonColor: '#739ec5',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+        confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
+      }
+    });
+  }
+};
+
 const startRescreening = async () => {
+  if (selectedAppIds.value.length > 0) {
+    return rescreenSelectedCandidates();
+  }
   // If no job filter, show warning first
   if (!activeJobId.value) {
     const confirm = await Swal.fire({
       title: 'Evaluasi Semua Pelamar?',
       html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-        Anda tidak sedang memfilter ke lowongan tertentu.<br><br>
-        Evaluasi akan tetap berjalan untuk <b>semua pelamar</b>, namun skor kualifikasi akan dibandingkan ke masing-masing lowongan yang dilamar.<br><br>
-        Untuk hasil lebih akurat, pilih lowongan terlebih dahulu dari halaman <b>Lowongan Kerja → Lihat Pelamar</b>.
+        Anda tidak mencentang pelamar dan tidak sedang memfilter ke lowongan tertentu.<br><br>
+        Evaluasi AI akan berjalan untuk <b>seluruh pelamar</b>.<br><br>
+        <i>Tips: Centang kotak pada nama pelamar jika hanya ingin mengevaluasi 1 atau beberapa orang saja.</i>
       </div>`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Lanjutkan Evaluasi',
+      confirmButtonText: 'Lanjutkan Evaluasi Semua',
       cancelButtonText: 'Batal',
       confirmButtonColor: '#0c2340',
       cancelButtonColor: '#64748b',
@@ -2155,8 +2353,8 @@ const startRescreening = async () => {
   const jobTitle = activeJobTitle.value;
   isScreening.value = true;
   Swal.fire({
-    title: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${jobTitle}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
+    titleText: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${escapeHtml(jobTitle)}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
            <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
@@ -2182,7 +2380,7 @@ const startRescreening = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Evaluasi kualifikasi berhasil diperbarui.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
       timer: 3000,
       showConfirmButton: false,
       iconColor: '#10b981',
@@ -2212,7 +2410,7 @@ const rescreenSingleCandidate = async (app) => {
   isScreening.value = true;
   Swal.fire({
     title: 'Mengevaluasi Pelamar',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${app.full_name}</b>...</div>`,
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${escapeHtml(app.full_name)}</b>...</div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
     showConfirmButton: false,
@@ -2234,7 +2432,7 @@ const rescreenSingleCandidate = async (app) => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Berhasil',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`)}</div>`,
       timer: 2000,
       showConfirmButton: false,
       iconColor: '#10b981',
