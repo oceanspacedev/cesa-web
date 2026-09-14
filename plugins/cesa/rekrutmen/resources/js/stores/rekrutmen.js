@@ -271,7 +271,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       try {
         const res = await axios.post(`/rekrutmen/api/applications/${appId}/analyze-ai`);
         const updated = res.data.application;
-        const app = this.applications.find(a => a.id === appId);
+        const app = this.applications.find(a => Number(a.id) === Number(appId));
         if (app && updated) {
           app.ai_match_score = updated.ai_match_score;
           app.ai_recommendation = updated.ai_recommendation;
@@ -285,8 +285,8 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       }
     },
 
-    async batchAnalyzeWithAi(jobId = null, onProgress = null) {
-      const chunkSize = 8;
+    async batchAnalyzeWithAi(jobId = null, onProgress = null, applicationIds = null) {
+      const chunkSize = 2;
       let offset = 0;
       let totalProcessed = 0;
       let total = null;
@@ -294,12 +294,17 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
 
       try {
         while (true) {
-          const res = await axios.post('/rekrutmen/api/applications/batch-analyze-ai', {
+          const payload = {
             job_id: jobId,
             force: true,
             chunk_size: chunkSize,
             offset: offset,
-          });
+          };
+          if (Array.isArray(applicationIds) && applicationIds.length) {
+            payload.application_ids = [...applicationIds];
+          }
+
+          const res = await axios.post('/rekrutmen/api/applications/batch-analyze-ai', payload);
 
           lastRes = res.data;
           totalProcessed += res.data.count || 0;

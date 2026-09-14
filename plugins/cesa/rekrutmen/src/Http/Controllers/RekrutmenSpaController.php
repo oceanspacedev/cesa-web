@@ -761,13 +761,20 @@ class RekrutmenSpaController extends Controller
      */
     public function batchAnalyzeWithAi(Request $request): JsonResponse
     {
+        @set_time_limit(180);
+
         $jobId = $request->input('job_id');
+        $rawAppIds = $request->input('application_ids', $request->input('ids'));
+        $applicationIds = is_array($rawAppIds) ? $rawAppIds : (! empty($rawAppIds) ? explode(',', (string) $rawAppIds) : []);
+        $applicationIds = array_values(array_filter(array_map('intval', $applicationIds)));
         $force = $request->boolean('force', true);
-        $chunkSize = (int) $request->input('chunk_size', 8);
+        $chunkSize = max(1, min(4, (int) $request->input('chunk_size', 2)));
         $offset = (int) $request->input('offset', 0);
 
         $query = JobApplication::with('jobPosting');
-        if ($jobId) {
+        if (! empty($applicationIds)) {
+            $query->whereIn('id', $applicationIds);
+        } elseif ($jobId) {
             $query->where('job_posting_id', $jobId);
         }
         if (! $force) {
@@ -1248,7 +1255,7 @@ PROMPT;
         // Clean up escaped PDF characters and normalize whitespace
         $cleaned = str_replace(['\\(', '\\)', '\\\\', '\\n', '\\r', '\\t'], ['(', ')', '\\', "\n", "\r", "\t"], $extractedText);
         $cleaned = preg_replace('/[^\p{L}\p{N}\s\.\,\-\@\:\/\(\)\+\#]/u', ' ', $cleaned);
-        $cleaned = trim(preg_replace('/\s+/', ' ', $cleaned));
+        $cleaned = trim(preg_replace('/\s+/', ' ', (string) $cleaned));
 
         // Avoid raw binary garbage or unmapped corrupted glyph strings
         if (! $this->isSensibleText($cleaned)) {

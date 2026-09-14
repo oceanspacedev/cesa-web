@@ -16,7 +16,7 @@ return new class extends Migration
 
         Schema::create('rekrutmen_notification_deliveries', function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('scheduled_notification_id')->nullable()->index();
+            $table->unsignedBigInteger('scheduled_notification_id')->nullable()->index('rekrutmen_delivery_sched_notif_index');
             $table->unsignedBigInteger('application_id')->nullable()->index();
             $table->unsignedBigInteger('approval_id')->nullable()->index();
             $table->string('request_key', 100)->unique();

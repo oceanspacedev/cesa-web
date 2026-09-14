@@ -130,12 +130,36 @@ class RekrutmenStorage
     {
         $path = $application->resume_path;
         if (is_string($path) && $path !== '') {
-            $disk = $this->resolveDisk($path, $application->resume_disk, $this->disk());
-            if ($disk !== null) {
-                return ['disk' => $disk, 'path' => $this->normalizePath($path)];
-            }
-            if (filled($application->resume_disk) || $this->normalizePath($path) === null) {
+            $normalized = $this->normalizePath($path);
+            if ($normalized === null) {
                 return null;
+            }
+
+            if ($files !== null) {
+                $samePath = array_values(array_filter($files, function (array $file) use ($normalized, $application): bool {
+                    if ($file['path'] !== $normalized) {
+                        return false;
+                    }
+
+                    return blank($application->resume_disk) || $file['disk'] === $application->resume_disk;
+                }));
+
+                if (count($samePath) === 1) {
+                    return $samePath[0];
+                }
+
+                if (count($samePath) > 1 || filled($application->resume_disk)) {
+                    return null;
+                }
+            } else {
+                $disk = $this->resolveDisk($path, $application->resume_disk, $this->disk());
+                if ($disk !== null) {
+                    return ['disk' => $disk, 'path' => $normalized];
+                }
+
+                if (filled($application->resume_disk)) {
+                    return null;
+                }
             }
         }
 
