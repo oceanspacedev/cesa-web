@@ -132,6 +132,19 @@ it('permits only explicit managers or super admins to manage sessions', function
     $this->actingAs($admin)->getJson('/rekrutmen/api/settings/whatsapp')->assertSuccessful();
 });
 
+it('allows the production Admin role to manage WhatsApp after receiving the permission', function (): void {
+    $this->fakeRekrutmenWhatsAppEngine();
+    $permission = Permission::findOrCreate('manage_rekrutmen_whatsapp', 'web');
+    $adminRole = Role::findOrCreate('Admin', 'web');
+    $adminRole->givePermissionTo($permission);
+    $admin = User::factory()->create(['is_active' => true]);
+    $admin->assignRole($adminRole);
+
+    $this->actingAs($admin)->getJson('/rekrutmen/api/settings/whatsapp')
+        ->assertSuccessful()
+        ->assertJsonPath('gateway.engine_ready', true);
+});
+
 it('rejects malformed pairing before storing any account', function (): void {
     $manager = User::factory()->create(['is_active' => true]);
     $manager->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_whatsapp', 'web'));

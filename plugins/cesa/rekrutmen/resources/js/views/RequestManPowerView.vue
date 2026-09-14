@@ -457,6 +457,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
 import { Skeleton } from '../components/ui/skeleton';
 import { Input } from '../components/ui/input';
+import { isApprovedManPowerRequest, isPendingManPowerRequest } from '../lib/requestManPowerStatus';
 
 // Icons
 import {
@@ -509,15 +510,9 @@ const refreshData = async () => {
 
 const requests = computed(() => store.requests || []);
 
-const approvedCount = computed(() => requests.value.filter(r => {
-  const s = String(r.status || r.approval_status || r.raw_status || '').toLowerCase();
-  return s.includes('approv') || s.includes('setuju');
-}).length);
+const approvedCount = computed(() => requests.value.filter(isApprovedManPowerRequest).length);
 
-const pendingCount = computed(() => requests.value.filter(r => {
-  const s = String(r.status || r.approval_status || r.raw_status || '').toLowerCase();
-  return s.includes('pend') || s.includes('tunggu');
-}).length);
+const pendingCount = computed(() => requests.value.filter(isPendingManPowerRequest).length);
 
 const totalNeededPersonnel = computed(() => {
   return requests.value.reduce((acc, r) => acc + (Number(r.jumlah_karyawan_dibutuhkan || r.quantity || 1) || 1), 0);
@@ -527,15 +522,9 @@ const filteredRequests = computed(() => {
   let list = requests.value;
 
   if (statusFilter.value === 'approved') {
-    list = list.filter(r => {
-      const s = String(r.status || r.approval_status || r.raw_status || '').toLowerCase();
-      return s.includes('approv') || s.includes('setuju');
-    });
+    list = list.filter(isApprovedManPowerRequest);
   } else if (statusFilter.value === 'pending') {
-    list = list.filter(r => {
-      const s = String(r.status || r.approval_status || r.raw_status || '').toLowerCase();
-      return s.includes('pend') || s.includes('tunggu');
-    });
+    list = list.filter(isPendingManPowerRequest);
   }
 
   if (!searchQuery.value) return list;
