@@ -33,7 +33,6 @@ Route::middleware(['web'])->group(function (): void {
         ->name('form-transfer.public.form');
 
     Route::get('transfer-requests/files/{statusResponseId}/{attachment}', PublicAttachmentDownloadController::class)
-        ->middleware('signed')
         ->name('form-transfer.public.attachments.download');
 
     Route::get('form', PublicCategoryIndex::class)

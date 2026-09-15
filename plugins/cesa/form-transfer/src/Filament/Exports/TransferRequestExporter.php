@@ -178,9 +178,8 @@ class TransferRequestExporter extends Exporter
         }
 
         try {
-            return URL::temporarySignedRoute(
+            return URL::route(
                 'form-transfer.public.attachments.download',
-                now()->addMinutes(60),
                 [
                     'statusResponseId' => $record->status_response_id,
                     'attachment'       => $attachmentType,

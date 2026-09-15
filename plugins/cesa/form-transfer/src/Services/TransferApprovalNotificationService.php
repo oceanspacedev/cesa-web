@@ -588,9 +588,8 @@ HTML;
         }
 
         try {
-            return URL::temporarySignedRoute(
+            return URL::route(
                 'form-transfer.public.attachments.download',
-                now()->addMinutes(60),
                 [
                     'statusResponseId' => $request->status_response_id,
                     'attachment'       => $attachmentType,
