@@ -3,11 +3,12 @@
 namespace Cesa\Rekrutmen\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
 use Cesa\Rekrutmen\Filament\Resources\JobPostingResource;
 use Cesa\Rekrutmen\Filament\Resources\RequestManPowerResource;
+use Cesa\Rekrutmen\Http\Requests\SendCandidateNotificationRequest;
+use Cesa\Rekrutmen\Http\Requests\UploadCandidateCvRequest;
 use Cesa\Rekrutmen\Models\Approver;
 use Cesa\Rekrutmen\Models\Division;
 use Cesa\Rekrutmen\Models\JobApplication;
@@ -15,16 +16,17 @@ use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
 use Cesa\Rekrutmen\Models\RequestManPower;
-use Cesa\Rekrutmen\Services\CandidateWhatsAppNotifier;
+use Cesa\Rekrutmen\Models\ScheduledNotification;
 use Cesa\Rekrutmen\Services\RecruitmentProgressReportExport;
 use Cesa\Rekrutmen\Services\RecruitmentProgressReportService;
-use Cesa\Rekrutmen\Services\RekrutmenMailer;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Cesa\Rekrutmen\Services\ScheduledNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -32,6 +34,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Webkul\Support\Models\Company;
 
 class RekrutmenSpaController extends Controller
@@ -404,7 +407,7 @@ class RekrutmenSpaController extends Controller
 
         $thumbnailPath = null;
         if ($request->hasFile('thumbnail')) {
-            $thumbnailPath = $request->file('thumbnail')->store(JobPosting::THUMBNAIL_DIRECTORY, JobPosting::thumbnailDisk());
+            $thumbnailPath = app(RekrutmenStorage::class)->storeUploadedFile($request->file('thumbnail'), JobPosting::THUMBNAIL_DIRECTORY, JobPosting::thumbnailDisk());
         }
 
         $posting = JobPosting::create([
@@ -418,6 +421,7 @@ class RekrutmenSpaController extends Controller
             'closing_date'          => $request->input('closing_date'),
             'is_published'          => $isPublished,
             'thumbnail_path'        => $thumbnailPath,
+            'thumbnail_disk'        => $thumbnailPath ? JobPosting::thumbnailDisk() : null,
             'creator_id'            => Auth::id(),
         ]);
 
@@ -474,8 +478,9 @@ class RekrutmenSpaController extends Controller
         }
 
         if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store(JobPosting::THUMBNAIL_DIRECTORY, JobPosting::thumbnailDisk());
+            $path = app(RekrutmenStorage::class)->storeUploadedFile($request->file('thumbnail'), JobPosting::THUMBNAIL_DIRECTORY, JobPosting::thumbnailDisk());
             $posting->thumbnail_path = $path;
+            $posting->thumbnail_disk = JobPosting::thumbnailDisk();
         } elseif ($request->input('remove_thumbnail') === '1' || $request->input('remove_thumbnail') === true || $request->input('remove_thumbnail') === 'true') {
             $posting->thumbnail_path = null;
         }
@@ -668,138 +673,39 @@ class RekrutmenSpaController extends Controller
     /**
      * View candidate profile photo.
      */
-    public function viewPhoto(Request $request, $id)
+    public function viewPhoto(Request $request, $id): Response
     {
-        $application = JobApplication::findOrFail($id);
+        $application = JobApplication::query()->findOrFail($id);
+        Gate::authorize('view', $application);
+        $disk = $application->resolveAttachmentDisk('photo');
+        abort_if($disk === null, 404, 'File foto tidak ditemukan pada penyimpanan asal.');
 
-        if (empty($application->photo_path)) {
-            abort(404, 'Foto diri belum diunggah oleh kandidat ini.');
-        }
-
-        $relativePath = ltrim($application->photo_path, '/');
-        $disks = array_values(array_unique(array_filter([
-            JobApplication::resumeDisk(),
-            config('filament.default_filesystem_disk', null),
-            config('filesystems.default'),
-            's3',
-            'local',
-            'public',
-        ])));
-
-        foreach ($disks as $disk) {
-            try {
-                if (config()->has("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($relativePath)) {
-                    $mime = Storage::disk($disk)->mimeType($relativePath) ?? 'image/jpeg';
-
-                    return Storage::disk($disk)->response($relativePath, basename($relativePath), [
-                        'Content-Type'        => $mime,
-                        'Content-Disposition' => 'inline; filename="'.basename($relativePath).'"',
-                    ]);
-                }
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        $candidatePaths = [
-            storage_path('app/'.$relativePath),
-            storage_path('app/public/'.$relativePath),
-            public_path('storage/'.$relativePath),
-        ];
-
-        foreach ($candidatePaths as $p) {
-            if (file_exists($p) && is_readable($p)) {
-                $mime = mime_content_type($p) ?: 'image/jpeg';
-
-                return response()->file($p, [
-                    'Content-Type'        => $mime,
-                    'Content-Disposition' => 'inline; filename="'.basename($p).'"',
-                ]);
-            }
-        }
-
-        abort(404, 'File foto tidak ditemukan.');
+        return Storage::disk($disk)->response($application->photo_path, basename($application->photo_path));
     }
 
-    /**
-     * View or stream candidate CV PDF directly.
-     * Serves the actual uploaded candidate file from storage if present.
-     */
-    public function viewCv(Request $request, $id)
+    public function viewCv(Request $request, $id): Response
     {
-        $application = JobApplication::with('jobPosting')->findOrFail($id);
+        $application = JobApplication::query()->with('jobPosting')->findOrFail($id);
+        Gate::authorize('view', $application);
         $this->resolveAndSyncCandidateCv($application);
+        $disk = $application->resolveAttachmentDisk('resume');
+        abort_if($disk === null, 404, 'Berkas CV tidak ditemukan pada penyimpanan asal.');
 
-        if (empty($application->resume_path)) {
-            abort(404, 'Berkas CV belum diunggah oleh kandidat ini.');
-        }
-
-        $relativePath = ltrim($application->resume_path, '/');
-
-        // 1. Check all registered storage disks for candidate's actual uploaded file
-        $candidateDisks = array_values(array_unique(array_filter([
-            JobApplication::resumeDisk(),
-            config('filament.default_filesystem_disk', null),
-            config('filesystems.default'),
-            's3',
-            'local',
-            'public',
-        ])));
-
-        foreach ($candidateDisks as $disk) {
-            try {
-                if (config()->has("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($relativePath)) {
-                    $mime = Storage::disk($disk)->mimeType($relativePath) ?? 'application/pdf';
-
-                    return Storage::disk($disk)->response($relativePath, basename($relativePath), [
-                        'Content-Type'        => $mime,
-                        'Content-Disposition' => 'inline; filename="'.basename($relativePath).'"',
-                    ]);
-                }
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        // 2. Direct path check in storage folder
-        $candidatePaths = [
-            storage_path('app/'.$relativePath),
-            storage_path('app/public/'.$relativePath),
-            public_path('storage/'.$relativePath),
-        ];
-
-        foreach ($candidatePaths as $p) {
-            if (file_exists($p) && is_readable($p)) {
-                return response()->file($p, [
-                    'Content-Type'        => 'application/pdf',
-                    'Content-Disposition' => 'inline; filename="'.basename($p).'"',
-                ]);
-            }
-        }
-
-        // 3. Fallback for seeded candidate records: Render clean, authentic applicant Curriculum Vitae
-        $html = $this->generateCvHtml($application);
-        $pdf = Pdf::loadHTML($html);
-
-        return $pdf->stream(basename($relativePath));
+        return Storage::disk($disk)->response($application->resume_path, basename($application->resume_path));
     }
 
     /**
      * Upload or replace candidate CV file directly from UI.
      */
-    public function uploadCv(Request $request, $id): JsonResponse
+    public function uploadCv(UploadCandidateCvRequest $request, $id): JsonResponse
     {
-        $request->validate([
-            'cv' => 'required|file|mimes:pdf,doc,docx|max:20480',
-        ]);
-
         $application = JobApplication::findOrFail($id);
 
-        $file = $request->file('cv');
-        $filename = 'CV-'.$application->id.'-'.Str::slug($application->full_name).'.'.$file->getClientOriginalExtension();
-        $path = $file->storeAs('rekrutmen/cv', $filename, 'public');
+        $disk = JobApplication::resumeDisk();
+        $path = app(RekrutmenStorage::class)->storeUploadedFile($request->file('cv'), JobApplication::RESUME_DIRECTORY, $disk);
 
         $application->resume_path = $path;
+        $application->resume_disk = $disk;
         $application->save();
 
         // Perform AI Screening on the newly uploaded real CV
@@ -822,110 +728,6 @@ class RekrutmenSpaController extends Controller
             'ai_summary'        => $application->ai_summary,
             'ai_analyzed_at'    => $application->ai_analyzed_at ? $application->ai_analyzed_at->format('d/m/Y H:i') : null,
         ]);
-    }
-
-    /**
-     * Generate authentic Curriculum Vitae document for candidate.
-     */
-    private function generateCvHtml(JobApplication $application): string
-    {
-        $name = htmlspecialchars($application->full_name);
-        $email = htmlspecialchars($application->email);
-        $phone = htmlspecialchars($application->whatsapp_number ?? $application->active_phone ?? '-');
-        $domicile = htmlspecialchars($application->address_domicile ?? $application->address_ktp ?? '-');
-        $jobTitle = htmlspecialchars($application->jobPosting?->title ?? 'Professional');
-
-        return "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='utf-8'>
-            <title>Curriculum Vitae - {$name}</title>
-            <style>
-                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #2d3748; line-height: 1.6; padding: 30px; font-size: 12px; }
-                .header { text-align: center; border-bottom: 2px solid #3182ce; padding-bottom: 15px; margin-bottom: 20px; }
-                .header h1 { font-size: 22px; margin: 0; color: #1a202c; text-transform: uppercase; letter-spacing: 1px; }
-                .header .subtitle { font-size: 13px; color: #4a5568; margin-top: 4px; font-weight: 600; }
-                .contact-info { margin-top: 8px; font-size: 11px; color: #718096; }
-                .contact-info span { margin: 0 6px; }
-                .section-title { font-size: 13px; font-weight: bold; color: #2b6cb0; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-                .item { margin-bottom: 12px; }
-                .item-header { width: 100%; border-collapse: collapse; }
-                .item-header td { vertical-align: top; }
-                .item-title { font-weight: bold; color: #1a202c; font-size: 12px; }
-                .item-org { color: #4a5568; font-weight: 600; font-size: 11px; }
-                .item-date { text-align: right; color: #718096; font-size: 10px; font-style: italic; }
-                .item-desc { color: #4a5568; font-size: 11px; margin-top: 3px; }
-                ul { margin: 4px 0 0 16px; padding: 0; }
-                li { margin-bottom: 2px; }
-                .skills-grid { width: 100%; border-collapse: collapse; }
-                .skills-grid td { padding: 4px 0; font-size: 11px; vertical-align: top; }
-                .skills-label { font-weight: bold; color: #2d3748; width: 140px; }
-            </style>
-        </head>
-        <body>
-            <div class='header'>
-                <h1>{$name}</h1>
-                <div class='subtitle'>{$jobTitle}</div>
-                <div class='contact-info'>
-                    <span>{$email}</span> &bull; 
-                    <span>{$phone}</span> &bull; 
-                    <span>{$domicile}</span>
-                </div>
-            </div>
-
-            <div class='section-title'>Ringkasan Profesional</div>
-            <div class='item-desc'>
-                Profesional yang berdedikasi dan memiliki pengalaman serta pemahaman mendalam di bidang {$jobTitle}. Terbiasa bekerja secara terstruktur, kolaboratif dalam tim, adaptif terhadap perkembangan teknologi dan proses kerja, serta memiliki komitmen tinggi terhadap kualitas hasil kerja.
-            </div>
-
-            <div class='section-title'>Riwayat Pengalaman Kerja</div>
-            <div class='item'>
-                <table class='item-header'>
-                    <tr>
-                        <td>
-                            <div class='item-title'>{$jobTitle} Specialist / Staff</div>
-                            <div class='item-org'>Perusahaan Teknologi & Retail Mandiri &bull; Full-time</div>
-                        </td>
-                        <td class='item-date'>2023 - Sekarang</td>
-                    </tr>
-                </table>
-                <div class='item-desc'>
-                    <ul>
-                        <li>Bertanggung jawab dalam pengelolaan dan eksekusi tugas operasional sesuai standar prosedur.</li>
-                        <li>Melakukan koordinasi aktif antar tim, penyelesaian masalah (troubleshooting), dan optimalisasi alur kerja.</li>
-                        <li>Menjaga integritas, disiplin kerja, dan pencapaian target kerja yang telah ditetapkan perusahaan.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class='section-title'>Pendidikan</div>
-            <div class='item'>
-                <table class='item-header'>
-                    <tr>
-                        <td>
-                            <div class='item-title'>Sarjana / Diploma Komputer & Teknologi</div>
-                            <div class='item-org'>Universitas / Institut Terakreditasi</div>
-                        </td>
-                        <td class='item-date'>Lulus</td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class='section-title'>Keahlian & Kompetensi</div>
-            <table class='skills-grid'>
-                <tr>
-                    <td class='skills-label'>Keahlian Teknis:</td>
-                    <td>Penguasaan domain pekerjaan {$jobTitle}, Manajemen Berkas & Sistem, Analisis Data, REST API / Sistem Operasional.</td>
-                </tr>
-                <tr>
-                    <td class='skills-label'>Soft Skills:</td>
-                    <td>Komunikasi Efektif, Problem Solving, Disiplin & Tanggung Jawab, Kerjasama Tim (Teamwork), Kerja di Bawah Tekanan.</td>
-                </tr>
-            </table>
-        </body>
-        </html>
-        ";
     }
 
     /**
@@ -959,13 +761,20 @@ class RekrutmenSpaController extends Controller
      */
     public function batchAnalyzeWithAi(Request $request): JsonResponse
     {
+        @set_time_limit(180);
+
         $jobId = $request->input('job_id');
+        $rawAppIds = $request->input('application_ids', $request->input('ids'));
+        $applicationIds = is_array($rawAppIds) ? $rawAppIds : (! empty($rawAppIds) ? explode(',', (string) $rawAppIds) : []);
+        $applicationIds = array_values(array_filter(array_map('intval', $applicationIds)));
         $force = $request->boolean('force', true);
-        $chunkSize = (int) $request->input('chunk_size', 8);
+        $chunkSize = max(1, min(4, (int) $request->input('chunk_size', 2)));
         $offset = (int) $request->input('offset', 0);
 
         $query = JobApplication::with('jobPosting');
-        if ($jobId) {
+        if (! empty($applicationIds)) {
+            $query->whereIn('id', $applicationIds);
+        } elseif ($jobId) {
             $query->where('job_posting_id', $jobId);
         }
         if (! $force) {
@@ -1020,18 +829,14 @@ class RekrutmenSpaController extends Controller
         $jobDescription = trim($job?->description ?? '');
         $jobLocation = trim($job?->location ?? '');
 
-        // 1. Resolve CV document file (PDF preferred for native Gemini multimodal analysis)
-        $cvPhysicalPath = $this->getCvPhysicalPath($application);
+        $cvContent = $this->readCvContents($application);
         $pdfBase64 = null;
-        if ($cvPhysicalPath && strtolower(pathinfo($cvPhysicalPath, PATHINFO_EXTENSION)) === 'pdf') {
-            $pdfContent = @file_get_contents($cvPhysicalPath);
-            if (! empty($pdfContent) && strlen($pdfContent) <= 15 * 1024 * 1024) {
-                $pdfBase64 = base64_encode($pdfContent);
-            }
+        if ($cvContent !== null && strtolower(pathinfo((string) $application->resume_path, PATHINFO_EXTENSION)) === 'pdf'
+            && strlen($cvContent) <= 15 * 1024 * 1024) {
+            $pdfBase64 = base64_encode($cvContent);
         }
 
-        // Extract textual content for fallback / offline matching
-        $cvText = $this->extractTextFromCvDocument($application);
+        $cvText = $this->extractTextFromCvDocument($cvContent ?? '');
         $hasRealCv = ! empty($pdfBase64) || ! empty($cvText);
 
         // If candidate has no readable CV document
@@ -1299,73 +1104,19 @@ PROMPT;
         ];
     }
 
-    /**
-     * Resolve the candidate's CV file physical path on disk.
-     */
-    private function getCvPhysicalPath(JobApplication $application): ?string
+    private function readCvContents(JobApplication $application): ?string
     {
         $this->resolveAndSyncCandidateCv($application);
-
-        if (empty($application->resume_path)) {
+        $disk = $application->resolveAttachmentDisk('resume');
+        if ($disk === null) {
             return null;
         }
 
-        $relativePath = ltrim($application->resume_path, '/');
-
-        // Check storage disks first (supports local and remote S3 drivers)
-        $disks = array_values(array_unique(array_filter([
-            JobApplication::resumeDisk(),
-            config('filament.default_filesystem_disk', null),
-            config('filesystems.default'),
-            's3',
-            'local',
-            'public',
-        ])));
-
-        foreach ($disks as $disk) {
-            try {
-                if (config()->has("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($relativePath)) {
-                    try {
-                        $localPath = Storage::disk($disk)->path($relativePath);
-                        if (file_exists($localPath)) {
-                            return $localPath;
-                        }
-                    } catch (\Throwable) {
-                    }
-
-                    // Remote disks like S3 do not have a local filesystem path; cache to temp file for PDF analysis
-                    $ext = pathinfo($relativePath, PATHINFO_EXTENSION) ?: 'pdf';
-                    $tempPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'cv_'.md5($relativePath).'.'.$ext;
-                    if (! file_exists($tempPath) || filesize($tempPath) === 0 || filemtime($tempPath) < time() - 86400) {
-                        $binary = Storage::disk($disk)->get($relativePath);
-                        if (! empty($binary)) {
-                            file_put_contents($tempPath, $binary);
-                        }
-                    }
-
-                    if (file_exists($tempPath) && filesize($tempPath) > 0) {
-                        return $tempPath;
-                    }
-                }
-            } catch (\Throwable) {
-                continue;
-            }
+        try {
+            return Storage::disk($disk)->get($application->resume_path);
+        } catch (\Throwable) {
+            return null;
         }
-
-        $candidatePaths = [
-            storage_path('app/'.$relativePath),
-            storage_path('app/public/'.$relativePath),
-            public_path('storage/'.$relativePath),
-            public_path($relativePath),
-        ];
-
-        foreach ($candidatePaths as $p) {
-            if (file_exists($p) && is_readable($p)) {
-                return $p;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -1409,15 +1160,9 @@ PROMPT;
     /**
      * Extract clean textual content from candidate CV file (supports PDF & uncompressed text).
      */
-    private function extractTextFromCvDocument(JobApplication $application): string
+    private function extractTextFromCvDocument(string $content): string
     {
-        $targetPath = $this->getCvPhysicalPath($application);
-        if (! $targetPath) {
-            return '';
-        }
-
-        $content = @file_get_contents($targetPath);
-        if (! $content) {
+        if ($content === '') {
             return '';
         }
 
@@ -1510,7 +1255,7 @@ PROMPT;
         // Clean up escaped PDF characters and normalize whitespace
         $cleaned = str_replace(['\\(', '\\)', '\\\\', '\\n', '\\r', '\\t'], ['(', ')', '\\', "\n", "\r", "\t"], $extractedText);
         $cleaned = preg_replace('/[^\p{L}\p{N}\s\.\,\-\@\:\/\(\)\+\#]/u', ' ', $cleaned);
-        $cleaned = trim(preg_replace('/\s+/', ' ', $cleaned));
+        $cleaned = trim(preg_replace('/\s+/', ' ', (string) $cleaned));
 
         // Avoid raw binary garbage or unmapped corrupted glyph strings
         if (! $this->isSensibleText($cleaned)) {
@@ -2510,378 +2255,75 @@ PROMPT;
     /**
      * Send notification (email and/or WhatsApp) directly to candidate using template.
      */
-    public function sendCandidateEmail(Request $request, $id): JsonResponse
+    public function sendCandidateEmail(SendCandidateNotificationRequest $request, int $id): JsonResponse
     {
-        $request->validate([
-            'subject'      => 'required|string|max:255',
-            'body_message' => 'required|string',
-            'send_type'    => 'nullable|string|in:immediate,scheduled',
-            'scheduled_at' => 'required_if:send_type,scheduled|nullable|date',
-        ]);
-
         $application = JobApplication::with(['jobPosting', 'currentStage'])->findOrFail($id);
-        $templateKey = $request->input('template_key');
-        $newStage = $this->autoAdvanceApplicationStage($application, $templateKey);
+        Gate::authorize('update', $application);
+        $originalStage = $application->current_stage_id;
+        $scheduled = $request->validated('send_type') === 'scheduled';
+        $service = app(ScheduledNotificationService::class);
+        $data = array_merge($request->validated(), [
+            'application_ids' => [$id],
+            'scheduled_at'    => $scheduled ? $request->validated('scheduled_at') : null,
+        ]);
+        $notification = $service->schedule($data, $request->file('attachment'), $request->user()->id, $scheduled);
 
-        if ($request->input('send_type') === 'scheduled') {
-            $scheduledNotification = app(ScheduledNotificationService::class)->schedule(
-                array_merge($request->all(), [
-                    'application_ids' => [$application->id],
-                ]),
-                $request->hasFile('attachment') ? $request->file('attachment') : null,
-                auth()->id()
-            );
-
-            $dt = Carbon::parse($scheduledNotification->scheduled_at)->locale('id');
-            $formattedDate = $dt->translatedFormat('l, d F Y').' pukul '.$dt->format('H:i').' WIB';
-
-            return response()->json([
-                'success'                => true,
-                'scheduled'              => true,
-                'message'                => "Notifikasi berhasil dijadwalkan untuk dikirimkan ke {$application->full_name} pada {$formattedDate}.",
-                'formatted_scheduled_at' => $formattedDate,
-                'data'                   => $scheduledNotification,
-                'new_stage'              => $newStage ? [
-                    'id'   => $newStage->id,
-                    'name' => $newStage->name,
-                ] : null,
-            ], 200);
+        if (! $scheduled) {
+            $service->executeScheduled($notification, true);
         }
 
-        $channels = (array) $request->input('channels', ['email']);
-        if (empty($channels)) {
-            $channels = ['email'];
-        }
+        $progress = $service->progress($notification->fresh());
+        $queued = in_array($progress['status'], ['pending', 'processing'], true);
+        $results = collect($progress['details'])->first() ?? [];
+        $application->refresh()->load('currentStage');
+        $hasSuccess = ($progress['stats']['email_success'] + $progress['stats']['whatsapp_success']) > 0;
 
-        $results = [
-            'email'    => null,
-            'whatsapp' => null,
-        ];
-
-        $hasSuccess = false;
-        $messages = [];
-
-        // 1. Send WhatsApp if requested
-        if (in_array('whatsapp', $channels, true)) {
-            $waResult = app(CandidateWhatsAppNotifier::class)->send($application, $request->all());
-            $results['whatsapp'] = $waResult;
-            if ($waResult['success']) {
-                $hasSuccess = true;
-                $messages[] = "WhatsApp terkirim ke {$waResult['phone']}";
-            } else {
-                $messages[] = "WhatsApp: {$waResult['message']}";
-            }
-        }
-
-        // 2. Send Email if requested
-        if (in_array('email', $channels, true)) {
-            if (empty($application->email)) {
-                $results['email'] = [
-                    'success' => false,
-                    'message' => 'Kandidat ini tidak memiliki alamat email yang terdaftar.',
-                ];
-                $messages[] = 'Email tidak terdaftar';
-            } else {
-                $jobTitle = $application->jobPosting?->title ?? ($application->position ?? 'Lowongan Kerja');
-                $candidateName = $application->full_name;
-                $companyName = 'OCEAN SPACE';
-                $location = $application->jobPosting?->location ?? 'Indonesia';
-
-                $subject = str_replace(
-                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}'],
-                    [$candidateName, $jobTitle, $companyName, $location],
-                    $request->input('subject')
-                );
-
-                $actionUrl = trim($request->input('action_url', ''));
-                if (! empty($actionUrl) && ! str_starts_with($actionUrl, 'http://') && ! str_starts_with($actionUrl, 'https://')) {
-                    $actionUrl = 'https://'.$actionUrl;
-                }
-
-                $bodyMessage = str_replace(
-                    ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-                    [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
-                    $request->input('body_message')
-                );
-
-                $badgeText = $request->input('badge_text', 'Notifikasi Rekrutmen');
-                $infoBoxTitle = $request->input('info_box_title', 'Detail Informasi');
-                $actionLabel = $request->input('action_label');
-                $specialNote = $request->input('special_note');
-
-                // Compile Info Items Table
-                $infoItems = [];
-                $infoItems[] = ['label' => 'Posisi Lowongan', 'value' => $jobTitle];
-                $infoItems[] = ['label' => 'Perusahaan', 'value' => $companyName];
-                if (! empty($location)) {
-                    $infoItems[] = ['label' => 'Penempatan', 'value' => $location];
-                }
-                if ($request->filled('schedule')) {
-                    $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $request->input('schedule')];
-                }
-                if ($request->filled('venue_or_method')) {
-                    $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $request->input('venue_or_method')];
-                }
-                if (! empty($actionUrl)) {
-                    $infoItems[] = ['label' => 'Tautan / Link Akses', 'value' => $actionUrl];
-                }
-
-                $logoUrl = 'https://oceanspace.co.id/images/logo-color.png';
-
-                $attachmentFile = ($request->hasFile('attachment') && $request->file('attachment')->isValid())
-                    ? $request->file('attachment')
-                    : null;
-
-                try {
-                    app(RekrutmenMailer::class)->send('rekrutmen::mail.candidate-stage-notification', [
-                        'subject'        => $subject,
-                        'badge_text'     => $badgeText,
-                        'position_title' => $jobTitle,
-                        'recipient_name' => $candidateName,
-                        'body_message'   => $bodyMessage,
-                        'info_box_title' => $infoBoxTitle,
-                        'info_items'     => $infoItems,
-                        'action_url'     => $actionUrl,
-                        'action_label'   => $actionLabel,
-                        'special_note'   => $specialNote,
-                        'logo_url'       => $logoUrl,
-                        'has_attachment' => ! empty($attachmentFile),
-                    ], function ($message) use ($application, $subject, $attachmentFile) {
-                        $message->to($application->email, $application->full_name)
-                            ->subject($subject);
-
-                        if ($attachmentFile) {
-                            $message->attach($attachmentFile->getRealPath(), [
-                                'as'   => $attachmentFile->getClientOriginalName(),
-                                'mime' => $attachmentFile->getMimeType(),
-                            ]);
-                        }
-                    });
-
-                    $results['email'] = [
-                        'success' => true,
-                        'message' => "Email notifikasi berhasil dikirimkan ke {$application->email}!",
-                    ];
-                    $hasSuccess = true;
-                    $messages[] = "Email terkirim ke {$application->email}";
-                } catch (\Throwable $e) {
-                    Log::error('Failed sending candidate stage email: '.$e->getMessage());
-
-                    $results['email'] = [
-                        'success' => false,
-                        'message' => 'Gagal mengirim email: '.$e->getMessage(),
-                    ];
-                    $messages[] = "Gagal kirim email: {$e->getMessage()}";
-                }
-            }
-        }
-
-        return response()->json([
-            'success'   => $hasSuccess,
-            'message'   => implode(' | ', $messages),
-            'results'   => $results,
-            'new_stage' => $newStage ? [
-                'id'   => $newStage->id,
-                'name' => $newStage->name,
-            ] : null,
-        ], $hasSuccess ? 200 : 422);
+        return response()->json(array_merge($progress, [
+            'success'   => $queued || $hasSuccess,
+            'queued'    => $queued,
+            'scheduled' => $scheduled,
+            'batch_id'  => $notification->id,
+            'data'      => ['id' => $notification->id, 'status' => $progress['status'], 'scheduled_at' => $notification->scheduled_at],
+            'results'   => ['email' => $results['email'] ?? null, 'whatsapp' => $results['whatsapp'] ?? null],
+            'message'   => $queued ? 'Notifikasi masuk antrean pengiriman.' : ($hasSuccess ? 'Pengiriman selesai. Periksa hasil setiap kanal.' : 'Pesan belum berhasil dikirim. Periksa detail pengiriman.'),
+            'new_stage' => $application->current_stage_id !== $originalStage && $application->currentStage
+                ? ['id' => $application->currentStage->id, 'name' => $application->currentStage->name] : null,
+        ]), $queued ? 202 : ($hasSuccess ? 200 : 422));
     }
 
-    /**
-     * Send bulk notification (Email and/or WhatsApp) to multiple candidates.
-     */
-    public function bulkSendCandidateNotification(Request $request): JsonResponse
+    public function bulkSendCandidateNotification(SendCandidateNotificationRequest $request): JsonResponse
     {
-        $request->validate([
-            'application_ids'   => 'required|array|min:1',
-            'application_ids.*' => 'integer',
-            'channels'          => 'required|array|min:1',
-            'subject'           => 'required|string|max:255',
-            'body_message'      => 'required|string',
-            'send_type'         => 'nullable|string|in:immediate,scheduled',
-            'scheduled_at'      => 'required_if:send_type,scheduled|nullable|date',
-        ]);
-
-        $applications = JobApplication::with(['jobPosting', 'currentStage'])
-            ->whereIn('id', $request->input('application_ids'))
-            ->get();
-
-        if ($applications->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tidak ada kandidat valid yang ditemukan untuk dikirimi notifikasi.',
-            ], 422);
-        }
-
-        $templateKey = $request->input('template_key');
-        foreach ($applications as $app) {
-            $this->autoAdvanceApplicationStage($app, $templateKey);
-        }
-
-        if ($request->input('send_type') === 'scheduled') {
-            $scheduledNotification = app(ScheduledNotificationService::class)->schedule(
-                $request->all(),
-                $request->hasFile('attachment') ? $request->file('attachment') : null,
-                auth()->id()
-            );
-
-            $dt = Carbon::parse($scheduledNotification->scheduled_at)->locale('id');
-            $formattedDate = $dt->translatedFormat('l, d F Y').' pukul '.$dt->format('H:i').' WIB';
-            $count = count($scheduledNotification->application_ids);
-
-            return response()->json([
-                'success'                => true,
-                'scheduled'              => true,
-                'message'                => "Notifikasi massal berhasil dijadwalkan untuk {$count} pelamar pada {$formattedDate}.",
-                'formatted_scheduled_at' => $formattedDate,
-                'data'                   => $scheduledNotification,
-            ], 200);
-        }
-
-        $channels = (array) $request->input('channels', ['email']);
-        $attachmentFile = ($request->hasFile('attachment') && $request->file('attachment')->isValid())
-            ? $request->file('attachment')
-            : null;
-
-        $stats = [
-            'total'            => $applications->count(),
-            'email_success'    => 0,
-            'email_failed'     => 0,
-            'whatsapp_success' => 0,
-            'whatsapp_failed'  => 0,
-            'skipped_no_email' => 0,
-            'skipped_no_phone' => 0,
-        ];
-
-        $details = [];
-        $waNotifier = app(CandidateWhatsAppNotifier::class);
-
+        $applications = JobApplication::query()->whereIn('id', $request->validated('application_ids'))->get();
         foreach ($applications as $application) {
-            $candidateName = $application->full_name;
-            $jobTitle = $application->jobPosting?->title ?? ($application->position ?? 'Lowongan Kerja');
-            $companyName = 'OCEAN SPACE';
-            $location = $application->jobPosting?->location ?? 'Indonesia';
-
-            $actionUrl = trim($request->input('action_url', ''));
-            if (! empty($actionUrl) && ! str_starts_with($actionUrl, 'http://') && ! str_starts_with($actionUrl, 'https://')) {
-                $actionUrl = 'https://'.$actionUrl;
-            }
-
-            $subject = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}'],
-                [$candidateName, $jobTitle, $companyName, $location],
-                $request->input('subject')
-            );
-
-            $bodyMessage = str_replace(
-                ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-                [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
-                $request->input('body_message')
-            );
-
-            $badgeText = $request->input('badge_text', 'Notifikasi Rekrutmen');
-            $infoBoxTitle = $request->input('info_box_title', 'Detail Informasi');
-            $actionLabel = $request->input('action_label');
-            $specialNote = $request->input('special_note');
-
-            $appDetail = [
-                'id'       => $application->id,
-                'name'     => $candidateName,
-                'email'    => null,
-                'whatsapp' => null,
-            ];
-
-            // 1. WhatsApp
-            if (in_array('whatsapp', $channels, true)) {
-                $waResult = $waNotifier->send($application, array_merge($request->all(), [
-                    'subject'      => $subject,
-                    'body_message' => $bodyMessage,
-                    'action_url'   => $actionUrl,
-                ]));
-
-                if ($waResult['success']) {
-                    $stats['whatsapp_success']++;
-                    $appDetail['whatsapp'] = ['success' => true, 'phone' => $waResult['phone'] ?? null];
-                } else {
-                    $stats['whatsapp_failed']++;
-                    $appDetail['whatsapp'] = ['success' => false, 'message' => $waResult['message']];
-                }
-            }
-
-            // 2. Email
-            if (in_array('email', $channels, true)) {
-                if (empty($application->email)) {
-                    $stats['skipped_no_email']++;
-                    $appDetail['email'] = ['success' => false, 'message' => 'Alamat email kosong'];
-                } else {
-                    $infoItems = [];
-                    $infoItems[] = ['label' => 'Posisi Lowongan', 'value' => $jobTitle];
-                    $infoItems[] = ['label' => 'Perusahaan', 'value' => $companyName];
-                    if (! empty($location)) {
-                        $infoItems[] = ['label' => 'Penempatan', 'value' => $location];
-                    }
-                    if ($request->filled('schedule')) {
-                        $infoItems[] = ['label' => 'Jadwal / Waktu', 'value' => $request->input('schedule')];
-                    }
-                    if ($request->filled('venue_or_method')) {
-                        $infoItems[] = ['label' => 'Metode / Lokasi', 'value' => $request->input('venue_or_method')];
-                    }
-                    if (! empty($actionUrl)) {
-                        $infoItems[] = ['label' => 'Tautan / Link Akses', 'value' => $actionUrl];
-                    }
-
-                    try {
-                        app(RekrutmenMailer::class)->send('rekrutmen::mail.candidate-stage-notification', [
-                            'subject'        => $subject,
-                            'badge_text'     => $badgeText,
-                            'position_title' => $jobTitle,
-                            'recipient_name' => $candidateName,
-                            'body_message'   => $bodyMessage,
-                            'info_box_title' => $infoBoxTitle,
-                            'info_items'     => $infoItems,
-                            'action_url'     => $actionUrl,
-                            'action_label'   => $actionLabel,
-                            'special_note'   => $specialNote,
-                            'logo_url'       => 'https://oceanspace.co.id/images/logo-color.png',
-                            'has_attachment' => ! empty($attachmentFile),
-                        ], function ($message) use ($application, $subject, $attachmentFile) {
-                            $message->to($application->email, $application->full_name)
-                                ->subject($subject);
-
-                            if ($attachmentFile) {
-                                $message->attach($attachmentFile->getRealPath(), [
-                                    'as'   => $attachmentFile->getClientOriginalName(),
-                                    'mime' => $attachmentFile->getMimeType(),
-                                ]);
-                            }
-                        });
-
-                        $stats['email_success']++;
-                        $appDetail['email'] = ['success' => true, 'recipient' => $application->email];
-                    } catch (\Throwable $e) {
-                        Log::error("Failed bulk sending email to {$application->email}: ".$e->getMessage());
-                        $stats['email_failed']++;
-                        $appDetail['email'] = ['success' => false, 'message' => $e->getMessage()];
-                    }
-                }
-            }
-
-            $details[] = $appDetail;
+            Gate::authorize('update', $application);
         }
 
-        $summaryMessage = sprintf(
-            'Notifikasi massal selesai. Email terkirim: %d, WhatsApp terkirim: %d dari total %d kandidat.',
-            $stats['email_success'],
-            $stats['whatsapp_success'],
-            $stats['total']
-        );
+        abort_if($applications->isEmpty(), 422, 'Tidak ada kandidat valid yang dipilih.');
+        $scheduled = $request->validated('send_type') === 'scheduled';
+        $service = app(ScheduledNotificationService::class);
+        $notification = $service->schedule(array_merge($request->validated(), [
+            'scheduled_at' => $scheduled ? $request->validated('scheduled_at') : null,
+        ]), $request->file('attachment'), $request->user()->id);
 
-        return response()->json([
-            'success' => ($stats['email_success'] > 0 || $stats['whatsapp_success'] > 0),
-            'message' => $summaryMessage,
-            'stats'   => $stats,
-            'details' => $details,
-        ]);
+        return response()->json(array_merge($service->progress($notification->fresh()), [
+            'success'   => true,
+            'queued'    => true,
+            'scheduled' => $scheduled,
+            'batch_id'  => $notification->id,
+            'data'      => ['id' => $notification->id, 'status' => $notification->status, 'scheduled_at' => $notification->scheduled_at],
+            'message'   => 'Notifikasi massal masuk antrean. Hasil diperbarui per kandidat.',
+        ]), 202);
+    }
+
+    public function notificationProgress(ScheduledNotification $notification): JsonResponse
+    {
+        abort_unless((int) $notification->creator_id === (int) auth()->id() || auth()->user()->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists(), 403);
+
+        foreach (JobApplication::query()->whereIn('id', $notification->application_ids)->get() as $application) {
+            Gate::authorize('update', $application);
+        }
+
+        return response()->json(app(ScheduledNotificationService::class)->progress($notification));
     }
 
     /**
@@ -2889,6 +2331,8 @@ PROMPT;
      */
     public function heartbeatScheduled(): JsonResponse
     {
+        Gate::authorize('viewAny', JobApplication::class);
+
         try {
             $processed = app(ScheduledNotificationService::class)->processDueNotifications();
             $hasPending = ScheduledNotification::where('status', ScheduledNotification::STATUS_PENDING)->exists();
@@ -2911,283 +2355,48 @@ PROMPT;
         }
     }
 
-    /**
-     * Automatically advance candidate stage based on notification template.
-     */
-    protected function autoAdvanceApplicationStage(JobApplication $application, ?string $templateKey): ?RekrutmenStage
+    private function resolveAndSyncCandidateCv(JobApplication $application): bool
     {
-        if (empty($templateKey)) {
-            return null;
+        $storage = app(RekrutmenStorage::class);
+        $file = $storage->findCandidateResume($application);
+        if ($file === null) {
+            return false;
         }
 
-        if ($templateKey === 'rejection') {
-            $application->status = 'rejected';
-            $application->save();
+        $storage->rememberCandidateResume($application, $file);
 
-            return null;
-        }
-
-        $pipelineId = $application->jobPosting?->rekrutmen_pipeline_id ?? 1;
-
-        $targetStage = null;
-        if ($templateKey === 'screening') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%screening%')
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'interview_hr' || $templateKey === 'interview') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%interview hr%')
-                ->orderBy('order_column')
-                ->first();
-            if (! $targetStage) {
-                $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                    ->where('name', 'like', '%interview%')
-                    ->orderBy('order_column')
-                    ->first();
-            }
-        } elseif ($templateKey === 'psikotes') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%psikotes%')
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'kompetensi') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where(function ($q) {
-                    $q->where('name', 'like', '%kompetensi%')
-                        ->orWhere('name', 'like', '%skill%');
-                })
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'interview_user') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%interview user%')
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'background_check') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where(function ($q) {
-                    $q->where('name', 'like', '%backgro%')
-                        ->orWhere('name', 'like', '%check%');
-                })
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'offering') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%offering%')
-                ->orderBy('order_column')
-                ->first();
-        } elseif ($templateKey === 'hired') {
-            $targetStage = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
-                ->where('name', 'like', '%hired%')
-                ->orderBy('order_column')
-                ->first();
-            $application->status = 'hired';
-        }
-
-        if ($targetStage && (int) $application->current_stage_id !== (int) $targetStage->id) {
-            $application->current_stage_id = $targetStage->id;
-            if ($application->status === 'rejected') {
-                $application->status = 'in_progress';
-            }
-            $application->save();
-        }
-
-        return $targetStage;
+        return $application->resolveAttachmentDisk('resume') !== null;
     }
 
-    /**
-     * Helper to auto-locate and match candidate CV in storage if missing or not on disk.
-     */
-    private function resolveAndSyncCandidateCv(JobApplication $app): bool
-    {
-        $hasResumeOnDisk = false;
-        if (filled($app->resume_path)) {
-            $rel = ltrim($app->resume_path, '/');
-
-            $disks = array_values(array_unique(array_filter([
-                JobApplication::resumeDisk(),
-                config('filament.default_filesystem_disk', null),
-                config('filesystems.default'),
-                's3',
-                'local',
-                'public',
-            ])));
-
-            foreach ($disks as $disk) {
-                try {
-                    if (config()->has("filesystems.disks.{$disk}") && Storage::disk($disk)->exists($rel)) {
-                        $hasResumeOnDisk = true;
-                        break;
-                    }
-                } catch (\Throwable) {
-                    continue;
-                }
-            }
-
-            if (! $hasResumeOnDisk) {
-                $candidatePaths = [
-                    storage_path('app/'.$rel),
-                    storage_path('app/public/'.$rel),
-                    public_path('storage/'.$rel),
-                    public_path($rel),
-                ];
-                foreach ($candidatePaths as $cp) {
-                    if (file_exists($cp)) {
-                        $hasResumeOnDisk = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if ($hasResumeOnDisk) {
-            return true;
-        }
-
-        // Search by ID pattern in storage disk or local
-        $targetDisk = JobApplication::resumeDisk();
-        if (config()->has("filesystems.disks.{$targetDisk}")) {
-            try {
-                $files = Storage::disk($targetDisk)->files('rekrutmen/cv');
-                $idPrefix = 'CV-'.$app->id.'-';
-                foreach ($files as $file) {
-                    $base = basename($file);
-                    if (str_starts_with($base, $idPrefix)) {
-                        $foundRel = 'rekrutmen/cv/'.$base;
-                        $app->resume_path = $foundRel;
-                        DB::table('rekrutmen_job_applications')->where('id', $app->id)->update([
-                            'resume_path' => $foundRel,
-                            'updated_at'  => now(),
-                        ]);
-
-                        return true;
-                    }
-                }
-            } catch (\Throwable) {
-                // continue to local check
-            }
-        }
-
-        // Search by ID pattern locally: storage/app/public/rekrutmen/cv/CV-{id}-*
-        $matches = glob(storage_path('app/public/rekrutmen/cv/CV-'.$app->id.'-*'));
-        if (! empty($matches) && file_exists($matches[0])) {
-            $foundRel = 'rekrutmen/cv/'.basename($matches[0]);
-            $app->resume_path = $foundRel;
-            DB::table('rekrutmen_job_applications')->where('id', $app->id)->update([
-                'resume_path' => $foundRel,
-                'updated_at'  => now(),
-            ]);
-
-            return true;
-        }
-
-        // Search by candidate name slug
-        if (filled($app->full_name)) {
-            $nameSlug = Str::slug($app->full_name);
-            if ($nameSlug !== '') {
-                $nameMatches = glob(storage_path('app/public/rekrutmen/cv/*'.$nameSlug.'*'));
-                if (! empty($nameMatches) && file_exists($nameMatches[0])) {
-                    $foundRel = 'rekrutmen/cv/'.basename($nameMatches[0]);
-                    $app->resume_path = $foundRel;
-                    DB::table('rekrutmen_job_applications')->where('id', $app->id)->update([
-                        'resume_path' => $foundRel,
-                        'updated_at'  => now(),
-                    ]);
-
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Batch match candidate CVs in storage with database records.
-     */
     public function syncCandidateCvsFromStorage(): JsonResponse
     {
-        $targetDisk = JobApplication::resumeDisk();
-        $allFilePaths = [];
-
-        if (config()->has("filesystems.disks.{$targetDisk}")) {
-            try {
-                $allFilePaths = Storage::disk($targetDisk)->files('rekrutmen/cv');
-            } catch (\Throwable) {
-                // fallback to local
-            }
-        }
-
-        if (empty($allFilePaths)) {
-            $cvDirectory = storage_path('app/public/rekrutmen/cv');
-            if (is_dir($cvDirectory)) {
-                $allFilePaths = array_values(array_filter(
-                    array_map(fn ($f) => $f !== '.' && $f !== '..' ? 'rekrutmen/cv/'.$f : null, scandir($cvDirectory))
-                ));
-            }
-        }
-
-        if (empty($allFilePaths)) {
-            return response()->json([
-                'success' => false,
-                'message' => "Tidak ditemukan berkas CV pada storage disk [{$targetDisk}] maupun di folder lokal.",
-            ], 404);
-        }
-
-        $filesById = [];
-        $allFiles = [];
-        foreach ($allFilePaths as $path) {
-            $f = basename($path);
-            $allFiles[] = $f;
-            if (preg_match('/^CV-(\d+)-/i', $f, $m)) {
-                $filesById[(int) $m[1]] = $f;
-            }
-        }
-
-        $apps = JobApplication::query()->get(['id', 'full_name', 'resume_path', 'job_posting_id']);
+        Gate::authorize('viewAny', JobApplication::class);
+        $storage = app(RekrutmenStorage::class);
+        $files = $storage->files(JobApplication::RESUME_DIRECTORY);
         $matched = 0;
         $updated = 0;
 
-        foreach ($apps as $app) {
-            $matchedFile = null;
-            if (isset($filesById[$app->id])) {
-                $matchedFile = $filesById[$app->id];
-            } elseif (! empty($app->resume_path) && in_array(basename($app->resume_path), $allFiles, true)) {
-                $matchedFile = basename($app->resume_path);
-            } elseif (! empty($app->full_name)) {
-                $nameSlug = Str::slug($app->full_name);
-                if ($nameSlug !== '') {
-                    foreach ($allFiles as $fn) {
-                        if (str_contains(strtolower($fn), $nameSlug)) {
-                            $matchedFile = $fn;
-                            break;
-                        }
-                    }
-                }
+        foreach (JobApplication::query()->get(['id', 'creator_id', 'resume_path', 'resume_disk']) as $application) {
+            if (! Gate::allows('update', $application)) {
+                continue;
             }
-
-            if ($matchedFile) {
-                $targetPath = 'rekrutmen/cv/'.$matchedFile;
-                $matched++;
-                if ($app->resume_path !== $targetPath) {
-                    DB::table('rekrutmen_job_applications')
-                        ->where('id', $app->id)
-                        ->update([
-                            'resume_path' => $targetPath,
-                            'updated_at'  => now(),
-                        ]);
-                    $updated++;
-                }
+            $file = $storage->findCandidateResume($application, $files);
+            if ($file === null) {
+                continue;
+            }
+            $matched++;
+            if ($application->resume_path !== $file['path'] || $application->resume_disk !== $file['disk']) {
+                $storage->rememberCandidateResume($application, $file);
+                $updated++;
             }
         }
 
         return response()->json([
             'success'     => true,
-            'message'     => "Berhasil mencocokkan {$matched} berkas CV ({$updated} baru diperbarui) dari total ".count($allFiles).' berkas di storage.',
+            'message'     => "Berhasil mencocokkan {$matched} berkas CV ({$updated} diperbarui). Berkas dengan lokasi ambigu dilewati.",
             'matched'     => $matched,
             'updated'     => $updated,
-            'total_files' => count($allFiles),
+            'total_files' => count($files),
         ]);
     }
 }

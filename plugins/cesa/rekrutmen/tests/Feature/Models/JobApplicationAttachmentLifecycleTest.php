@@ -18,6 +18,7 @@ class JobApplicationAttachmentLifecycleTest extends RekrutmenTestCase
 
         config()->set('filesystems.default', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
+        config()->set('rekrutmen.disk', 'local');
 
         $jobPosting = $this->createJobPosting();
 
@@ -96,6 +97,7 @@ class JobApplicationAttachmentLifecycleTest extends RekrutmenTestCase
 
         config()->set('filesystems.default', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
+        config()->set('rekrutmen.disk', 'local');
 
         $jobPosting = $this->createJobPosting();
 

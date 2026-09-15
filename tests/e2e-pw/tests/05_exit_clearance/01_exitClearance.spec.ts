@@ -1,4 +1,5 @@
 import { test } from "../../setup";
+import { CompanyManagementPage } from "../../pages/03_companyManagement";
 import { ExitClearanceAdminPage } from "../../pages/07_exitClearanceAdmin";
 import { ExitClearancePage, type ExitClearancePersonalData } from "../../pages/06_exitClearance";
 import { loginWithCredentials } from "../../utils/admin";
@@ -20,6 +21,7 @@ test.describe("Exit Clearance Public Flow E2E", () => {
         phone: `08123${key.toString().slice(-7)}`,
         position: "QA Engineer",
         placement: "Jakarta",
+        company: `E2E Exit Clearance Company ${key}`,
         department: "HR",
         joinDate: "2022-01-10",
         departureDate: "2026-03-28",
@@ -41,6 +43,10 @@ test.describe("Exit Clearance Public Flow E2E", () => {
         const questionnaireAnswer = `Alasan resign ${key}`;
         const clearanceAnswer = "Tidak ada";
 
+        const companyPage = new CompanyManagementPage(adminPage);
+        await companyPage.gotoCompaniesPage();
+        await companyPage.createCompany({ name: personalData.company });
+
         await exitClearancePage.submitRequest({
             personalData,
             questionnaireAnswerPrefix: String(key),
@@ -49,6 +55,7 @@ test.describe("Exit Clearance Public Flow E2E", () => {
 
         await exitClearancePage.assertProgressPageShowsSubmission({
             applicantName: personalData.name,
+            company: personalData.company,
             department: personalData.department,
             questionnaireAnswer,
             clearanceAnswer,
@@ -59,17 +66,22 @@ test.describe("Exit Clearance Public Flow E2E", () => {
         await adminRequestPage.gotoRequestView(metadata.requestId);
         await adminRequestPage.assertRequestDetails({
             applicantName: personalData.name,
+            company: personalData.company,
             email: personalData.email,
             uid: metadata.uid,
             status: "Pending",
         });
     });
 
-    test("Approver can reject a submission and progress page reflects the rejected state", async ({ page }) => {
+    test("Approver can reject a submission and progress page reflects the rejected state", async ({ page, adminPage }) => {
         const exitClearancePage = new ExitClearancePage(page);
         const key = Date.now();
         const personalData = buildPersonalData(key);
         const rejectionNote = `Reject note ${key}`;
+
+        const companyPage = new CompanyManagementPage(adminPage);
+        await companyPage.gotoCompaniesPage();
+        await companyPage.createCompany({ name: personalData.company, status: "false" });
 
         await exitClearancePage.submitRequest({
             personalData,
@@ -95,6 +107,10 @@ test.describe("Exit Clearance Public Flow E2E", () => {
         const key = Date.now();
         const personalData = buildPersonalData(key);
         const finalApprovalNote = `Approve note final ${key}`;
+
+        const companyPage = new CompanyManagementPage(adminPage);
+        await companyPage.gotoCompaniesPage();
+        await companyPage.createCompany({ name: personalData.company });
 
         await exitClearancePage.submitRequest({
             personalData,
@@ -124,6 +140,7 @@ test.describe("Exit Clearance Public Flow E2E", () => {
         await adminRequestPage.gotoRequestView(metadata.requestId);
         await adminRequestPage.assertRequestDetails({
             applicantName: personalData.name,
+            company: personalData.company,
             email: personalData.email,
             uid: metadata.uid,
             status: "Approved",

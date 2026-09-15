@@ -1,0 +1,19 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (Schema::hasTable(config('permission.table_names.permissions', 'permissions'))) {
+            Permission::findOrCreate('manage_rekrutmen_whatsapp', 'web');
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+        }
+    }
+
+    public function down(): void {}
+};

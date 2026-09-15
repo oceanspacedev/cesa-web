@@ -6,6 +6,7 @@ use Cesa\Rekrutmen\Enums\WhatsAppAccountStatus;
 use Cesa\Rekrutmen\Models\WhatsAppAccount;
 use Cesa\Rekrutmen\Models\WhatsAppSetting;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class WhatsAppGateway
@@ -22,62 +23,84 @@ class WhatsAppGateway
     public function sendText(?WhatsAppAccount $account, string $phone, string $message, array $options = []): array
     {
         if (! $this->isEnabled()) {
-            return [
-                'success' => false,
-                'message' => 'Pengiriman WhatsApp rekrutmen sedang nonaktif.',
-            ];
+            return $this->failedSend('Pengiriman WhatsApp rekrutmen sedang nonaktif.');
         }
 
-        if (! $account) {
-            return [
-                'success' => false,
-                'message' => 'Belum ada nomor WhatsApp yang terhubung. Scan QR di Pengaturan Rekrutmen.',
-            ];
+        $account = $account?->fresh();
+        if (! $account || ! $account->is_active) {
+            return $this->failedSend('Akun WhatsApp yang dipilih sudah dihapus atau tidak aktif.');
+        }
+
+        $phone = $this->formatPhone($phone);
+        if (! $phone || trim($message) === '') {
+            return $this->failedSend('Nomor tujuan atau pesan WhatsApp tidak valid.');
         }
 
         if (! $this->ensureEngine()) {
-            return [
-                'success'    => false,
-                'message'    => 'Engine WhatsApp rekrutmen belum berjalan. Jalankan: php artisan rekrutmen:whatsapp-engine',
-                'account_id' => $account->id,
-            ];
+            return $this->failedSend('Engine WhatsApp belum tersedia. Pengiriman menunggu akun yang dipilih.', true);
         }
 
+        $key = (string) ($options['idempotency_key'] ?? Str::uuid());
         try {
-            $payload = $this->sendWithRetry($account, $phone, $message);
-            $account->markConnected($account->phone_number);
-
-            return [
-                'success'    => true,
-                'message'    => 'Pesan WhatsApp berhasil dikirim ke '.$phone,
-                'phone'      => $phone,
-                'data'       => $payload,
-                'account_id' => $account->id,
-                'session_id' => $account->sessionId(),
-            ];
+            $payload = $this->engine->sendText($account->sessionId(), $phone, $message, $key);
         } catch (Throwable $e) {
-            $this->rememberSendFailure($account, $e);
-
-            Log::error('Rekrutmen WhatsApp engine failed to send.', [
-                'account_id' => $account->id,
-                'phone'      => $phone,
-                'error'      => $e->getMessage(),
-            ]);
-
-            return [
-                'success'    => false,
-                'message'    => $e->getMessage(),
-                'phone'      => $phone,
-                'account_id' => $account->id,
-                'session_id' => $account->sessionId(),
+            $payload = $this->messageResult($account, $key) ?? [
+                'status'    => 'unknown',
+                'retryable' => false,
+                'message'   => 'Hasil pengiriman belum pasti. Perlu diperiksa sebelum mengirim ulang.',
             ];
+
+            Log::warning('Recruitment WhatsApp send requires reconciliation.', [
+                'account_id'  => $account->id,
+                'request_key' => $key,
+                'error'       => $e->getMessage(),
+            ]);
         }
+
+        $status = (string) ($payload['status'] ?? 'unknown');
+        $success = $status === 'sent';
+        if ($success) {
+            $account->markConnected($account->phone_number);
+        } else {
+            $account->forceFill([
+                'last_error'      => $payload['message'] ?? 'Hasil pengiriman belum pasti.',
+                'last_checked_at' => now(),
+            ])->save();
+        }
+
+        return [
+            'success'         => $success,
+            'status'          => $status,
+            'retryable'       => $status === 'failed' && (bool) ($payload['retryable'] ?? false),
+            'message'         => $success ? 'Pesan WhatsApp berhasil dikirim ke '.$phone : ($payload['message'] ?? 'Pengiriman perlu diperiksa.'),
+            'phone'           => $phone,
+            'data'            => $payload,
+            'account_id'      => $account->id,
+            'session_id'      => $account->sessionId(),
+            'idempotency_key' => $key,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    public function messageResult(WhatsAppAccount $account, string $key): ?array
+    {
+        try {
+            return $this->engine->message($account->sessionId(), $key);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /** @return array{success: bool, status: string, retryable: bool, message: string} */
+    protected function failedSend(string $message, bool $retryable = false): array
+    {
+        return ['success' => false, 'status' => 'failed', 'retryable' => $retryable, 'message' => $message];
     }
 
     /**
      * @return array{success: bool, message: string, data?: array<string, mixed>}
      */
-    public function connect(WhatsAppAccount $account, ?string $phone = null): array
+    public function connect(WhatsAppAccount $account, string $mode = 'qr', ?string $phone = null): array
     {
         if (! $this->ensureEngine()) {
             return [
@@ -87,29 +110,15 @@ class WhatsAppGateway
         }
 
         try {
-            $sessionPhone = $phone ?: $account->phone_number;
-            $session = $this->engine->startSession(
-                $account->sessionId(),
-                $sessionPhone,
-            );
-
-            if (filled($sessionPhone) && empty($session['pairing_code'])) {
-                for ($attempt = 0; $attempt < 8; $attempt++) {
-                    usleep(400000);
-                    $session = $this->engine->session($account->sessionId());
-
-                    if (! empty($session['pairing_code']) || ($session['status'] ?? null) === 'connected') {
-                        break;
-                    }
-                }
-            }
+            $session = $this->engine->startSession($account->sessionId(), $mode, $mode === 'pairing' ? $phone : null);
+            $account->forceFill(['is_active' => true])->save();
 
             $this->syncAccount($account, $session);
 
             return [
                 'success' => true,
                 'message' => 'Scan QR WhatsApp atau masukkan kode pairing di HP.',
-                'data'    => $this->sessionPayload($account, $session),
+                'data'    => $this->sessionPayload($account, $session, true),
             ];
         } catch (Throwable $e) {
             $account->markDisconnected($e->getMessage());
@@ -124,39 +133,49 @@ class WhatsAppGateway
     /**
      * @return array<string, mixed>
      */
-    public function session(WhatsAppAccount $account): array
+    public function session(WhatsAppAccount $account, ?bool $engineReady = null): array
     {
-        if (! $this->engine->isReady()) {
+        $engineReady ??= $this->engine->isReady();
+        if (! $engineReady) {
             return $this->sessionPayload($account, [
-                'status' => $account->status?->value ?? WhatsAppAccountStatus::Disconnected->value,
-                'error'  => 'Engine WhatsApp belum berjalan.',
-            ]);
+                'status' => 'unknown',
+                'error'  => 'Engine WhatsApp belum tersedia.',
+            ], false);
         }
 
         try {
             $session = $this->engine->session($account->sessionId());
             $this->syncAccount($account, $session);
 
-            return $this->sessionPayload($account->fresh() ?? $account, $session);
+            return $this->sessionPayload($account, $session, true);
         } catch (Throwable $e) {
             return $this->sessionPayload($account, [
-                'status' => WhatsAppAccountStatus::Disconnected->value,
+                'status' => 'unknown',
                 'error'  => $e->getMessage(),
-            ]);
+            ], false);
         }
     }
 
-    public function disconnect(WhatsAppAccount $account): void
+    /** @return array<string, mixed> */
+    public function disconnect(WhatsAppAccount $account): array
     {
-        try {
-            if ($this->engine->isReady()) {
-                $this->engine->logout($account->sessionId());
-            }
-        } catch (Throwable) {
-            // The local record should still be marked disconnected.
-        }
-
+        $account->forceFill(['is_active' => false])->save();
         $account->markDisconnected('Nomor diputuskan dari CESA.');
+
+        try {
+            if (! $this->engine->isReady()) {
+                return $this->failedSend('Pengiriman akun dinonaktifkan. Engine belum tersedia untuk menghapus sesi; coba putuskan lagi setelah engine pulih.');
+            }
+
+            $result = $this->engine->logout($account->sessionId());
+
+            return [
+                'success' => true,
+                'message' => $result['message'] ?? 'Nomor WhatsApp diputuskan.',
+            ];
+        } catch (Throwable $e) {
+            return $this->failedSend('Pengiriman akun dinonaktifkan. Pemutusan sesi belum terkonfirmasi: '.$e->getMessage());
+        }
     }
 
     /**
@@ -223,25 +242,18 @@ class WhatsAppGateway
             return null;
         }
 
-        $digits = preg_replace('/[^\d]/', '', $trimmed);
-
-        if (! is_string($digits) || strlen($digits) < 8) {
+        if (! preg_match('/^\+?[0-9\s().-]+$/', $trimmed)) {
             return null;
         }
 
-        if (str_starts_with($digits, '62')) {
-            return $digits;
-        }
-
+        $digits = preg_replace('/[^0-9]/', '', $trimmed);
         if (str_starts_with($digits, '0')) {
-            return '62'.substr($digits, 1);
+            $digits = '62'.substr($digits, 1);
+        } elseif (str_starts_with($digits, '8')) {
+            $digits = '62'.$digits;
         }
 
-        if (str_starts_with($digits, '8')) {
-            return '62'.$digits;
-        }
-
-        return $digits;
+        return preg_match('/^[1-9][0-9]{7,14}$/', $digits) ? $digits : null;
     }
 
     protected function ensureEngine(): bool
@@ -265,19 +277,6 @@ class WhatsAppGateway
         $status = $this->mapStatus($session['status'] ?? null);
         $phone = $this->formatPhone(isset($session['phone']) ? (string) $session['phone'] : null);
         $error = isset($session['error']) ? (string) $session['error'] : null;
-
-        if (
-            $account->status === WhatsAppAccountStatus::Connected
-            && in_array($status, [WhatsAppAccountStatus::Disconnected, WhatsAppAccountStatus::Unknown], true)
-            && ! $this->isSessionDeadMessage((string) $error)
-        ) {
-            $account->forceFill([
-                'last_checked_at' => now(),
-                'last_error'      => $error,
-            ])->save();
-
-            return;
-        }
 
         $account->forceFill([
             'status'          => $status,
@@ -303,77 +302,17 @@ class WhatsAppGateway
      * @param  array<string, mixed>  $session
      * @return array<string, mixed>
      */
-    protected function sessionPayload(WhatsAppAccount $account, array $session): array
+    protected function sessionPayload(WhatsAppAccount $account, array $session, bool $engineReady): array
     {
+        $status = $this->mapStatus($session['status'] ?? null)->value;
+
         return array_merge($account->toApiArray(), [
-            'qr'            => $session['qr'] ?? null,
-            'pairing_code'  => $session['pairing_code'] ?? null,
-            'engine_ready'  => $this->engine->isReady(),
-            'engine_error'  => $session['error'] ?? $account->last_error,
+            'status'         => $status,
+            'qr'             => $status === 'qr' ? ($session['qr'] ?? null) : null,
+            'pairing_code'   => $status === 'pairing' ? ($session['pairing_code'] ?? null) : null,
+            'engine_ready'   => $engineReady,
+            'delivery_ready' => $engineReady && $account->is_active && $status === 'connected' && $this->isEnabled(),
+            'engine_error'   => $session['error'] ?? $account->last_error,
         ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function sendWithRetry(WhatsAppAccount $account, string $phone, string $message): array
-    {
-        try {
-            return $this->engine->sendText($account->sessionId(), $phone, $message);
-        } catch (Throwable $e) {
-            if (! $this->isRetryableSendError($e)) {
-                throw $e;
-            }
-
-            $this->ensureEngine();
-
-            try {
-                $this->engine->startSession($account->sessionId());
-            } catch (Throwable) {
-                // Restore is best-effort; the retry below is the source of truth.
-            }
-
-            return $this->engine->sendText($account->sessionId(), $phone, $message);
-        }
-    }
-
-    protected function rememberSendFailure(WhatsAppAccount $account, Throwable $e): void
-    {
-        if ($this->isSessionDeadMessage($e->getMessage())) {
-            $account->markDisconnected($e->getMessage());
-
-            return;
-        }
-
-        $account->forceFill([
-            'last_error'      => $e->getMessage(),
-            'last_checked_at' => now(),
-        ])->save();
-    }
-
-    protected function isRetryableSendError(Throwable $e): bool
-    {
-        $message = strtolower($e->getMessage());
-
-        return str_contains($message, 'timed out')
-            || str_contains($message, 'timeout')
-            || str_contains($message, 'connection')
-            || str_contains($message, 'refused')
-            || str_contains($message, 'unavailable')
-            || str_contains($message, 'not found')
-            || str_contains($message, 'belum terhubung');
-    }
-
-    protected function isSessionDeadMessage(string $message): bool
-    {
-        $normalized = strtolower($message);
-
-        return str_contains($normalized, 'logout')
-            || str_contains($normalized, 'logged out')
-            || str_contains($normalized, 'sesi rusak')
-            || str_contains($normalized, 'sesi dihapus')
-            || str_contains($normalized, 'scan qr')
-            || str_contains($normalized, 'kode pairing')
-            || str_contains($normalized, 'belum terhubung');
     }
 }

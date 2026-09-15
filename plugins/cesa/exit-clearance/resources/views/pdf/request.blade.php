@@ -151,6 +151,10 @@
             <td>{{ $record->position ?: '-' }}</td>
         </tr>
         <tr>
+            <td class="label">{{ __('exit-clearance::filament/resources/request.fields.company') }}</td>
+            <td>{{ $record->company?->name ?? '—' }}</td>
+        </tr>
+        <tr>
             <td class="label">Penempatan / Cabang</td>
             <td>{{ $record->placement ?: '-' }}</td>
         </tr>

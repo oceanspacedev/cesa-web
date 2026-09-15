@@ -35,6 +35,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -154,6 +155,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -204,6 +206,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
         config()->set('rekrutmen.mail.job_application.mailer', 'missing-mailer');
 
@@ -255,6 +258,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -319,6 +323,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -379,6 +384,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -446,6 +452,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -555,6 +562,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([
@@ -633,6 +641,7 @@ class CareerControllerApplyTest extends RekrutmenTestCase
         Storage::fake('local');
 
         config()->set('filesystems.default', 'local');
+        config()->set('rekrutmen.disk', 'local');
         config()->set('filament.default_filesystem_disk', 'local');
 
         $pipeline = RekrutmenPipeline::query()->create([

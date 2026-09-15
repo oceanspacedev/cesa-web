@@ -8,7 +8,7 @@ class TestWhatsAppAccountRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return $this->user()?->can('manage_rekrutmen_whatsapp') ?? false;
     }
 
     /**

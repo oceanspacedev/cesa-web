@@ -9,6 +9,7 @@ use Cesa\Rekrutmen\Enums\JobApplicationStatus;
 use Cesa\Rekrutmen\Http\Requests\CareerJobIndexRequest;
 use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\JobPosting;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -222,18 +223,21 @@ class CareerController extends Controller
             trans('rekrutmen::api/career.validation.attributes'),
         )->validate();
 
-        $resumePath = $request->hasFile('resume')
-            ? $request->file('resume')->store(
-                JobApplication::RESUME_DIRECTORY,
-                JobApplication::resumeDisk()
-            )
-            : null;
-        $photoPath = $request->hasFile('photo')
-            ? $request->file('photo')->store(
-                JobApplication::PHOTO_DIRECTORY,
-                JobApplication::resumeDisk()
-            )
-            : null;
+        $disk = JobApplication::resumeDisk();
+        $storage = app(RekrutmenStorage::class);
+        $resumePath = null;
+        $photoPath = null;
+        try {
+            $resumePath = $request->hasFile('resume')
+                ? $storage->storeUploadedFile($request->file('resume'), JobApplication::RESUME_DIRECTORY, $disk)
+                : null;
+            $photoPath = $request->hasFile('photo')
+                ? $storage->storeUploadedFile($request->file('photo'), JobApplication::PHOTO_DIRECTORY, $disk)
+                : null;
+        } catch (\Throwable $exception) {
+            $this->cleanupStoredApplicationFiles($resumePath, $photoPath, $disk);
+            throw $exception;
+        }
 
         try {
             $application = JobApplication::query()->create([
@@ -253,15 +257,17 @@ class CareerController extends Controller
                 'emergency_contact_relation' => $validated['emergency_contact_relation'] ?? null,
                 'emergency_contact_phone'    => $validated['emergency_contact_phone'] ?? null,
                 'photo_path'                 => $photoPath,
+                'photo_disk'                 => $photoPath ? $disk : null,
                 'resume_path'                => $resumePath,
+                'resume_disk'                => $resumePath ? $disk : null,
                 'status'                     => JobApplicationStatus::IN_PROGRESS,
             ]);
         } catch (ValidationException $exception) {
-            $this->cleanupStoredApplicationFiles($resumePath, $photoPath);
+            $this->cleanupStoredApplicationFiles($resumePath, $photoPath, $disk);
 
             throw $exception;
         } catch (QueryException $exception) {
-            $this->cleanupStoredApplicationFiles($resumePath, $photoPath);
+            $this->cleanupStoredApplicationFiles($resumePath, $photoPath, $disk);
 
             if ($this->isDuplicateApplicationConstraintViolation($exception)) {
                 throw ValidationException::withMessages([
@@ -317,7 +323,7 @@ class CareerController extends Controller
         }, $this->resolveApplicationFieldConfiguration($slug));
     }
 
-    private function cleanupStoredApplicationFiles(?string $resumePath, ?string $photoPath): void
+    private function cleanupStoredApplicationFiles(?string $resumePath, ?string $photoPath, string $disk): void
     {
         $paths = array_values(array_filter([$resumePath, $photoPath], static fn (?string $path): bool => is_string($path) && $path !== ''));
 
@@ -326,7 +332,7 @@ class CareerController extends Controller
         }
 
         try {
-            Storage::disk(JobApplication::resumeDisk())->delete($paths);
+            Storage::disk($disk)->delete($paths);
         } catch (\Throwable) {
             return;
         }

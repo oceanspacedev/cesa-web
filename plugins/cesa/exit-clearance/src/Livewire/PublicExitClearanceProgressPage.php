@@ -39,7 +39,7 @@ class PublicExitClearanceProgressPage extends SimplePage
         }
 
         $request = ExitClearanceRequest::query()
-            ->with(['approvers', 'department'])
+            ->with(['approvers', 'company', 'department'])
             ->where('form_response_id', $response)
             ->first();
 

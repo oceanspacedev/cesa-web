@@ -9,12 +9,15 @@ use Cesa\Rekrutmen\Http\Requests\SaveWhatsAppSettingsRequest;
 use Cesa\Rekrutmen\Http\Requests\TestMailSettingsRequest;
 use Cesa\Rekrutmen\Http\Requests\TestWhatsAppAccountRequest;
 use Cesa\Rekrutmen\Http\Requests\UpsertWhatsAppAccountRequest;
+use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\MailSetting;
 use Cesa\Rekrutmen\Models\WhatsAppAccount;
 use Cesa\Rekrutmen\Models\WhatsAppSetting;
 use Cesa\Rekrutmen\Services\RekrutmenMailer;
 use Cesa\Rekrutmen\Services\WhatsAppGateway;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Throwable;
 
 class RekrutmenCommunicationSettingsController extends Controller
@@ -65,26 +68,35 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function getWhatsAppSettings(): JsonResponse
     {
-        $accounts = WhatsAppAccount::query()
-            ->orderByDesc('is_default')
-            ->orderBy('name')
-            ->get()
-            ->map(function (WhatsAppAccount $account): array {
-                if ($this->whatsAppGateway->engineReady()) {
-                    return $this->whatsAppGateway->session($account);
-                }
-
-                return $account->toApiArray();
-            })
-            ->values();
-
+        $ready = $this->whatsAppGateway->engineReady();
+        $accounts = WhatsAppAccount::query()->orderByDesc('is_default')->orderBy('name')->get()
+            ->map(fn (WhatsAppAccount $account): array => $this->whatsAppGateway->session($account, $ready))->values();
         $gateway = WhatsAppSetting::current()->toApiArray();
-        $gateway['engine_ready'] = $this->whatsAppGateway->engineReady();
+        $gateway['engine_ready'] = $ready;
 
         return response()->json([
             'gateway'  => $gateway,
             'accounts' => $accounts,
         ]);
+    }
+
+    public function whatsappSenders(): JsonResponse
+    {
+        if (! Gate::allows('manage_rekrutmen_whatsapp')) {
+            Gate::authorize('viewAny', JobApplication::class);
+        }
+
+        $ready = $this->whatsAppGateway->engineReady();
+        $accounts = WhatsAppAccount::query()->active()->orderByDesc('is_default')->orderBy('name')->get()
+            ->map(function (WhatsAppAccount $account) use ($ready): array {
+                $session = $this->whatsAppGateway->session($account, $ready);
+
+                return array_intersect_key($session, array_flip([
+                    'id', 'name', 'phone_number', 'is_active', 'is_default', 'status', 'delivery_ready',
+                ]));
+            });
+
+        return response()->json(['accounts' => $accounts->values(), 'engine_ready' => $ready]);
     }
 
     public function saveWhatsAppSettings(SaveWhatsAppSettingsRequest $request): JsonResponse
@@ -110,14 +122,18 @@ class RekrutmenCommunicationSettingsController extends Controller
             $name = $phone ? 'WhatsApp '.$phone : 'WhatsApp Rekrutmen';
         }
 
-        $account = WhatsAppAccount::query()->create([
+        $account = WhatsAppAccount::withTrashed()->firstOrCreate([
+            'connection_request_key' => hash('sha256', $request->user()->id.':'.($request->validated('request_key') ?? Str::uuid())),
+        ], [
             'name'         => $name,
             'phone_number' => $phone,
             'is_active'    => true,
             'is_default'   => ! WhatsAppAccount::query()->exists(),
         ]);
 
-        $result = $this->whatsAppGateway->connect($account, $mode === 'pairing' ? $phone : null);
+        abort_if($account->trashed(), 409, 'Permintaan ini sudah digunakan untuk akun yang dihapus. Buat koneksi baru.');
+
+        $result = $this->whatsAppGateway->connect($account, $mode, $mode === 'pairing' ? $phone : null);
 
         return response()->json([
             'success' => $result['success'],
@@ -130,7 +146,7 @@ class RekrutmenCommunicationSettingsController extends Controller
     {
         $mode = (string) $request->validated('mode', 'qr');
         $phone = $this->whatsAppGateway->formatPhone($request->validated('phone_number')) ?: $account->phone_number;
-        $result = $this->whatsAppGateway->connect($account, $mode === 'pairing' ? $phone : null);
+        $result = $this->whatsAppGateway->connect($account, $mode, $mode === 'pairing' ? $phone : null);
 
         return response()->json($result, $result['success'] ? 200 : 422);
     }
@@ -142,13 +158,11 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function disconnectWhatsAppAccount(WhatsAppAccount $account): JsonResponse
     {
-        $this->whatsAppGateway->disconnect($account);
+        $result = $this->whatsAppGateway->disconnect($account);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Nomor WhatsApp diputuskan. Scan lagi untuk menghubungkan.',
-            'data'    => $account->fresh()?->toApiArray() ?? $account->toApiArray(),
-        ]);
+        return response()->json(array_merge($result, [
+            'data' => $account->fresh()?->toApiArray() ?? $account->toApiArray(),
+        ]), $result['success'] ? 200 : 503);
     }
 
     public function updateWhatsAppAccount(UpsertWhatsAppAccountRequest $request, WhatsAppAccount $account): JsonResponse
@@ -166,7 +180,11 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function destroyWhatsAppAccount(WhatsAppAccount $account): JsonResponse
     {
-        $this->whatsAppGateway->disconnect($account);
+        $result = $this->whatsAppGateway->disconnect($account);
+        if (! $result['success']) {
+            return response()->json($result, 503);
+        }
+
         $account->delete();
 
         return response()->json([

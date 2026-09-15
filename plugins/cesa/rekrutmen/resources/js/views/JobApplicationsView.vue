@@ -42,11 +42,16 @@
           size="sm"
           @click="startRescreening"
           :disabled="isScreening"
-          class="h-8 text-xs gap-1.5"
-          title="Jalankan evaluasi kualifikasi otomatis untuk pelamar"
+          class="h-8 text-xs gap-1.5 transition-all cursor-pointer"
+          :class="[
+            selectedAppIds.length
+              ? 'border-blue-400 bg-blue-50 text-blue-900 font-semibold shadow-xs ring-1 ring-blue-200'
+              : 'text-zinc-700 hover:bg-zinc-50'
+          ]"
+          :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI khusus untuk 1 pelamar terpilih' : (selectedAppIds.length > 1 ? `Jalankan evaluasi kualifikasi AI khusus untuk ${selectedAppIds.length} pelamar terpilih` : 'Jalankan evaluasi kualifikasi otomatis untuk pelamar')"
         >
-          <RotateCw class="w-3.5 h-3.5 text-zinc-500" :class="{ 'animate-spin': isScreening }" />
-          <span>Evaluasi Kualifikasi</span>
+          <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isScreening, 'text-blue-600': selectedAppIds.length, 'text-zinc-500': !selectedAppIds.length }" />
+          <span>{{ selectedAppIds.length === 1 ? 'Evaluasi AI (1 Terpilih)' : (selectedAppIds.length > 1 ? `Evaluasi AI (${selectedAppIds.length} Terpilih)` : 'Evaluasi Kualifikasi') }}</span>
         </Button>
 
         <!-- View Switcher (Table / Kanban) -->
@@ -76,6 +81,43 @@
         </div>
       </div>
     </div>
+
+    <section v-if="notificationProgress" aria-label="Progres pengiriman notifikasi" class="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-zinc-900">{{ notificationProgressTitle }}</h2>
+          <p class="text-xs text-zinc-500">Pengiriman #{{ notificationProgress.id }} · {{ notificationProgress.stats?.total || 0 }} pelamar</p>
+        </div>
+        <Button variant="outline" size="sm" @click="refreshNotificationProgress">Perbarui status</Button>
+      </div>
+      <div class="flex flex-wrap gap-3 text-xs text-zinc-700" aria-live="polite">
+        <span>Email terkirim: {{ notificationProgress.stats?.email_success || 0 }}</span>
+        <span>WhatsApp terkirim: {{ notificationProgress.stats?.whatsapp_success || 0 }}</span>
+        <span>Gagal: {{ (notificationProgress.stats?.email_failed || 0) + (notificationProgress.stats?.whatsapp_failed || 0) }}</span>
+        <span>Menunggu: {{ notificationPendingCount }}</span>
+        <span>Belum pasti: {{ notificationUnknownCount }}</span>
+      </div>
+      <p v-if="notificationProgressError" role="status" class="text-xs text-amber-700">{{ notificationProgressError }}</p>
+      <p v-if="notificationUnknownCount" class="text-xs text-amber-700">Sebagian hasil belum dapat dipastikan. Periksa penerimaan pesan sebelum membuat pengiriman baru.</p>
+      <div v-if="notificationProgress.details?.length" class="max-h-64 overflow-auto">
+        <table class="w-full text-left text-xs">
+          <thead><tr><th class="py-2">Pelamar</th><th>Email</th><th>WhatsApp</th></tr></thead>
+          <tbody>
+            <tr v-for="detail in notificationProgress.details" :key="detail.id" class="border-t border-zinc-100">
+              <td class="py-2 pr-3">{{ detail.name }}</td>
+              <td class="py-2 pr-3" :title="detail.email?.message">
+                {{ deliveryStatusLabel(detail.email) }}
+                <span v-if="detail.email?.stage_error" :title="detail.email.stage_error" class="block text-amber-700">Tahapan belum diperbarui</span>
+              </td>
+              <td class="py-2" :title="detail.whatsapp?.message">
+                {{ deliveryStatusLabel(detail.whatsapp) }}
+                <span v-if="detail.whatsapp?.stage_error" :title="detail.whatsapp.stage_error" class="block text-amber-700">Tahapan belum diperbarui</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- Floating Toast Notification -->
     <teleport to="body">
@@ -315,18 +357,21 @@
       v-if="viewMode === 'table'"
       class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
     >
-      <!-- Bulk Selection Action Bar -->
+      <!-- Bulk Selection Action Bar: Clean, modern, unified styling -->
       <div
         v-if="selectedAppIds.length"
-        class="bg-zinc-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs"
+        class="bg-blue-50/70 border-b border-blue-100 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs animate-in fade-in duration-150"
       >
-        <div class="flex items-center gap-2">
-          <span class="font-semibold">{{ selectedAppIds.length }} pelamar dipilih</span>
-          <span class="text-zinc-500">&bull;</span>
+        <div class="flex items-center gap-2.5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#0c2340] border border-blue-200/80 shadow-2xs">
+            <CheckSquare class="w-3.5 h-3.5 text-blue-600" />
+            <span>{{ selectedAppIds.length }} pelamar dipilih</span>
+          </div>
+          <span class="text-zinc-300">&bull;</span>
           <button
             type="button"
             @click="selectedAppIds = []"
-            class="text-zinc-400 hover:text-white underline cursor-pointer font-medium"
+            class="text-zinc-500 hover:text-zinc-800 text-xs font-medium cursor-pointer transition-colors hover:underline"
           >
             Batalkan pilihan
           </button>
@@ -334,21 +379,32 @@
         <div class="flex items-center gap-2">
           <Button
             type="button"
-            variant="destructive"
+            variant="outline"
+            size="xs"
+            @click="rescreenSelectedCandidates"
+            :disabled="isScreening"
+            class="gap-1.5 h-7.5 px-2.5 bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:border-blue-300 font-medium shadow-2xs cursor-pointer disabled:opacity-50"
+            :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI hanya untuk 1 pelamar terpilih' : 'Jalankan evaluasi kualifikasi AI hanya untuk kandidat terpilih'"
+          >
+            <RotateCw class="w-3.5 h-3.5 text-blue-600" :class="{ 'animate-spin': isScreening }" />
+            <span>{{ selectedAppIds.length === 1 ? 'Evaluasi AI (1 Terpilih)' : `Evaluasi AI (${selectedAppIds.length})` }}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             size="xs"
             @click="bulkRejectSelected"
-            class="gap-1.5 h-7"
+            class="gap-1.5 h-7.5 px-2.5 bg-white text-rose-700 border-rose-200 hover:bg-rose-50 hover:border-rose-300 font-medium shadow-2xs cursor-pointer"
             title="Tolak pelamar terpilih"
           >
-            <UserX class="w-3.5 h-3.5" />
+            <UserX class="w-3.5 h-3.5 text-rose-600" />
             <span>Tolak</span>
           </Button>
           <Button
             type="button"
-            variant="default"
             size="xs"
             @click="openBulkNotificationModal"
-            class="bg-zinc-800 hover:bg-zinc-700 text-white gap-1.5 h-7 border border-zinc-700"
+            class="bg-[#0c2340] hover:bg-[#12335c] text-white gap-1.5 h-7.5 px-3 font-semibold shadow-xs cursor-pointer"
           >
             <Send class="w-3.5 h-3.5" />
             <span>Kirim Notifikasi Massal</span>
@@ -444,7 +500,18 @@
                   </Badge>
                 </button>
               </div>
-              <div v-else class="text-[11px] text-zinc-400 italic text-center">Menunggu evaluasi</div>
+              <div v-else class="flex items-center justify-center">
+                <button
+                  type="button"
+                  @click.stop="rescreenSingleCandidate(app)"
+                  :disabled="isScreening"
+                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-blue-700 bg-blue-50/80 hover:bg-blue-100 hover:text-blue-900 border border-blue-200 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                  title="Klik untuk evaluasi kualifikasi kandidat ini dengan AI"
+                >
+                  <RotateCw class="w-3 h-3 text-blue-600" :class="{ 'animate-spin': isScreening }" />
+                  <span>Evaluasi AI</span>
+                </button>
+              </div>
             </TableCell>
 
             <!-- Stage (Centered, Clean Dropdown) -->
@@ -490,6 +557,16 @@
             <!-- Action Buttons -->
             <TableCell class="text-right whitespace-nowrap pr-6">
               <div class="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  @click.stop="rescreenSingleCandidate(app)"
+                  :disabled="isScreening"
+                  class="h-7 w-7 p-0 text-blue-600 hover:text-blue-900 hover:bg-blue-50 cursor-pointer"
+                  title="Evaluasi Kualifikasi AI Kandidat Ini"
+                >
+                  <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isScreening }" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="xs"
@@ -1140,279 +1217,412 @@
       class="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
       @click.self="closeNotificationModal"
     >
-      <div class="bg-white rounded-xl border border-zinc-200 w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col my-6 max-h-[95vh]">
-        <!-- Modal Header -->
-        <div class="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-white sticky top-0 z-10">
-          <div>
-            <h3 class="text-sm font-semibold text-zinc-900">
-              {{ isBulkMode ? 'Kirim Notifikasi Massal' : 'Kirim Undangan / Notifikasi' }}
-            </h3>
-            <p class="text-xs text-zinc-500 mt-0.5">
-              <template v-if="isBulkMode">
-                Target: <strong class="text-zinc-900">{{ selectedAppIds.length }} Pelamar</strong> &bull; Pesan otomatis dipersonalisasi per pelamar
-              </template>
-              <template v-else>
-                Penerima: <strong class="text-zinc-900">{{ sendEmailModalApp.full_name }}</strong>
-                <span v-if="sendEmailModalApp.email" class="text-zinc-500"> ({{ sendEmailModalApp.email }})</span>
-                <span class="text-zinc-300 mx-2">|</span>
-                <span v-if="sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone" class="text-emerald-700 font-medium">WA: {{ sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone }}</span>
-              </template>
-            </p>
+      <!-- Modal Notification: Unified, Modern, Cohesive Design -->
+      <div class="bg-white rounded-2xl border border-zinc-200/90 w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col my-4 max-h-[92vh]">
+        <!-- 1. Modal Header -->
+        <div class="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-white sticky top-0 z-20">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-[#0c2340] text-white flex items-center justify-center shadow-xs shrink-0">
+              <Send class="w-4 h-4" />
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-bold text-zinc-900">
+                  {{ isBulkMode ? 'Kirim Notifikasi Massal' : 'Kirim Undangan / Notifikasi' }}
+                </h3>
+                <span v-if="isBulkMode" class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+                  {{ selectedAppIds.length }} Pelamar
+                </span>
+                <span v-else class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-zinc-100 text-zinc-700 border border-zinc-200">
+                  1 Penerima
+                </span>
+              </div>
+              <p class="text-xs text-zinc-500 mt-0.5">
+                <template v-if="isBulkMode">
+                  Pesan otomatis dipersonalisasi sesuai profil & jadwal masing-masing pelamar
+                </template>
+                <template v-else>
+                  Penerima: <strong class="text-zinc-800">{{ sendEmailModalApp.full_name }}</strong>
+                  <span v-if="sendEmailModalApp.email" class="text-zinc-400"> ({{ sendEmailModalApp.email }})</span>
+                  <span v-if="sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone" class="text-emerald-600 font-medium ml-1.5">• WA: {{ sendEmailModalApp.whatsapp_number || sendEmailModalApp.phone }}</span>
+                </template>
+              </p>
+            </div>
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
+
+          <button
             type="button"
             @click="closeNotificationModal"
-            class="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-900"
+            class="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
             title="Tutup"
           >
             <X class="w-4 h-4" />
-          </Button>
+          </button>
         </div>
 
-        <!-- Modal Body (Scrollable) -->
-        <div class="p-6 space-y-4 text-xs overflow-y-auto flex-1 no-scrollbar">
-          <!-- Kanal Pengiriman -->
-          <div class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Kanal Pengiriman</label>
-            <div class="border border-zinc-200 rounded-lg bg-white flex flex-wrap sm:flex-nowrap items-center divide-y sm:divide-y-0 sm:divide-x divide-zinc-200 text-xs">
-              <!-- Email Checkbox -->
-              <label class="flex-1 flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-zinc-50 transition-colors select-none">
+        <!-- 2. Modal Body (Scrollable with clean spacing) -->
+        <div class="p-6 space-y-4 text-xs overflow-y-auto flex-1">
+          
+          <!-- Section 1: Saluran & Waktu Pengiriman -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-zinc-50/50 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+                Saluran & Waktu Pengiriman
+              </span>
+              <!-- Kirim: Langsung vs Jadwalkan (Segmented Switch) -->
+              <div class="inline-flex p-0.5 bg-zinc-200/70 rounded-lg text-[11px] font-medium">
+                <button
+                  type="button"
+                  @click="sendType = 'immediate'"
+                  :class="[
+                    'px-2.5 py-1 rounded-md transition-all cursor-pointer select-none',
+                    sendType === 'immediate' ? 'bg-white text-zinc-900 shadow-2xs font-semibold' : 'text-zinc-600 hover:text-zinc-900'
+                  ]"
+                >
+                  ⚡ Langsung
+                </button>
+                <button
+                  type="button"
+                  @click="sendType = 'scheduled'"
+                  :class="[
+                    'px-2.5 py-1 rounded-md transition-all cursor-pointer select-none',
+                    sendType === 'scheduled' ? 'bg-white text-zinc-900 shadow-2xs font-semibold' : 'text-zinc-600 hover:text-zinc-900'
+                  ]"
+                >
+                  ⏰ Jadwalkan
+                </button>
+              </div>
+            </div>
+
+            <!-- Delivery Channel Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- Card Email -->
+              <label 
+                :class="[
+                  'relative border rounded-xl p-3 flex items-start gap-3 cursor-pointer transition-all select-none',
+                  selectedChannels.includes('email') 
+                    ? 'border-[#0c2340] bg-white shadow-2xs' 
+                    : 'border-zinc-200 bg-white/70 hover:border-zinc-300'
+                ]"
+              >
                 <input
                   type="checkbox"
                   value="email"
                   v-model="selectedChannels"
-                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-4 h-4 cursor-pointer"
+                  class="sr-only"
                 />
-                <Mail class="w-4 h-4 text-zinc-500" />
-                <span class="font-medium text-zinc-800">Email (Surat Resmi)</span>
+                <div 
+                  :class="[
+                    'w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-colors shrink-0',
+                    selectedChannels.includes('email') ? 'bg-[#0c2340] border-[#0c2340] text-white' : 'border-zinc-300 bg-white'
+                  ]"
+                >
+                  <CheckSquare v-if="selectedChannels.includes('email')" class="w-3.5 h-3.5" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <Mail class="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span class="font-bold text-zinc-900 text-xs">Email (Surat Resmi)</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Format surat HTML resmi dengan lampiran & logo perusahaan.
+                  </p>
+                </div>
               </label>
 
-              <!-- WhatsApp Checkbox -->
-              <label class="flex-1 flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-zinc-50 transition-colors select-none">
+              <!-- Card WhatsApp -->
+              <label 
+                :class="[
+                  'relative border rounded-xl p-3 flex items-start gap-3 cursor-pointer transition-all select-none',
+                  selectedChannels.includes('whatsapp') 
+                    ? 'border-emerald-600 bg-white shadow-2xs' 
+                    : 'border-zinc-200 bg-white/70 hover:border-zinc-300'
+                ]"
+              >
                 <input
                   type="checkbox"
                   value="whatsapp"
                   v-model="selectedChannels"
-                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-4 h-4 cursor-pointer"
+                  class="sr-only"
                 />
-                <svg class="w-4 h-4 text-[#25D366] shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                </svg>
-                <span class="font-medium text-zinc-800">WhatsApp</span>
+                <div 
+                  :class="[
+                    'w-4 h-4 rounded mt-0.5 flex items-center justify-center border transition-colors shrink-0',
+                    selectedChannels.includes('whatsapp') ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-zinc-300 bg-white'
+                  ]"
+                >
+                  <CheckSquare v-if="selectedChannels.includes('whatsapp')" class="w-3.5 h-3.5" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-[#25D366] shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                    </svg>
+                    <span class="font-bold text-zinc-900 text-xs">WhatsApp Message</span>
+                  </div>
+                  <p class="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                    Pesan instan langsung ke nomor WhatsApp masing-masing pelamar.
+                  </p>
+                </div>
               </label>
+            </div>
 
-              <!-- Kirim: Langsung vs Jadwalkan -->
-              <div class="px-4 py-2.5 flex items-center gap-3.5 bg-white shrink-0">
-                <span class="font-medium text-zinc-600 text-xs">Kirim:</span>
-                <label class="inline-flex items-center gap-1.5 cursor-pointer text-zinc-800 text-xs font-medium select-none">
-                  <input
-                    type="radio"
-                    value="immediate"
-                    v-model="sendType"
-                    name="modal_send_type"
-                    class="accent-zinc-900 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>Langsung</span>
-                </label>
-                <label class="inline-flex items-center gap-1.5 cursor-pointer text-zinc-800 text-xs font-medium select-none">
-                  <input
-                    type="radio"
-                    value="scheduled"
-                    v-model="sendType"
-                    name="modal_send_type"
-                    class="accent-zinc-900 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>Jadwalkan</span>
-                </label>
+            <div v-if="!selectedChannels.length" class="text-rose-600 text-[11px] font-medium">
+              Pilih minimal salah satu saluran pengiriman (Email atau WhatsApp).
+            </div>
+
+            <!-- WhatsApp Account Selector -->
+            <div v-if="selectedChannels.includes('whatsapp')" class="pt-2 border-t border-zinc-200/60 flex items-center justify-between gap-3 flex-wrap">
+              <span class="text-[11px] font-medium text-zinc-600">Nomor Pengirim WhatsApp:</span>
+              <div class="relative flex-1 max-w-sm">
+                <select
+                  v-model="selectedWhatsappAccountId"
+                  class="w-full h-8 bg-white border border-zinc-200 rounded-lg px-2.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 appearance-none pr-8 cursor-pointer"
+                >
+                  <option v-if="!connectedWhatsappAccounts.length" :value="null">Nomor pengirim belum siap; hubungi pengelola WhatsApp</option>
+                  <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
+                    {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
+                  </option>
+                </select>
+                <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-            <div v-if="!selectedChannels.length" class="text-rose-600 text-[11px] font-medium px-1">
-              Pilih minimal salah satu kanal pengiriman (Email atau WhatsApp).
+
+            <!-- Scheduled Sending Inputs -->
+            <div v-if="sendType === 'scheduled'" class="pt-2 border-t border-zinc-200/60 flex items-center gap-2.5 flex-wrap">
+              <span class="text-[11px] font-medium text-zinc-600">Jadwal Kirim Otomatis:</span>
+              <input
+                type="date"
+                v-model="scheduleDate"
+                :min="todayDateString"
+                class="h-8 px-2.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 cursor-pointer"
+              />
+              <input
+                type="time"
+                v-model="scheduleTime"
+                class="h-8 px-2.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 cursor-pointer font-mono"
+              />
+              <span class="text-[11px] font-medium text-zinc-500">WIB</span>
             </div>
           </div>
 
-          <div v-if="selectedChannels.includes('whatsapp')" class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Kirim dari nomor WhatsApp</label>
-            <div class="relative">
-              <select
-                v-model="selectedWhatsappAccountId"
-                class="w-full h-9 bg-white border border-zinc-200 rounded-md px-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 appearance-none pr-8 cursor-pointer"
-              >
-                <option v-if="!connectedWhatsappAccounts.length" :value="null">Belum ada nomor terhubung. Scan QR di Pengaturan Rekrutmen.</option>
-                <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
-                  {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
-                </option>
-              </select>
-              <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          <!-- Jadwalkan Pengiriman Inputs (Horizontal Integrated Bar) -->
-          <div v-if="sendType === 'scheduled'" class="space-y-1.5">
-            <label class="block font-medium text-xs text-zinc-800">Jadwalkan Pengiriman</label>
-            <div class="border border-zinc-200 rounded-lg bg-white overflow-hidden text-xs">
-              <div class="flex flex-wrap sm:flex-nowrap items-center divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
-                <!-- Date Input -->
-                <div class="flex items-center gap-2 px-3 py-2 flex-1 min-w-[200px]">
-                  <span class="text-zinc-500 whitespace-nowrap text-xs">Kirim otomatis pada</span>
-                  <input
-                    type="date"
-                    v-model="scheduleDate"
-                    :min="todayDateString"
-                    class="bg-transparent text-xs text-zinc-900 focus:outline-none cursor-pointer flex-1"
-                  />
-                </div>
-
-                <!-- Time Input -->
-                <div class="flex items-center gap-2 px-3 py-2 flex-1 min-w-[140px]">
-                  <span class="text-zinc-500 whitespace-nowrap text-xs">Pukul</span>
-                  <input
-                    type="time"
-                    v-model="scheduleTime"
-                    class="bg-transparent text-xs text-zinc-900 focus:outline-none cursor-pointer flex-1"
-                  />
-                </div>
-
-                <!-- Timezone Selector -->
-                <div class="relative flex-1 px-3 py-2">
-                  <select class="w-full bg-transparent text-xs text-zinc-800 focus:outline-none cursor-pointer">
-                    <option value="WIB">WIB (UTC+07:00)</option>
-                    <option value="WITA">WITA (UTC+08:00)</option>
-                    <option value="WIT">WIT (UTC+09:00)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Template Notifikasi (Sesuai Pipeline - New York Style Pills) -->
+          <!-- Section 2: Template Tahapan Pipeline -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <label class="block font-medium text-xs text-zinc-800">Pilih Template Sesuai Tahapan Pipeline</label>
-              <span class="text-[11px] text-zinc-400">Pilihan otomatis mengisi subjek dan draft pesan</span>
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+                Template Sesuai Tahapan Pipeline
+              </span>
+              <span class="text-[11px] text-zinc-400">Otomatis menyusun subjek dan draft pesan</span>
             </div>
-            <div class="flex flex-wrap items-center gap-1.5 p-1.5 bg-zinc-100 rounded-lg border border-zinc-200">
+            
+            <!-- Modern Segmented Tabs -->
+            <div class="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80">
               <button
                 v-for="tpl in pipelineTemplateTabs"
                 :key="tpl.key"
                 type="button"
                 @click="applyEmailTemplate(tpl.key)"
                 :class="[
-                  'px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer select-none flex items-center gap-1.5',
+                  'px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer select-none flex items-center gap-1.5 font-medium',
                   activeEmailTemplateKey === tpl.key
-                    ? 'bg-zinc-900 text-white shadow-2xs font-semibold'
-                    : 'bg-white text-zinc-700 hover:bg-zinc-50 border border-zinc-200'
+                    ? 'bg-[#0c2340] text-white shadow-xs font-semibold'
+                    : 'bg-transparent text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60'
                 ]"
               >
-                <span :class="activeEmailTemplateKey === tpl.key ? 'text-zinc-400' : 'text-zinc-400 font-mono text-[10px]'">{{ tpl.num }}</span>
+                <span :class="activeEmailTemplateKey === tpl.key ? 'text-zinc-300' : 'text-zinc-400 text-[10px] font-mono'">{{ tpl.num }}</span>
                 <span>{{ tpl.label }}</span>
               </button>
             </div>
           </div>
 
-          <!-- Subject Input -->
-          <div>
-            <label class="block font-medium text-xs text-zinc-800 mb-1.5">Subjek Notifikasi</label>
-            <Input
-              type="text"
-              v-model="emailForm.subject"
-              class="h-9 font-medium"
-            />
-          </div>
+          <!-- Section 3: Detail Sesi & Pelaksanaan (Clean Card, Modern Form) -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-zinc-50/50 space-y-3.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                <Calendar class="w-3.5 h-3.5 text-zinc-700" />
+                Detail Sesi & Pelaksanaan
+              </span>
 
-          <!-- Body Message Textarea -->
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="block font-medium text-xs text-zinc-800">Isi Pesan Notifikasi</label>
+              <!-- Clean Bulk Individual Schedule Toggle -->
+              <label 
+                v-if="isBulkMode && selectedCandidatesList.length > 1" 
+                class="inline-flex items-center gap-2 cursor-pointer select-none px-2.5 py-1 rounded-lg border border-zinc-200 bg-white hover:border-zinc-300 transition-colors shadow-2xs"
+              >
+                <input
+                  type="checkbox"
+                  v-model="useIndividualSchedules"
+                  @change="onToggleIndividualSchedules"
+                  class="rounded border-zinc-300 text-zinc-900 accent-zinc-900 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                />
+                <span class="text-[11.5px] font-semibold text-zinc-800">Atur jam berbeda tiap pelamar</span>
+              </label>
             </div>
-            <textarea
-              ref="bodyTextareaRef"
-              v-model="emailForm.body_message"
-              rows="7"
-              @input="adjustTextareaHeight"
-              class="w-full bg-white border border-zinc-200 rounded-md p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 leading-relaxed font-sans shadow-2xs transition-colors overflow-y-hidden resize-none"
-              style="min-height: 140px;"
-            ></textarea>
-          </div>
 
-          <!-- Detail Pelaksanaan (Table Form Style) -->
-          <div class="space-y-3">
-            <label class="block font-medium text-xs text-zinc-800">Detail Pelaksanaan</label>
-
-            <div class="border border-zinc-200 rounded-lg overflow-hidden text-xs">
-              <!-- Table Header -->
-              <div class="grid grid-cols-12 bg-zinc-50 border-b border-zinc-200 font-medium text-zinc-600 px-3 py-2">
-                <div class="col-span-4">Item</div>
-                <div class="col-span-8">Keterangan</div>
-              </div>
-
-              <!-- Row 1: Jadwal / Batas Waktu -->
-              <div class="grid grid-cols-12 items-center px-3 py-2 border-b border-zinc-100 gap-2">
-                <div class="col-span-4 font-normal text-zinc-700">Jadwal / Batas Waktu</div>
-                <div class="col-span-8">
+            <!-- Single Global Schedule Input (when individual is NOT enabled) -->
+            <div v-if="!useIndividualSchedules" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Jadwal / Waktu Pelaksanaan</label>
+                <div class="relative">
+                  <Clock class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.schedule"
-                    placeholder="Batas Pengerjaan: 3 hari kerja"
-                    class="h-8 text-xs"
+                    placeholder="Contoh: Selasa, 8 September 2026 pukul 09:00 WIB"
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
 
-              <!-- Row 2: Lokasi / Media -->
-              <div class="grid grid-cols-12 items-center px-3 py-2 gap-2">
-                <div class="col-span-4 font-normal text-zinc-700">Lokasi / Media</div>
-                <div class="col-span-8">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Lokasi / Media</label>
+                <div class="relative">
+                  <MapPin class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.venue_or_method"
-                    placeholder="Online Assessment"
-                    class="h-8 text-xs"
+                    placeholder="Contoh: Online (Google Meet) / Ruang Rapat Lt. 2"
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
             </div>
 
-            <!-- Optional 2-col inputs: Tautan Akses & Catatan Tambahan -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Individual Schedule Table (when enabled in bulk mode) -->
+            <div v-else class="space-y-3">
               <div>
-                <label class="block font-medium text-xs text-zinc-800 mb-1.5">Tautan Akses (Opsional)</label>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Lokasi / Media</label>
+                <div class="relative">
+                  <MapPin class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Input
+                    type="text"
+                    v-model="emailForm.venue_or_method"
+                    placeholder="Contoh: Online (Google Meet) / Ruang Rapat Lt. 2"
+                    class="h-8 pl-8 text-xs bg-white"
+                  />
+                </div>
+              </div>
+
+              <!-- Sleek Candidate Schedule Table -->
+              <div class="border border-zinc-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <div class="bg-zinc-100/70 border-b border-zinc-200 px-3 py-2 flex items-center justify-between text-[11px] font-semibold text-zinc-700">
+                  <span>Nama Pelamar ({{ selectedCandidatesList.length }})</span>
+                  <span>Jadwal / Jam Khusus Pelamar</span>
+                </div>
+                <div class="divide-y divide-zinc-100 max-h-56 overflow-y-auto">
+                  <div
+                    v-for="(cand, idx) in selectedCandidatesList"
+                    :key="cand.id"
+                    class="px-3 py-2 flex items-center justify-between gap-3 text-xs hover:bg-zinc-50/60 transition-colors"
+                  >
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                      <div class="w-5 h-5 rounded-full bg-zinc-800 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                        {{ idx + 1 }}
+                      </div>
+                      <div class="truncate">
+                        <div class="font-semibold text-zinc-900 truncate">{{ cand.full_name }}</div>
+                        <div class="text-[10px] text-zinc-400 truncate">{{ cand.phone || cand.whatsapp_number || cand.email }}</div>
+                      </div>
+                    </div>
+                    <div class="w-60 shrink-0">
+                      <Input
+                        type="text"
+                        v-if="candidateSchedules[cand.id]"
+                        v-model="candidateSchedules[cand.id].schedule"
+                        :placeholder="`Jam ${cand.full_name}`"
+                        class="h-7 text-xs bg-zinc-50/50 border-zinc-200 focus:bg-white font-medium"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Optional Access Link & Special Note -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Tautan Akses (Opsional)</label>
                 <div class="relative">
                   <Link2 class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="url"
                     v-model="emailForm.action_url"
-                    placeholder="https://..."
-                    class="h-8 pl-8 font-mono text-xs"
+                    placeholder="https://meet.google.com/..."
+                    class="h-8 pl-8 font-mono text-xs bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label class="block font-medium text-xs text-zinc-800 mb-1.5">Catatan Tambahan (Opsional)</label>
+                <label class="block text-[11px] font-medium text-zinc-700 mb-1">Catatan Tambahan (Opsional)</label>
                 <div class="relative">
                   <FileText class="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <Input
                     type="text"
                     v-model="emailForm.special_note"
-                    placeholder="Pastikan koneksi stabil..."
-                    class="h-8 pl-8 text-xs"
+                    placeholder="Contoh: Hadir 10 menit lebih awal..."
+                    class="h-8 pl-8 text-xs bg-white"
                   />
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- Section 4: Draf Notifikasi (Subjek & Pesan) -->
+          <div class="border border-zinc-200/80 rounded-xl p-4 bg-white space-y-3 shadow-2xs">
+            <span class="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#0c2340]"></span>
+              Draf Notifikasi
+            </span>
+
+            <!-- Subjek -->
+            <div>
+              <label class="block text-[11px] font-medium text-zinc-700 mb-1">Subjek Notifikasi</label>
+              <Input
+                type="text"
+                v-model="emailForm.subject"
+                placeholder="Subjek email atau ringkasan pesan..."
+                class="h-8 text-xs font-semibold"
+              />
+            </div>
+
+            <!-- Isi Pesan -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+                <label class="block text-[11px] font-medium text-zinc-700">Isi Pesan Notifikasi</label>
+                
+                <!-- Variable Chips -->
+                <div class="flex items-center gap-1 flex-wrap">
+                  <span class="text-[10px] text-zinc-400 font-medium">Sisipkan:</span>
+                  <button type="button" @click="insertTag('{nama_pelamar}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {nama_pelamar}</button>
+                  <button type="button" @click="insertTag('{jadwal}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {jadwal}</button>
+                  <button type="button" @click="insertTag('{posisi}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {posisi}</button>
+                  <button type="button" @click="insertTag('{perusahaan}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {perusahaan}</button>
+                  <button type="button" @click="insertTag('{link_aksi}')" class="px-2 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-md text-[10.5px] font-mono cursor-pointer transition-colors">+ {link_aksi}</button>
+                </div>
+              </div>
+
+              <textarea
+                ref="bodyTextareaRef"
+                v-model="emailForm.body_message"
+                rows="6"
+                @input="adjustTextareaHeight"
+                class="w-full bg-zinc-50/50 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 focus:border-zinc-900 leading-relaxed font-sans shadow-2xs transition-all overflow-y-hidden resize-none"
+                style="min-height: 130px;"
+                placeholder="Tulis pesan..."
+              ></textarea>
+            </div>
+          </div>
+
           <!-- Offering Letter PDF Upload -->
-          <div v-if="activeEmailTemplateKey === 'offering'" class="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
+          <div v-if="activeEmailTemplateKey === 'offering'" class="p-4 bg-zinc-50/80 rounded-xl border border-zinc-200/80 space-y-2">
             <div class="flex items-center justify-between">
-              <label class="block font-medium text-xs text-zinc-800 flex items-center gap-1.5">
+              <label class="block font-bold text-xs text-zinc-800 flex items-center gap-1.5">
                 <FileText class="w-3.5 h-3.5 text-zinc-900" />
-                <span>Dokumen Lampiran (PDF)</span>
+                <span>Dokumen Lampiran Offering Letter (PDF)</span>
               </label>
-              <span class="text-[10.5px] text-zinc-500">Maks. 15MB &bull; Khusus Email</span>
+              <span class="text-[10.5px] text-zinc-500">Maks. 10MB &bull; Khusus Email</span>
             </div>
 
             <div v-if="!emailForm.attachment" class="relative border border-dashed border-zinc-300 hover:border-zinc-400 bg-white rounded-lg p-3 text-center cursor-pointer transition-colors group">
@@ -1452,33 +1662,44 @@
           </div>
         </div>
 
-        <!-- Modal Footer -->
-        <div class="px-6 py-3.5 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between sticky bottom-0 z-10">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            @click="closeNotificationModal"
-            class="h-8 text-xs"
-          >
-            Batal
-          </Button>
+        <!-- 3. Modal Footer -->
+        <div class="px-6 py-3.5 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between sticky bottom-0 z-20">
+          <div class="text-xs text-zinc-500">
+            <template v-if="isBulkMode">
+              Siap dikirim ke <strong class="text-zinc-800">{{ selectedAppIds.length }} pelamar</strong> terpilih.
+            </template>
+            <template v-else>
+              Penerima: <strong class="text-zinc-800">{{ sendEmailModalApp.full_name }}</strong>
+            </template>
+          </div>
 
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            @click="executeSendNotification"
-            :disabled="isSendingEmail || !selectedChannels.length || (sendType === 'scheduled' && (!scheduleDate || !scheduleTime))"
-            class="h-8 text-xs bg-zinc-900 hover:bg-zinc-800 text-white gap-1.5"
-          >
-            <RotateCw v-if="isSendingEmail" class="w-3.5 h-3.5 animate-spin" />
-            <CalendarClock v-else-if="sendType === 'scheduled'" class="w-3.5 h-3.5" />
-            <Send v-else class="w-3.5 h-3.5" />
-            <span>
-              {{ isSendingEmail ? 'Memproses...' : (sendType === 'scheduled' ? (isBulkMode ? `Jadwalkan untuk ${selectedAppIds.length} Pelamar` : 'Jadwalkan Notifikasi') : (isBulkMode ? `Kirim ke ${selectedAppIds.length} Pelamar` : 'Kirim Notifikasi')) }}
-            </span>
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="closeNotificationModal"
+              class="h-8 text-xs cursor-pointer"
+            >
+              Batal
+            </Button>
+
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              @click="executeSendNotification"
+              :disabled="isSendingEmail || !selectedChannels.length || (sendType === 'scheduled' && (!scheduleDate || !scheduleTime))"
+              class="h-8 text-xs bg-[#0c2340] hover:bg-[#12335c] text-white gap-1.5 cursor-pointer shadow-xs font-semibold"
+            >
+              <RotateCw v-if="isSendingEmail" class="w-3.5 h-3.5 animate-spin" />
+              <CalendarClock v-else-if="sendType === 'scheduled'" class="w-3.5 h-3.5" />
+              <Send v-else class="w-3.5 h-3.5" />
+              <span>
+                {{ isSendingEmail ? 'Memproses...' : (sendType === 'scheduled' ? (isBulkMode ? `Jadwalkan untuk ${selectedAppIds.length} Pelamar` : 'Jadwalkan Notifikasi') : (isBulkMode ? `Kirim ke ${selectedAppIds.length} Pelamar` : 'Kirim Notifikasi')) }}
+              </span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1486,9 +1707,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
+import { createPoller } from '../lib/polling';
+import { createRequestKey, escapeHtml } from '../lib/utils';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -1529,7 +1752,66 @@ const isBulkMode = ref(false);
 const selectedChannels = ref(['email', 'whatsapp']);
 const whatsappAccounts = ref([]);
 const selectedWhatsappAccountId = ref(null);
-const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => account.is_active && account.status === 'connected'));
+const whatsappEngineReady = ref(false);
+const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => whatsappEngineReady.value && account.is_active && account.delivery_ready === true));
+const notificationProgress = ref(null);
+const notificationProgressError = ref('');
+let notificationRequest = null;
+const notificationTerminalStatuses = ['sent', 'partial', 'failed', 'unknown', 'cancelled'];
+const notificationPendingCount = computed(() => notificationProgress.value?.stats?.pending ?? ((notificationProgress.value?.stats?.email_pending || 0) + (notificationProgress.value?.stats?.whatsapp_pending || 0)));
+const notificationUnknownCount = computed(() => notificationProgress.value?.stats?.unknown ?? ((notificationProgress.value?.stats?.email_unknown || 0) + (notificationProgress.value?.stats?.whatsapp_unknown || 0)));
+const notificationProgressTitle = computed(() => ({
+  pending: 'Notifikasi dalam antrean', processing: 'Pengiriman sedang diproses', sending: 'Pengiriman sedang diproses',
+  scheduled: 'Notifikasi dijadwalkan', sent: 'Pengiriman selesai', partial: 'Pengiriman selesai sebagian',
+  failed: 'Pengiriman gagal', unknown: 'Hasil pengiriman belum pasti', cancelled: 'Pengiriman dibatalkan',
+}[notificationProgress.value?.status] || 'Menunggu progres pengiriman'));
+const deliveryStatusLabel = (delivery) => {
+  if (!delivery) return 'Tidak dipilih';
+  return { pending: 'Menunggu', processing: 'Diproses', sending: 'Sedang dikirim', sent: 'Terkirim', failed: 'Gagal', unknown: 'Belum pasti', skipped: 'Dilewati', cancelled: 'Dibatalkan' }[delivery.status] || 'Menunggu';
+};
+const notificationPoller = createPoller({
+  maxDuration: 600000,
+  request: async (id, signal) => (await axios.get(`/rekrutmen/api/notifications/${id}`, { signal, timeout: 10000 })).data,
+  onData: (data) => {
+    notificationProgress.value = data;
+    notificationProgressError.value = '';
+    if (notificationTerminalStatuses.includes(data.status)) {
+      store.fetchApplications('', true).catch(() => {});
+      return false;
+    }
+  },
+  onError: (error) => {
+    notificationProgressError.value = error.response?.status === 403
+      ? 'Anda tidak memiliki akses untuk melihat pengiriman ini.'
+      : 'Progres belum dapat dimuat. Tekan Perbarui status untuk memeriksa pengiriman yang sama.';
+    return false;
+  },
+  onTimeout: () => {
+    notificationProgressError.value = 'Pembaruan otomatis dijeda. Pengiriman tetap berjalan; tekan Perbarui status untuk melihat hasil terbaru.';
+  },
+});
+const refreshNotificationProgress = () => {
+  if (!notificationProgress.value?.id) return;
+  notificationProgressError.value = '';
+  notificationPoller.start(notificationProgress.value.id);
+};
+const trackQueuedNotification = (response, total) => {
+  const waitingForSchedule = response.scheduled && !notificationTerminalStatuses.includes(response.status);
+  notificationProgress.value = { id: response.batch_id, status: waitingForSchedule ? 'scheduled' : (response.status || 'pending'), stats: response.stats || { total }, details: response.details || [] };
+  notificationProgressError.value = waitingForSchedule ? 'Pengiriman akan dimulai sesuai jadwal. Perbarui status setelah waktu pengiriman.' : '';
+  notificationPoller.stop();
+  if (!response.scheduled && !notificationTerminalStatuses.includes(response.status)) refreshNotificationProgress();
+};
+
+// Individual schedules per candidate state (for bulk notifications)
+const useIndividualSchedules = ref(false);
+const candidateSchedules = ref({});
+
+const selectedCandidatesList = computed(() => {
+  return selectedAppIds.value
+    .map(id => applications.value.find(a => a.id === id))
+    .filter(Boolean);
+});
 
 const isAllSelected = computed(() => {
   if (!filteredApplications.value.length) return false;
@@ -1599,7 +1881,9 @@ onActivated(() => {
 
 onUnmounted(() => {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
+  notificationPoller.stop();
 });
+onDeactivated(() => notificationPoller.stop());
 
 watch(
   () => activeJobId.value,
@@ -1860,7 +2144,7 @@ const startSyncCvs = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Pencocokan CV Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Berkas CV berhasil dicocokkan ke kandidat.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Berkas CV berhasil dicocokkan ke kandidat.')}</div>`,
       confirmButtonText: 'Evaluasi Sekarang',
       showCancelButton: true,
       cancelButtonText: 'Tutup',
@@ -1882,19 +2166,179 @@ const startSyncCvs = async () => {
   }
 };
 
+const rescreenSelectedCandidates = async () => {
+  if (!selectedAppIds.value.length) return;
+  const count = selectedAppIds.value.length;
+
+  if (count === 1) {
+    const targetId = selectedAppIds.value[0];
+    const targetApp = applications.value.find(a => Number(a.id) === Number(targetId));
+    const candidateName = targetApp ? targetApp.full_name : 'Pelamar Terpilih';
+
+    const confirm = await Swal.fire({
+      titleText: `Evaluasi AI: ${candidateName}?`,
+      html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
+        Sistem AI hanya akan mengevaluasi kualifikasi CV untuk kandidat <b>${escapeHtml(candidateName)}</b> saja.<br><br>
+        Apakah Anda ingin melanjutkan evaluasi AI kandidat ini?
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Evaluasi Sekarang',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#0c2340',
+      cancelButtonColor: '#64748b',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+      }
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    if (targetApp) {
+      await rescreenSingleCandidate(targetApp);
+    } else {
+      isScreening.value = true;
+      Swal.fire({
+        title: 'Mengevaluasi Pelamar',
+        html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi kandidat...</div>`,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+          title: 'text-sm font-bold text-slate-900',
+        },
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+      try {
+        const res = await store.analyzeCandidateWithAi(targetId);
+        Swal.fire({
+          icon: 'success',
+          title: 'Evaluasi Berhasil',
+          html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
+          timer: 2000,
+          showConfirmButton: false,
+          iconColor: '#10b981',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+            title: 'text-sm font-bold text-slate-900',
+          }
+        });
+      } catch (err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal',
+          html: '<div class="text-xs text-slate-600 mt-1">Gagal mengevaluasi data pelamar.</div>',
+          confirmButtonColor: '#739ec5',
+          customClass: {
+            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+            title: 'text-sm font-bold text-slate-900',
+            confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
+          }
+        });
+      } finally {
+        isScreening.value = false;
+      }
+    }
+    selectedAppIds.value = [];
+    return;
+  }
+
+  const confirm = await Swal.fire({
+    title: `Evaluasi ${count} Pelamar Terpilih?`,
+    html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
+      Sistem AI hanya akan mengevaluasi kualifikasi CV untuk <b>${count} pelamar yang Anda centang</b>.<br><br>
+      Apakah Anda ingin melanjutkan evaluasi ulang AI?
+    </div>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: `Evaluasi ${count} Pelamar`,
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#0c2340',
+    cancelButtonColor: '#64748b',
+    customClass: {
+      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+      title: 'text-sm font-bold text-slate-900',
+    }
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  isScreening.value = true;
+  Swal.fire({
+    title: `Evaluasi AI: ${count} Pelamar Terpilih`,
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Mengevaluasi kualifikasi pelamar yang dipilih...</div>
+           <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
+    allowOutsideClick: false,
+    allowEscapeKey: false,
+    showConfirmButton: false,
+    customClass: {
+      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+      title: 'text-sm font-bold text-slate-900',
+    },
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+
+  try {
+    const res = await store.batchAnalyzeWithAi(activeJobId.value, ({ processed, total }) => {
+      const el = document.getElementById('swal-progress');
+      if (el) {
+        const pct = total ? Math.round((processed / total) * 100) : 0;
+        el.textContent = `Memproses ${processed} dari ${total} kandidat (${pct}%)`;
+      }
+    }, [...selectedAppIds.value]);
+
+    isScreening.value = false;
+    selectedAppIds.value = [];
+    Swal.fire({
+      icon: 'success',
+      title: 'Evaluasi Selesai',
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi kualifikasi ${count} pelamar berhasil diperbarui.`)}</div>`,
+      timer: 3000,
+      showConfirmButton: false,
+      iconColor: '#10b981',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+      }
+    });
+  } catch (e) {
+    isScreening.value = false;
+    Swal.fire({
+      icon: 'error',
+      title: 'Gagal Evaluasi',
+      html: '<div class="text-xs text-slate-600 mt-1">Terjadi kesalahan saat memproses evaluasi kualifikasi pelamar terpilih.</div>',
+      confirmButtonColor: '#739ec5',
+      customClass: {
+        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
+        title: 'text-sm font-bold text-slate-900',
+        confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
+      }
+    });
+  }
+};
+
 const startRescreening = async () => {
+  if (selectedAppIds.value.length > 0) {
+    return rescreenSelectedCandidates();
+  }
   // If no job filter, show warning first
   if (!activeJobId.value) {
     const confirm = await Swal.fire({
       title: 'Evaluasi Semua Pelamar?',
       html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-        Anda tidak sedang memfilter ke lowongan tertentu.<br><br>
-        Evaluasi akan tetap berjalan untuk <b>semua pelamar</b>, namun skor kualifikasi akan dibandingkan ke masing-masing lowongan yang dilamar.<br><br>
-        Untuk hasil lebih akurat, pilih lowongan terlebih dahulu dari halaman <b>Lowongan Kerja → Lihat Pelamar</b>.
+        Anda tidak mencentang pelamar dan tidak sedang memfilter ke lowongan tertentu.<br><br>
+        Evaluasi AI akan berjalan untuk <b>seluruh pelamar</b>.<br><br>
+        <i>Tips: Centang kotak pada nama pelamar jika hanya ingin mengevaluasi 1 atau beberapa orang saja.</i>
       </div>`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Lanjutkan Evaluasi',
+      confirmButtonText: 'Lanjutkan Evaluasi Semua',
       cancelButtonText: 'Batal',
       confirmButtonColor: '#0c2340',
       cancelButtonColor: '#64748b',
@@ -1909,8 +2353,8 @@ const startRescreening = async () => {
   const jobTitle = activeJobTitle.value;
   isScreening.value = true;
   Swal.fire({
-    title: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${jobTitle}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
+    titleText: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${escapeHtml(jobTitle)}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
            <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
@@ -1936,7 +2380,7 @@ const startRescreening = async () => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || 'Evaluasi kualifikasi berhasil diperbarui.'}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
       timer: 3000,
       showConfirmButton: false,
       iconColor: '#10b981',
@@ -1966,7 +2410,7 @@ const rescreenSingleCandidate = async (app) => {
   isScreening.value = true;
   Swal.fire({
     title: 'Mengevaluasi Pelamar',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${app.full_name}</b>...</div>`,
+    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${escapeHtml(app.full_name)}</b>...</div>`,
     allowOutsideClick: false,
     allowEscapeKey: false,
     showConfirmButton: false,
@@ -1988,7 +2432,7 @@ const rescreenSingleCandidate = async (app) => {
     Swal.fire({
       icon: 'success',
       title: 'Evaluasi Berhasil',
-      html: `<div class="text-xs text-slate-600 mt-1">${res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`}</div>`,
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`)}</div>`,
       timer: 2000,
       showConfirmButton: false,
       iconColor: '#10b981',
@@ -2217,11 +2661,11 @@ const handleAttachmentUpload = (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  if (file.size > 15 * 1024 * 1024) {
+  if (file.size > 10 * 1024 * 1024) {
     Swal.fire({
       icon: 'warning',
       title: 'Ukuran File Terlalu Besar',
-      text: 'Maksimal ukuran file dokumen adalah 15MB.',
+      text: 'Maksimal ukuran file dokumen adalah 10MB.',
       confirmButtonColor: '#0c2340',
     });
     return;
@@ -2246,12 +2690,16 @@ const formatFileSize = (bytes) => {
 
 const fetchWhatsappAccounts = async () => {
   try {
-    const res = await axios.get('/rekrutmen/api/settings/whatsapp');
+    const res = await axios.get('/rekrutmen/api/whatsapp/senders');
     whatsappAccounts.value = res.data?.accounts || [];
+    whatsappEngineReady.value = res.data?.engine_ready === true;
     const current = connectedWhatsappAccounts.value.find((account) => account.id === selectedWhatsappAccountId.value);
     const fallback = connectedWhatsappAccounts.value.find((account) => account.is_default) || connectedWhatsappAccounts.value[0];
     selectedWhatsappAccountId.value = current ? current.id : (fallback ? fallback.id : null);
   } catch (err) {
+    whatsappAccounts.value = [];
+    whatsappEngineReady.value = false;
+    selectedWhatsappAccountId.value = null;
     console.error('Failed to fetch WhatsApp accounts', err);
   }
 };
@@ -2281,6 +2729,7 @@ const pipelineTemplateTabs = [
 
 const openSendEmailModal = async (app) => {
   if (!app) return;
+  notificationRequest = null;
   isBulkMode.value = false;
   sendEmailModalApp.value = app;
   sendType.value = 'immediate';
@@ -2315,9 +2764,30 @@ const openSendEmailModal = async (app) => {
   applyEmailTemplate(defaultKey);
 };
 
+const onToggleIndividualSchedules = () => {
+  if (useIndividualSchedules.value) {
+    const map = {};
+    const baseSchedule = emailForm.value.schedule || '';
+    selectedAppIds.value.forEach((id, idx) => {
+      const hour = 8 + idx;
+      const defaultTime = `${String(hour).padStart(2, '0')}:00 WIB`;
+      map[id] = {
+        schedule: candidateSchedules.value[id]?.schedule || baseSchedule || defaultTime,
+        action_url: '',
+        venue_or_method: '',
+      };
+    });
+    candidateSchedules.value = map;
+  }
+};
+
 const openBulkNotificationModal = async () => {
   if (!selectedAppIds.value.length) return;
+  notificationRequest = null;
   isBulkMode.value = true;
+  useIndividualSchedules.value = false;
+  candidateSchedules.value = {};
+
   sendType.value = 'immediate';
   scheduleDate.value = todayDateString.value;
   const nextHour = new Date();
@@ -2345,6 +2815,8 @@ const openBulkNotificationModal = async () => {
 const closeNotificationModal = () => {
   sendEmailModalApp.value = null;
   isBulkMode.value = false;
+  useIndividualSchedules.value = false;
+  candidateSchedules.value = {};
   sendType.value = 'immediate';
   scheduleDate.value = '';
   scheduleTime.value = '';
@@ -2441,7 +2913,7 @@ const insertTag = (tag) => {
 };
 
 const executeSendNotification = async () => {
-  if (!sendEmailModalApp.value) return;
+  if (!sendEmailModalApp.value || isSendingEmail.value) return;
 
   if (!selectedChannels.value.length) {
     Swal.fire({
@@ -2450,6 +2922,11 @@ const executeSendNotification = async () => {
       text: 'Harap centang minimal salah satu kanal: Email atau WhatsApp.',
       confirmButtonColor: '#0c2340',
     });
+    return;
+  }
+
+  if (selectedChannels.value.includes('whatsapp') && !selectedWhatsappAccountId.value) {
+    Swal.fire({ icon: 'warning', title: 'Nomor WhatsApp Belum Siap', text: 'Pilih nomor pengirim yang siap atau gunakan kanal email.', confirmButtonColor: '#0c2340' });
     return;
   }
 
@@ -2509,148 +2986,68 @@ const executeSendNotification = async () => {
       formData.append('attachment', emailForm.value.attachment);
     }
 
-    if (isBulkMode.value) {
-      selectedAppIds.value.forEach((id) => {
-        formData.append('application_ids[]', id);
-      });
+    const fingerprint = JSON.stringify({
+      fields: [...formData.entries()].map(([key, value]) => [key, value instanceof File ? [value.name, value.size, value.lastModified] : value]),
+      applicationIds: isBulkMode.value ? selectedAppIds.value : [sendEmailModalApp.value.id],
+      candidateSchedules: useIndividualSchedules.value ? candidateSchedules.value : null,
+    });
+    if (!notificationRequest || notificationRequest.fingerprint !== fingerprint) {
+      notificationRequest = { fingerprint, key: createRequestKey() };
+    }
+    formData.append('request_key', notificationRequest.key);
 
-      const res = await axios.post('/rekrutmen/api/applications/bulk-send-notification', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      const deliveryTimeStr = res.data.formatted_scheduled_at || schedulePreviewText.value;
-      isSendingEmail.value = false;
-      const count = selectedAppIds.value.length;
-      selectedAppIds.value = [];
-      closeNotificationModal();
-
-      // Refresh applications immediately so stage changes reflect in Table & Kanban
-      await store.fetchApplications('', false).catch(() => {});
-
-      if (res.data.scheduled) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Massal Berhasil Dijadwalkan',
-          html: `
-            <div class="text-xs text-slate-600 mt-2 space-y-3">
-              <p class="text-slate-700">Notifikasi untuk <strong>${count} pelamar terpilih</strong> akan dikirim secara otomatis pada:</p>
-              <div class="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-50 text-blue-700 font-semibold rounded-lg border border-blue-100 text-xs shadow-2xs">
-                <span>📅</span>
-                <span>${deliveryTimeStr}</span>
-              </div>
-            </div>
-          `,
-          confirmButtonText: 'Selesai',
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-base font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      } else {
-        const stats = res.data.stats || {};
-        let recapHtml = `
-          <div class="text-xs text-left space-y-1.5 mt-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <div><strong>Total Sasaran:</strong> ${stats.total || count} pelamar</div>
-        `;
-
-        if (selectedChannels.value.includes('email')) {
-          recapHtml += `
-            <div class="text-blue-700">📧 <strong>Email:</strong> ${stats.email_success || 0} berhasil terkirim (Gagal: ${stats.email_failed || 0}, Email Kosong: ${stats.skipped_no_email || 0})</div>
-          `;
-        }
-
-        if (selectedChannels.value.includes('whatsapp')) {
-          recapHtml += `
-            <div class="text-emerald-700">💬 <strong>WhatsApp:</strong> ${stats.whatsapp_success || 0} berhasil terkirim (Gagal: ${stats.whatsapp_failed || 0})</div>
-          `;
-        }
-
-        recapHtml += `</div>`;
-
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Massal Berhasil Dikirim!',
-          html: recapHtml,
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      }
-    } else {
-      // Single candidate notification
-      const app = sendEmailModalApp.value;
-
-      const res = await axios.post(`/rekrutmen/api/applications/${app.id}/send-notification`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      const deliveryTimeStr = res.data.formatted_scheduled_at || schedulePreviewText.value;
-      isSendingEmail.value = false;
-      closeNotificationModal();
-
-      // Update local state and refresh applications list so stage change is immediate
-      if (res.data?.new_stage) {
-        app.current_stage_id = res.data.new_stage.id;
-        const targetStage = stages.value.find(s => String(s.id) === String(res.data.new_stage.id));
-        if (targetStage) {
-          app.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
-        }
-        if (selectedApp.value && String(selectedApp.value.id) === String(app.id)) {
-          selectedApp.value.current_stage_id = res.data.new_stage.id;
-          if (targetStage) {
-            selectedApp.value.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
-          }
-        }
-      }
-      await store.fetchApplications('', false).catch(() => {});
-
-      if (res.data.scheduled) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Berhasil Dijadwalkan',
-          html: `
-            <div class="text-xs text-slate-600 mt-2 space-y-3">
-              <p class="text-slate-700">Notifikasi untuk <strong>${app.full_name}</strong> akan dikirim secara otomatis pada:</p>
-              <div class="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-50 text-blue-700 font-semibold rounded-lg border border-blue-100 text-xs shadow-2xs">
-                <span>📅</span>
-                <span>${deliveryTimeStr}</span>
-              </div>
-            </div>
-          `,
-          confirmButtonText: 'Selesai',
-          confirmButtonColor: '#2563eb',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-base font-bold text-slate-900',
-            confirmButton: 'px-6 py-2 rounded-lg text-xs font-semibold'
-          }
-        });
-      } else {
-        Swal.fire({
-          icon: 'success',
-          title: 'Notifikasi Berhasil Terkirim!',
-          html: `<div class="text-xs text-slate-600 mt-1">${res.data.message || 'Notifikasi berhasil dikirimkan ke kandidat.'}</div>`,
-          timer: 3000,
-          showConfirmButton: false,
-          iconColor: '#10b981',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-          }
-        });
+    const bulk = isBulkMode.value;
+    const app = sendEmailModalApp.value;
+    const count = bulk ? selectedAppIds.value.length : 1;
+    if (bulk) {
+      selectedAppIds.value.forEach((id) => formData.append('application_ids[]', id));
+      if (useIndividualSchedules.value) {
+        formData.append('candidate_schedules', JSON.stringify(candidateSchedules.value));
       }
     }
+    const endpoint = bulk ? '/rekrutmen/api/applications/bulk-send-notification' : `/rekrutmen/api/applications/${app.id}/send-notification`;
+    const res = await axios.post(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    isSendingEmail.value = false;
+
+    if (res.data.batch_id && (res.status === 202 || res.data.queued || res.data.scheduled)) {
+      trackQueuedNotification(res.data, count);
+      if (bulk) selectedAppIds.value = [];
+      closeNotificationModal();
+      notificationRequest = null;
+      return;
+    }
+
+    if (bulk) {
+      throw new Error('Respons antrean belum lengkap. Periksa status sebelum membuat pengiriman baru.');
+    }
+    if (res.data.batch_id) trackQueuedNotification(res.data, 1);
+    closeNotificationModal();
+    notificationRequest = null;
+    if (res.data?.new_stage) {
+      app.current_stage_id = res.data.new_stage.id;
+      const targetStage = stages.value.find((stage) => String(stage.id) === String(res.data.new_stage.id));
+      if (targetStage) app.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
+    }
+    await store.fetchApplications('', true).catch(() => {});
+    const resultEntries = Object.values(res.data.results || {}).filter((result) => result && typeof result === 'object');
+    const incomplete = res.data.success === false || resultEntries.some((result) => result.success === false || ['failed', 'unknown', 'pending', 'skipped'].includes(result.status));
+    Swal.fire({
+      icon: incomplete ? 'warning' : 'success',
+      title: res.data.status === 'unknown' ? 'Hasil Pengiriman Belum Pasti' : (incomplete ? 'Sebagian notifikasi belum terkirim' : (res.data.scheduled ? 'Notifikasi Dijadwalkan' : 'Notifikasi Terkirim')),
+      text: res.data.message || 'Hasil pengiriman telah diperbarui.',
+      confirmButtonColor: '#2563eb',
+    });
   } catch (err) {
     isSendingEmail.value = false;
+    if (err.response?.data?.batch_id) {
+      trackQueuedNotification(err.response.data, isBulkMode.value ? selectedAppIds.value.length : 1);
+      closeNotificationModal();
+      notificationRequest = null;
+    }
     Swal.fire({
-      icon: 'error',
-      title: sendType.value === 'scheduled' ? 'Gagal Menjadwalkan Notifikasi' : 'Gagal Mengirim Notifikasi',
-      text: err.response?.data?.message || 'Terjadi kesalahan saat memproses notifikasi.',
+      icon: err.response?.data?.status === 'unknown' ? 'warning' : 'error',
+      title: err.response?.data?.status === 'unknown' ? 'Hasil Pengiriman Belum Pasti' : (sendType.value === 'scheduled' ? 'Gagal Menjadwalkan Notifikasi' : 'Gagal Mengirim Notifikasi'),
+      text: err.response?.data?.message || (err.response ? 'Terjadi kesalahan saat memproses notifikasi.' : 'Respons pengiriman belum diterima. Jangan membuat pengiriman baru; mencoba lagi dengan formulir yang sama memakai permintaan yang sama.'),
       confirmButtonColor: '#e11d48',
       customClass: {
         popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',

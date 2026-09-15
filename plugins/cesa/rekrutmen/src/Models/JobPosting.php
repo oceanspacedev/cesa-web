@@ -4,6 +4,7 @@ namespace Cesa\Rekrutmen\Models;
 
 use Cesa\Rekrutmen\Enums\JobApplicationStatus;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
+use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 use Webkul\Security\Traits\HasNullableCreator;
 use Webkul\Support\Models\Company;
 
@@ -22,6 +24,8 @@ class JobPosting extends Model
 
     protected $table = 'rekrutmen_job_postings';
 
+    protected bool $thumbnailDiskWasAssigned = false;
+
     protected $fillable = [
         'company_id',
         'request_man_power_id',
@@ -32,6 +36,7 @@ class JobPosting extends Model
         'requirements',
         'location',
         'thumbnail_path',
+        'thumbnail_disk',
         'is_published',
         'closing_date',
     ];
@@ -47,7 +52,52 @@ class JobPosting extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $jobPosting): void {
+            if (blank($jobPosting->thumbnail_path)) {
+                $jobPosting->thumbnail_disk = null;
+
+                return;
+            }
+
+            if ($jobPosting->isDirty('thumbnail_path') && ! $jobPosting->thumbnailDiskWasAssigned) {
+                $jobPosting->thumbnail_disk = null;
+            }
+
+            if (! $jobPosting->isDirty('thumbnail_path') && $jobPosting->thumbnail_disk === null) {
+                $jobPosting->thumbnail_disk = $jobPosting->getOriginal('thumbnail_disk');
+            }
+
+            $jobPosting->thumbnail_disk ??= $jobPosting->resolveThumbnailDisk();
+        });
+
+        static::updated(function (self $jobPosting): void {
+            if (! $jobPosting->wasChanged(['thumbnail_path', 'thumbnail_disk'])) {
+                return;
+            }
+
+            $oldPath = $jobPosting->getOriginal('thumbnail_path');
+            $oldDisk = $jobPosting->getOriginal('thumbnail_disk');
+
+            if (! is_string($oldPath) || $oldPath === '') {
+                return;
+            }
+
+            $oldDisk = app(RekrutmenStorage::class)->resolveDisk($oldPath, $oldDisk, self::thumbnailDisk());
+
+            if ($oldDisk === null || ($oldPath === $jobPosting->thumbnail_path && $oldDisk === $jobPosting->thumbnail_disk)) {
+                return;
+            }
+
+            try {
+                Storage::disk($oldDisk)->delete($oldPath);
+            } catch (Throwable) {
+                return;
+            }
+        });
+
         static::saved(function (self $jobPosting): void {
+            $jobPosting->thumbnailDiskWasAssigned = false;
+
             if (! is_numeric($jobPosting->request_man_power_id)) {
                 return;
             }
@@ -167,9 +217,37 @@ class JobPosting extends Model
 
     public static function thumbnailDisk(): string
     {
-        $disk = config('rekrutmen.thumbnail_disk', config('rekrutmen.disk', 'public'));
+        return app(RekrutmenStorage::class)->thumbnailDisk();
+    }
 
-        return is_string($disk) && $disk !== '' ? $disk : 'public';
+    public function setThumbnailDiskAttribute(mixed $disk): void
+    {
+        $this->attributes['thumbnail_disk'] = is_string($disk) && trim($disk) !== '' ? trim($disk) : null;
+        $this->thumbnailDiskWasAssigned = true;
+    }
+
+    public function resolveThumbnailDisk(): ?string
+    {
+        if (! is_string($this->thumbnail_path) || $this->thumbnail_path === '') {
+            return null;
+        }
+
+        $disk = app(RekrutmenStorage::class)->resolveDisk($this->thumbnail_path, $this->thumbnail_disk, self::thumbnailDisk());
+
+        if ($disk !== null && $this->thumbnail_disk === null && $this->exists
+            && ! $this->isDirty(['thumbnail_path', 'thumbnail_disk'])) {
+            $persisted = static::query()->withoutGlobalScopes()->whereKey($this->getKey())
+                ->where('thumbnail_path', $this->getRawOriginal('thumbnail_path'))
+                ->whereNull('thumbnail_disk')
+                ->update(['thumbnail_disk' => $disk]);
+
+            if ($persisted) {
+                $this->attributes['thumbnail_disk'] = $disk;
+                $this->syncOriginalAttribute('thumbnail_disk');
+            }
+        }
+
+        return $disk;
     }
 
     public function getThumbnailUrlAttribute(): ?string
@@ -178,21 +256,9 @@ class JobPosting extends Model
             return null;
         }
 
-        if (filter_var($this->thumbnail_path, FILTER_VALIDATE_URL)) {
-            return $this->thumbnail_path;
-        }
+        $disk = $this->resolveThumbnailDisk();
 
-        $disk = self::thumbnailDisk();
-
-        if ($disk === 's3') {
-            try {
-                return Storage::disk($disk)->temporaryUrl($this->thumbnail_path, now()->addHours(24));
-            } catch (\Throwable) {
-                // fallback
-            }
-        }
-
-        return Storage::disk($disk)->url($this->thumbnail_path);
+        return app(RekrutmenStorage::class)->url($this->thumbnail_path, $this->thumbnail_disk ?? $disk, self::thumbnailDisk());
     }
 
     public function isAcceptingApplications(): bool

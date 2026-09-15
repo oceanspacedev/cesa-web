@@ -40,6 +40,7 @@ class CandidateWhatsAppNotifier
             'purpose'          => 'notification',
             'mode'             => 'sync',
             'client_reference' => 'rekrutmen-candidate-'.$application->id,
+            'idempotency_key'  => $data['request_key'] ?? $data['idempotency_key'] ?? null,
         ]);
     }
 
@@ -48,16 +49,13 @@ class CandidateWhatsAppNotifier
      */
     public function resolveCandidatePhone(JobApplication $application): ?string
     {
-        $raw = $application->whatsapp_number
-            ?: ($application->active_whatsapp
-            ?: ($application->active_phone
-            ?: ($application->phone ?? null)));
-
-        if (! is_string($raw) || trim($raw) === '') {
-            return null;
+        foreach ([$application->whatsapp_number, $application->active_whatsapp, $application->active_phone, $application->phone] as $raw) {
+            if (is_string($raw) && ($phone = $this->gateway->formatPhone($raw))) {
+                return $phone;
+            }
         }
 
-        return $this->gateway->formatPhone($raw);
+        return null;
     }
 
     /**
@@ -73,7 +71,7 @@ class CandidateWhatsAppNotifier
      *
      * @param  array<string, mixed>  $data
      */
-    protected function buildCandidateMessage(JobApplication $application, array $data): string
+    public function buildCandidateMessage(JobApplication $application, array $data): string
     {
         $candidateName = $application->full_name;
         $jobTitle = $application->jobPosting?->title ?? ($application->position ?? 'Posisi Lowongan');
@@ -85,17 +83,17 @@ class CandidateWhatsAppNotifier
             $actionUrl = 'https://'.$actionUrl;
         }
 
-        $body = $data['body_message'] ?? '';
-        $body = str_replace(
-            ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}'],
-            [$candidateName, $jobTitle, $companyName, $location, $actionUrl],
-            $body
-        );
-
         $schedule = trim($data['schedule'] ?? '');
         $venueOrMethod = trim($data['venue_or_method'] ?? '');
         $actionLabel = trim($data['action_label'] ?? '');
         $specialNote = trim($data['special_note'] ?? '');
+
+        $body = $data['body_message'] ?? '';
+        $body = str_replace(
+            ['{nama_pelamar}', '{posisi}', '{perusahaan}', '{lokasi}', '{link_aksi}', '{jadwal}', '{schedule}'],
+            [$candidateName, $jobTitle, $companyName, $location, $actionUrl, $schedule, $schedule],
+            $body
+        );
 
         $lines = [];
         $lines[] = "Halo *{$candidateName}*,";

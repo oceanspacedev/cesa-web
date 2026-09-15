@@ -25,33 +25,9 @@ class JobApplicationAttachmentDownloadController extends Controller
             return redirect()->away($path);
         }
 
-        $relativePath = ltrim($path, '/');
+        $disk = $jobApplication->resolveAttachmentDisk($attachment);
+        abort_if($disk === null, 404);
 
-        $candidateDisks = array_values(array_unique(array_filter([
-            JobApplication::resumeDisk(),
-            config('filament.default_filesystem_disk', null),
-            config('filesystems.default'),
-            's3',
-            'local',
-            'public',
-        ])));
-
-        foreach ($candidateDisks as $disk) {
-            try {
-                if (! config()->has("filesystems.disks.{$disk}")) {
-                    continue;
-                }
-
-                if (! Storage::disk($disk)->exists($relativePath)) {
-                    continue;
-                }
-
-                return Storage::disk($disk)->response($relativePath, basename($relativePath));
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        abort(404);
+        return Storage::disk($disk)->response($path, basename($path));
     }
 }

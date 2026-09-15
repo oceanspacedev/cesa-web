@@ -2,7 +2,7 @@
 
 namespace Cesa\Rekrutmen\Tests\Feature;
 
-use Cesa\Rekrutmen\Jobs\SendWhatsAppNotification;
+use Cesa\Rekrutmen\Jobs\SendNotificationDeliveryJob;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerForm;
 use Cesa\Rekrutmen\Models\Approver;
 use Cesa\Rekrutmen\Models\Division;
@@ -16,6 +16,13 @@ use Webkul\Support\Models\Company;
 
 class PublicRequestManPowerFormTest extends RekrutmenTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->fakeRekrutmenWhatsAppEngine();
+        $this->makeConnectedWhatsAppAccount();
+    }
+
     public function test_public_request_man_power_form_uses_plain_textareas_for_long_text_fields(): void
     {
         app()->setLocale('en');
@@ -244,7 +251,7 @@ class PublicRequestManPowerFormTest extends RekrutmenTestCase
                 && ($notifiable->routes['mail'] ?? null) === 'it.approver@example.com';
         });
 
-        Queue::assertPushed(SendWhatsAppNotification::class, function (SendWhatsAppNotification $job): bool {
+        Queue::assertPushed(SendNotificationDeliveryJob::class, function (SendNotificationDeliveryJob $job): bool {
             return $job->queue === 'whatsapp';
         });
     }
