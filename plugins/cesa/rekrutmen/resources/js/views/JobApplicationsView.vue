@@ -488,9 +488,6 @@
                       size="sm"
                       class="font-semibold tabular-nums"
                     >
-                      <template #prefix>
-                        <Sparkles class="w-3 h-3 shrink-0" />
-                      </template>
                       {{ app.ai_match_score }}% &bull; {{ formatAiRecommendation(app.ai_recommendation) }}
                     </FBadge>
                   </button>
@@ -1672,7 +1669,7 @@ import {
   Search, ListFilter, Kanban, ArrowLeft, ExternalLink, Eye,
   CheckCircle2, AlertCircle, Mail, Phone, FileText, RefreshCw, RotateCw, User, UserCheck, ClipboardCheck,
   Link2, Users, Bell, ChevronDown, Upload, MessageSquare, Send, CheckSquare,
-  Calendar, MapPin, X, Clock, CalendarClock, UserX, Sparkles, Zap
+  Calendar, MapPin, X, Clock, CalendarClock, UserX, Zap
 } from 'lucide-vue-next';
 
 const store = useRekrutmenStore();

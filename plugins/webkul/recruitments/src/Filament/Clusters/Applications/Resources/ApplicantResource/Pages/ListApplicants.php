@@ -119,7 +119,6 @@ class ListApplicants extends ListRecords
                 }),
 
             'created_recently' => PresetView::make(__('recruitments::filament/clusters/applications/resources/applicant/pages/list-applicant.tabs.created-recently'))
-                ->icon('heroicon-s-sparkles')
                 ->modifyQueryUsing(function (Builder $query) {
                     return $query->where('create_date', '>=', now()->subDays(30)->toDateString());
                 }),
