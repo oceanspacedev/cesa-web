@@ -1,5 +1,159 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --color-surface-white: #ffffff;
+  --color-surface-gray-1: #f8f8f8;
+  --color-surface-gray-2: #f3f3f3;
+  --color-surface-gray-3: #ededed;
+  --color-surface-gray-4: #e2e2e2;
+  --color-surface-gray-5: #525252;
+  --color-surface-gray-6: #383838;
+  --color-surface-gray-7: #171717;
+  --color-surface-cards: #ffffff;
+  --color-surface-modal: #ffffff;
+
+  --color-surface-green-1: #f2fdf4;
+  --color-surface-green-2: #e4faeb;
+  --color-surface-green-3: #137949;
+
+  --color-surface-blue-1: #f2f9ff;
+  --color-surface-blue-2: #e6f4ff;
+  --color-surface-blue-3: #007be0;
+
+  --color-surface-red-1: #fff7f7;
+  --color-surface-red-2: #ffe7e7;
+  --color-surface-red-3: #ffd8d8;
+  --color-surface-red-4: #fdc2c2;
+  --color-surface-red-5: #e03636;
+  --color-surface-red-6: #cc2929;
+  --color-surface-red-7: #b52a2a;
+
+  --color-surface-amber-1: #fdfaed;
+  --color-surface-amber-2: #fff7d3;
+  --color-surface-amber-3: #db7706;
+
+  --color-ink-white: #ffffff;
+  --color-ink-gray-1: #ededed;
+  --color-ink-gray-2: #e2e2e2;
+  --color-ink-gray-3: #c7c7c7;
+  --color-ink-gray-4: #999999;
+  --color-ink-gray-5: #7c7c7c;
+  --color-ink-gray-6: #525252;
+  --color-ink-gray-7: #525252;
+  --color-ink-gray-8: #383838;
+  --color-ink-gray-9: #171717;
+
+  --color-ink-green-1: #f2fdf4;
+  --color-ink-green-2: #46b37e;
+  --color-ink-green-3: #137949;
+
+  --color-ink-red-1: #fff7f7;
+  --color-ink-red-2: #f79596;
+  --color-ink-red-3: #e03636;
+  --color-ink-red-4: #cc2929;
+
+  --color-ink-amber-1: #fdfaed;
+  --color-ink-amber-2: #fbcc55;
+  --color-ink-amber-3: #b35309;
+
+  --color-ink-blue-1: #f2f9ff;
+  --color-ink-blue-2: #0070cc;
+  --color-ink-blue-3: #0070cc;
+  --color-ink-blue-link: #0070cc;
+
+  --color-outline-white: #ffffff;
+  --color-outline-gray-1: #ededed;
+  --color-outline-gray-2: #e2e2e2;
+  --color-outline-gray-3: #c7c7c7;
+  --color-outline-gray-4: #999999;
+  --color-outline-gray-5: #383838;
+  --color-outline-gray-modals: #ededed;
+
+  --color-outline-green-1: #a6efc0;
+  --color-outline-green-2: #86e0a8;
+
+  --color-outline-red-1: #fdc2c2;
+  --color-outline-red-2: #f79596;
+  --color-outline-blue-1: #a7d7fd;
+  --color-outline-amber-1: #fbdb73;
+  --color-outline-amber-2: #fbcc55;
+}
+
+:root {
+  --surface-white: #ffffff;
+  --surface-gray-1: #f8f8f8;
+  --surface-gray-2: #f3f3f3;
+  --surface-gray-3: #ededed;
+  --surface-gray-4: #e2e2e2;
+  --surface-gray-5: #525252;
+  --surface-gray-6: #383838;
+  --surface-gray-7: #171717;
+  --surface-cards: #ffffff;
+  --surface-modal: #ffffff;
+  --outline-gray-modals: #ededed;
+}
+
+/* ==========================================================================
+   Typography Normalization & Font Consistency (Plus Jakarta Sans)
+   ========================================================================== */
+*, ::before, ::after {
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body,
+button,
+input,
+optgroup,
+select,
+textarea,
+::placeholder {
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+}
+
+/* Force standard enterprise compact font-size on all form inputs and controls */
+input,
+select,
+textarea {
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+  font-size: 0.75rem !important; /* 12px (text-xs) */
+  line-height: 1.25rem !important;
+}
+
+/* Frappe UI input and textarea overrides */
+.frappe-control input,
+.frappe-control textarea,
+input[type="text"],
+input[type="search"],
+input[type="date"],
+textarea {
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+  font-size: 0.75rem !important;
+}
+
+/* Ensure button elements and button text have consistent vertical and horizontal centering */
+button,
+[type='button'],
+[type='reset'],
+[type='submit'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  vertical-align: middle;
+}
+
+button > span,
+.btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+}
+
 /* ==========================================================================
    RTL/LTR Support - Global Styles
    ========================================================================== */

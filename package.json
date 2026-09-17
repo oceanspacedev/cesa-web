@@ -21,6 +21,7 @@
         "@vitejs/plugin-vue": "5.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "frappe-ui": "^0.1.278",
         "lucide-vue-next": "^0.475.0",
         "pinia": "2.1",
         "primeicons": "^8.0.0",

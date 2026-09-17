@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import vue from '@vitejs/plugin-vue';
+import path from 'path';
 
 export default defineConfig({
     build: {
@@ -25,6 +26,7 @@ export default defineConfig({
         alias: {
             '@rekrutmen': '/plugins/cesa/rekrutmen/resources/js',
             '@lead': '/plugins/cesa/lead/resources/js',
+            'frappe-ui/src': path.resolve(__dirname, 'node_modules/frappe-ui/src'),
         },
     },
 });

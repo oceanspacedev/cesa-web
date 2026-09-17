@@ -181,7 +181,7 @@ class SyncStorageToS3Command extends Command
             return self::FAILURE;
         }
 
-        $this->info('✓ Sinkronisasi seluruh berkas rekrutmen ke S3 selesai dengan sukses!');
+        $this->info('[OK] Sinkronisasi seluruh berkas rekrutmen ke S3 selesai dengan sukses!');
 
         return self::SUCCESS;
     }

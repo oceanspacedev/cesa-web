@@ -51,7 +51,7 @@
               <!-- Attachment Notice if Present -->
               @if (!empty($has_attachment))
               <div style="margin:20px 0 24px 0; background-color:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 16px; font-size:13px; color:#166534; line-height:1.5;">
-                <strong style="color:#15803d;">📎 Dokumen Terlampir:</strong> Berkas Offering Letter resmi telah dilampirkan pada email ini dalam format PDF. Silakan unduh dan tinjau rincian dokumen terlampir.
+                <strong style="color:#15803d;">Dokumen Terlampir:</strong> Berkas Offering Letter resmi telah dilampirkan pada email ini dalam format PDF. Silakan unduh dan tinjau rincian dokumen terlampir.
               </div>
               @endif
 

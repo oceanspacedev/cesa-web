@@ -56,9 +56,13 @@
             v-if="searchQuery"
             type="button"
             @click="searchQuery = ''"
-            class="absolute right-2 text-gray-400 hover:text-gray-600 text-xs p-0.5"
+            class="absolute right-2 text-gray-400 hover:text-gray-600 p-0.5 inline-flex items-center justify-center cursor-pointer"
+            title="Hapus pencarian"
           >
-            ✕
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
       </div>

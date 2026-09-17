@@ -8,6 +8,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     companies: [],
     applications: [],
     stages: [],
+    pipelines: [],
     activeJob: null,
     progressData: null,
     progressReport: null,
@@ -81,6 +82,9 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
           this.postings = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
           if (res.data.companies && Array.isArray(res.data.companies)) {
             this.companies = res.data.companies;
+          }
+          if (res.data.pipelines && Array.isArray(res.data.pipelines)) {
+            this.pipelines = res.data.pipelines;
           }
         }
       } catch (err) {
@@ -367,6 +371,9 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         if (res.data) {
           this.configurationsData = res.data;
           this.configurations = res.data;
+          if (res.data.pipelines) {
+            this.pipelines = res.data.pipelines;
+          }
           if (res.data.stages) {
             this.stages = res.data.stages;
           }
@@ -377,6 +384,24 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         this.loading.configurations = false;
       }
       return this.configurations;
+    },
+
+    async createPipeline(payload) {
+      const res = await axios.post('/rekrutmen/api/pipelines', payload);
+      await this.fetchConfigurations(true);
+      return res.data;
+    },
+
+    async updatePipeline(id, payload) {
+      const res = await axios.put(`/rekrutmen/api/pipelines/${id}`, payload);
+      await this.fetchConfigurations(true);
+      return res.data;
+    },
+
+    async deletePipeline(id) {
+      const res = await axios.delete(`/rekrutmen/api/pipelines/${id}`);
+      await this.fetchConfigurations(true);
+      return res.data;
     },
 
     async createDivision(payload) {
@@ -415,7 +440,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       return res.data;
     },
 
-    async reorderStages(stageIds) {
+    async reorderStages(stageIds, pipelineId = null) {
       if (Array.isArray(this.stages) && this.stages.length) {
         const idMap = new Map(stageIds.map((id, idx) => [Number(id), idx]));
         this.stages.sort((a, b) => {
@@ -428,9 +453,13 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         });
       }
 
-      const res = await axios.post('/rekrutmen/api/stages/reorder', {
-        stage_ids: stageIds,
-      });
+      const payload = { stage_ids: stageIds };
+      if (pipelineId) {
+        payload.pipeline_id = pipelineId;
+        payload.rekrutmen_pipeline_id = pipelineId;
+      }
+
+      const res = await axios.post('/rekrutmen/api/stages/reorder', payload);
 
       if (res.data?.stages && Array.isArray(this.stages)) {
         const currentStagesMap = new Map(this.stages.map(s => [s.id, s]));

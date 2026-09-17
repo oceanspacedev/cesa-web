@@ -85,6 +85,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('divisions', [RekrutmenSpaController::class, 'storeDivision'])->name('rekrutmen.api.divisions.store');
         Route::put('divisions/{id}', [RekrutmenSpaController::class, 'updateDivision'])->name('rekrutmen.api.divisions.update');
         Route::delete('divisions/{id}', [RekrutmenSpaController::class, 'destroyDivision'])->name('rekrutmen.api.divisions.destroy');
+        Route::post('pipelines', [RekrutmenSpaController::class, 'storePipeline'])->name('rekrutmen.api.pipelines.store');
+        Route::put('pipelines/{id}', [RekrutmenSpaController::class, 'updatePipeline'])->name('rekrutmen.api.pipelines.update');
+        Route::delete('pipelines/{id}', [RekrutmenSpaController::class, 'destroyPipeline'])->name('rekrutmen.api.pipelines.destroy');
         Route::post('stages', [RekrutmenSpaController::class, 'storeStage'])->name('rekrutmen.api.stages.store');
         Route::post('stages/reorder', [RekrutmenSpaController::class, 'reorderStages'])->name('rekrutmen.api.stages.reorder');
         Route::put('stages/{id}', [RekrutmenSpaController::class, 'updateStage'])->name('rekrutmen.api.stages.update');

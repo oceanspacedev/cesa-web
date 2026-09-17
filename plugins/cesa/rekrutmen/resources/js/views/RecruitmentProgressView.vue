@@ -1,44 +1,53 @@
 <template>
-  <div class="space-y-6 pb-12">
-    <!-- Top Header & Actions -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2.5">
-          <h1 class="text-xl font-semibold text-zinc-900 tracking-tight">
-            Monitoring & Progres Rekrutmen
-          </h1>
-          <Badge variant="outline" class="font-mono text-[11px] text-zinc-600 bg-zinc-50 border-zinc-200">
-            {{ positions.length }} Posisi
-          </Badge>
+  <div class="space-y-4 pb-12 font-sans">
+    <!-- Elevated Asoy Header Card -->
+    <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0">
+          <TrendingUp class="w-5 h-5 text-ink-gray-7" />
         </div>
-        <p class="text-xs text-zinc-500 mt-1">
-          Pantau rasio pemenuhan personil Manpower Planning (MPP), kandidat dalam proses seleksi, dan status pemenuhan
-        </p>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+              Monitoring & Progres Rekrutmen
+            </h1>
+            <FBadge theme="green" variant="subtle" size="sm" class="tabular-nums font-semibold">
+              <template #prefix>
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              </template>
+              {{ positions.length }} Posisi
+            </FBadge>
+          </div>
+          <p class="text-xs text-ink-gray-5 mt-0.5">
+            Pantau rasio pemenuhan personil Manpower Planning (MPP), pipeline seleksi, dan status target kebutuhan
+          </p>
+        </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <Button
+      <div class="flex items-center gap-2 shrink-0">
+        <FButton
           variant="outline"
           size="sm"
           @click="refreshData"
-          :disabled="isRefreshing"
-          class="text-xs h-8 text-zinc-700 hover:text-zinc-900"
+          :loading="isRefreshing"
         >
-          <RotateCw :class="['w-3.5 h-3.5 mr-1.5', isRefreshing ? 'animate-spin' : '']" />
-          <span>Segarkan</span>
-        </Button>
+          <template #prefix>
+            <RotateCw class="w-3.5 h-3.5" />
+          </template>
+          Segarkan
+        </FButton>
 
-        <Button
-          variant="default"
+        <FButton
+          variant="solid"
           size="sm"
           @click="exportExcel"
-          :disabled="isExporting"
-          class="bg-[#0c2340] hover:bg-[#153459] text-white text-xs h-8 gap-1.5 shadow-xs"
+          :loading="isExporting"
         >
-          <RotateCw v-if="isExporting" class="w-3.5 h-3.5 animate-spin" />
-          <FileSpreadsheet v-else class="w-3.5 h-3.5" />
-          <span>{{ isExporting ? 'Mengekspor...' : 'Export Excel' }}</span>
-        </Button>
+          <template #prefix>
+            <FileSpreadsheet class="w-3.5 h-3.5" />
+          </template>
+          Export Excel
+        </FButton>
       </div>
     </div>
 
@@ -57,8 +66,8 @@
           class="fixed bottom-6 right-6 z-50 max-w-sm w-auto p-3 rounded-xl border flex items-center gap-3 text-xs font-medium shadow-lg backdrop-blur-md"
           :class="[
             toastType === 'success'
-              ? 'bg-white/95 border-emerald-200 text-emerald-900 shadow-emerald-950/10'
-              : 'bg-white/95 border-rose-200 text-rose-900 shadow-rose-950/10'
+              ? 'bg-surface-white/95 border-emerald-200 text-emerald-900 shadow-emerald-950/10'
+              : 'bg-surface-white/95 border-rose-200 text-rose-900 shadow-rose-950/10'
           ]"
         >
           <div :class="['w-7 h-7 rounded-lg flex items-center justify-center shrink-0', toastType === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700']">
@@ -69,7 +78,7 @@
           <button
             type="button"
             @click="toastMessage = null"
-            class="text-zinc-400 hover:text-zinc-700 font-bold p-1 rounded-md hover:bg-zinc-100 cursor-pointer ml-auto"
+            class="text-ink-gray-4 hover:text-ink-gray-7 font-bold p-1 rounded-md hover:bg-surface-gray-2 cursor-pointer ml-auto"
           >
             &times;
           </button>
@@ -77,221 +86,206 @@
       </transition>
     </teleport>
 
-    <!-- KPI Summary Metrics (Polished Brand-Aligned Cards) -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <Card class="hover:border-blue-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Posisi Dipantau</span>
-          <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-            <Briefcase class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-zinc-900">{{ positions.length }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Total jabatan dalam pipeline
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card class="hover:border-indigo-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Target Kebutuhan</span>
-          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
-            <Users class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-zinc-900">{{ totalNeeded }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Total personil yang dicari
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card class="hover:border-amber-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Dalam Proses</span>
-          <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-            <Clock class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-amber-700">{{ totalInProcess }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Kandidat sedang diseleksi
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card class="hover:border-emerald-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Terpenuhi (Hired)</span>
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-            <CheckCircle2 class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-emerald-700">{{ totalHired }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Kandidat telah diterima kerja
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-
-    <!-- Filter & Toolbar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-zinc-200 shadow-2xs">
-      <div class="text-xs font-semibold text-zinc-700 uppercase tracking-wider">
-        Monitoring Pemenuhan Pipeline
-      </div>
-
-      <div class="relative w-full sm:w-80">
-        <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-        <Input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Cari posisi, lokasi, perusahaan..."
-          class="pl-8 h-8 text-xs bg-zinc-50 focus:bg-white"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          @click="searchQuery = ''"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs font-bold"
-        >
-          &times;
-        </button>
-      </div>
-    </div>
-
-    <!-- SKELETON LOADING STATE -->
-    <div v-if="isLoading" class="bg-white rounded-xl border border-zinc-200 shadow-2xs p-4 space-y-3">
-      <div v-for="i in 5" :key="i" class="flex items-center justify-between gap-4 py-3 border-b border-zinc-100 last:border-0">
-        <div class="space-y-1.5 w-1/4">
-          <Skeleton class="h-4 w-36" />
-          <Skeleton class="h-3 w-20" />
+    <!-- Calibrated KPI Summary Cards (py-4 px-4) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Posisi Dipantau</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">{{ positions.length }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Total jabatan pipeline</span>
         </div>
-        <Skeleton class="h-4 w-16" />
-        <Skeleton class="h-4 w-16" />
-        <Skeleton class="h-4 w-16" />
-        <Skeleton class="h-4 w-28" />
-        <Skeleton class="h-5 w-20 rounded-full" />
+        <div class="w-9 h-9 rounded-lg bg-surface-blue-2 text-surface-blue-3 flex items-center justify-center shrink-0">
+          <Briefcase class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Target Kebutuhan</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">{{ totalNeeded }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Total personil dicari</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-ink-gray-7 flex items-center justify-center shrink-0">
+          <Users class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Dalam Proses</span>
+          <span class="text-xl font-bold text-amber-700 mt-1 block tabular-nums">{{ totalInProcess }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Kandidat sedang seleksi</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-amber-600 flex items-center justify-center shrink-0">
+          <Clock class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Terpenuhi (Hired)</span>
+          <span class="text-xl font-bold text-emerald-700 mt-1 block tabular-nums">{{ totalHired }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Kandidat diterima kerja</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-green-2 text-surface-green-3 flex items-center justify-center shrink-0">
+          <CheckCircle2 class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
       </div>
     </div>
 
-    <!-- TABLE VIEW: Shadcn Table Component -->
-    <div v-else class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead class="w-[28%]">Posisi Lowongan</TableHead>
-            <TableHead class="w-[22%]">Perusahaan & Lokasi</TableHead>
-            <TableHead class="w-[10%]">Kebutuhan</TableHead>
-            <TableHead class="w-[10%]">Total Pelamar</TableHead>
-            <TableHead class="w-[10%]">Dalam Proses</TableHead>
-            <TableHead class="w-[10%]">Hired</TableHead>
-            <TableHead class="w-[16%]">Persentase Pemenuhan</TableHead>
-            <TableHead class="w-[10%] text-right">Status Health</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow
-            v-for="item in filteredPositions"
-            :key="item.job_posting_id"
-            @click="navigateToJob(item)"
-            class="group hover:bg-blue-50/40 transition-colors cursor-pointer"
-            title="Klik untuk melihat data pelamar posisi ini"
-          >
-            <!-- Posisi -->
-            <TableCell class="py-3.5">
-              <div class="font-semibold text-xs text-zinc-900 group-hover:text-[#0c2340] group-hover:underline transition-colors">
-                {{ item.position }}
-              </div>
-              <div class="flex items-center gap-1.5 mt-0.5">
-                <span class="inline-flex items-center text-[10px] font-mono font-medium text-blue-900 bg-blue-50/80 px-1.5 py-0.5 rounded border border-blue-200/60">
-                  ID #{{ item.id || item.job_posting_id }}
-                </span>
-                <span class="text-zinc-400 text-[10px]">&bull;</span>
-                <span class="text-zinc-500 text-[10px] group-hover:text-blue-700">Lihat Pelamar &rarr;</span>
-              </div>
-            </TableCell>
+    <!-- Filter & Search Toolbar -->
+    <div class="p-2.5 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-ink-gray-7">Pemenuhan Pipeline</span>
+        <span class="text-xs text-ink-gray-4">({{ filteredPositions.length }} posisi)</span>
+      </div>
 
-            <!-- Perusahaan & Lokasi -->
-            <TableCell class="py-3.5">
-              <div class="font-medium text-xs text-zinc-800 truncate max-w-[200px]">
-                {{ item.company }}
-              </div>
-              <div class="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                <MapPin class="w-3 h-3 text-zinc-400 shrink-0" />
-                <span class="truncate">{{ item.location || 'Indonesia' }}</span>
-              </div>
-            </TableCell>
+      <FTextInput
+        v-model="searchQuery"
+        placeholder="Cari posisi, lokasi, perusahaan..."
+        size="md"
+        variant="outline"
+        class="w-full sm:w-64"
+      >
+        <template #prefix>
+          <Search class="w-3.5 h-3.5 text-zinc-400" />
+        </template>
+      </FTextInput>
+    </div>
 
-            <!-- Kebutuhan -->
-            <TableCell class="py-3.5 font-semibold text-zinc-900 text-xs">
-              {{ item.needed }} orang
-            </TableCell>
+    <!-- Skeleton Loading State -->
+    <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+      <div
+        v-for="i in 6"
+        :key="i"
+        class="bg-surface-white rounded-lg border border-outline-gray-2 p-4 space-y-3 shadow-2xs"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div class="space-y-1.5 w-3/4">
+            <Skeleton class="h-4 w-44" />
+            <Skeleton class="h-3 w-28" />
+          </div>
+          <Skeleton class="h-5 w-16 rounded-full" />
+        </div>
+        <Skeleton class="h-2 w-full rounded-full" />
+        <div class="grid grid-cols-4 gap-2 pt-2">
+          <Skeleton class="h-8 rounded" />
+          <Skeleton class="h-8 rounded" />
+          <Skeleton class="h-8 rounded" />
+          <Skeleton class="h-8 rounded" />
+        </div>
+        <Skeleton class="h-8 w-full rounded-md mt-2" />
+      </div>
+    </div>
 
-            <!-- Total Pelamar -->
-            <TableCell class="py-3.5 text-zinc-700 text-xs font-medium">
-              {{ item.total_applicants }} kandidat
-            </TableCell>
-
-            <!-- Dalam Proses -->
-            <TableCell class="py-3.5 text-amber-700 text-xs font-medium">
-              {{ item.in_process }} kandidat
-            </TableCell>
-
-            <!-- Hired -->
-            <TableCell class="py-3.5 text-emerald-700 text-xs font-semibold">
-              {{ item.hired }} orang
-            </TableCell>
-
-            <!-- Progress Bar -->
-            <TableCell class="py-3.5">
-              <div class="w-32 space-y-1">
-                <div class="flex items-center justify-between text-[10px] font-medium text-zinc-600">
-                  <span>{{ item.hired }}/{{ item.needed }}</span>
-                  <span class="font-mono font-semibold text-zinc-700">{{ item.fulfillment_percentage || 0 }}%</span>
-                </div>
-                <div class="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    :class="[
-                      'h-1.5 rounded-full transition-all duration-300',
-                      item.fulfillment_percentage >= 100
-                        ? 'bg-emerald-500'
-                        : item.fulfillment_percentage >= 50
-                        ? 'bg-blue-600'
-                        : item.fulfillment_percentage > 0
-                        ? 'bg-amber-500'
-                        : 'bg-zinc-300'
-                    ]"
-                    :style="{ width: `${Math.min(item.fulfillment_percentage || 0, 100)}%` }"
-                  ></div>
-                </div>
-              </div>
-            </TableCell>
-
-            <!-- Status Health -->
-            <TableCell class="py-3.5 text-right">
-              <Badge
-                :variant="getHealthBadgeVariant(item)"
-                class="w-20 justify-center text-center font-medium"
-                :title="item.cycle_health_summary || item.cycle_health_desc || ''"
+    <!-- Card Feed (Zero Table Layout) -->
+    <div v-else-if="filteredPositions.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+      <div
+        v-for="item in filteredPositions"
+        :key="item.job_posting_id || item.id"
+        class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs hover:border-outline-gray-3 hover:shadow-xs transition-all duration-200 p-4 flex flex-col justify-between gap-3 group"
+      >
+        <!-- Card Top: Title, Meta, Badge -->
+        <div class="space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <h3
+                @click="navigateToJob(item)"
+                class="text-sm font-bold text-ink-gray-9 group-hover:text-blue-600 transition-colors cursor-pointer truncate"
+                :title="item.position"
               >
-                {{ getHealthBadgeLabel(item) }}
-              </Badge>
-            </TableCell>
-          </TableRow>
+                {{ item.position }}
+              </h3>
+              <div class="flex items-center gap-2 text-xs text-ink-gray-5 mt-1 flex-wrap">
+                <span class="inline-flex items-center gap-1">
+                  <Building2 class="w-3 h-3 text-ink-gray-4 shrink-0" />
+                  <span class="truncate max-w-[130px]">{{ item.company || 'Perusahaan' }}</span>
+                </span>
+                <span class="text-ink-gray-3">&bull;</span>
+                <span class="inline-flex items-center gap-1">
+                  <MapPin class="w-3 h-3 text-ink-gray-4 shrink-0" />
+                  <span class="truncate max-w-[110px]">{{ item.location || 'Indonesia' }}</span>
+                </span>
+              </div>
+            </div>
 
-          <TableRow v-if="!filteredPositions.length">
-            <TableCell colspan="8" class="py-12 text-center text-xs text-zinc-500">
-              Tidak ada data progres rekrutmen yang sesuai kriteria.
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+            <FBadge
+              :theme="getHealthBadgeTheme(item)"
+              size="sm"
+              class="shrink-0"
+            >
+              {{ getHealthBadgeLabel(item) }}
+            </FBadge>
+          </div>
+
+          <!-- Progress Bar Section -->
+          <div class="space-y-1.5 pt-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-ink-gray-5 font-medium">Pemenuhan Personil</span>
+              <span class="font-bold text-ink-gray-9 tabular-nums">
+                {{ item.hired }} / {{ item.needed }}
+                <span class="text-ink-gray-4 font-normal">({{ item.fulfillment_percentage || 0 }}%)</span>
+              </span>
+            </div>
+            <div class="w-full bg-surface-gray-2 rounded-full h-2 overflow-hidden border border-outline-gray-1">
+              <div
+                :class="[
+                  'h-2 rounded-full transition-all duration-300',
+                  item.fulfillment_percentage >= 100
+                    ? 'bg-emerald-500'
+                    : item.fulfillment_percentage >= 50
+                    ? 'bg-blue-600'
+                    : item.fulfillment_percentage > 0
+                    ? 'bg-amber-500'
+                    : 'bg-zinc-300'
+                ]"
+                :style="{ width: `${Math.min(item.fulfillment_percentage || 0, 100)}%` }"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric Mini-Strip -->
+        <div class="grid grid-cols-4 gap-1.5 py-2 px-2.5 rounded-lg bg-surface-gray-1 border border-outline-gray-1 text-center">
+          <div>
+            <span class="text-[10px] text-ink-gray-4 block">Target</span>
+            <span class="text-xs font-bold text-ink-gray-9 tabular-nums">{{ item.needed }}</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-ink-gray-4 block">Pelamar</span>
+            <span class="text-xs font-bold text-ink-gray-9 tabular-nums">{{ item.total_applicants }}</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-amber-700 block">Proses</span>
+            <span class="text-xs font-bold text-amber-600 tabular-nums">{{ item.in_process }}</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-emerald-700 block">Hired</span>
+            <span class="text-xs font-bold text-emerald-600 tabular-nums">{{ item.hired }}</span>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <div class="pt-1">
+          <FButton
+            variant="subtle"
+            size="sm"
+            class="w-full justify-center"
+            @click="navigateToJob(item)"
+          >
+            Lihat Pelamar & Seleksi &rarr;
+          </FButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="p-12 text-center bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs">
+      <Briefcase class="w-8 h-8 text-ink-gray-4 mx-auto mb-2" />
+      <h4 class="text-sm font-bold text-ink-gray-9">Tidak Ada Data Progres</h4>
+      <p class="text-xs text-ink-gray-5 mt-1">
+        Tidak ada data posisi atau lowongan yang sesuai dengan kriteria pencarian.
+      </p>
     </div>
   </div>
 </template>
@@ -302,13 +296,13 @@ import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 
+// Frappe UI Components
+import FButton from '../components/frappe/Button.vue';
+import FBadge from 'frappe-ui/src/components/Badge/Badge.vue';
+import FTextInput from '../components/frappe/TextInput.vue';
+
 // Shadcn UI Components
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Card, CardHeader, CardContent } from '../components/ui/card';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '../components/ui/table';
 import { Skeleton } from '../components/ui/skeleton';
-import { Input } from '../components/ui/input';
 
 // Icons
 import {
@@ -321,6 +315,8 @@ import {
   CheckCircle2,
   AlertCircle,
   MapPin,
+  Building2,
+  TrendingUp,
 } from 'lucide-vue-next';
 
 const store = useRekrutmenStore();
@@ -390,11 +386,11 @@ const filteredPositions = computed(() => {
   );
 });
 
-const getHealthBadgeVariant = (item) => {
+const getHealthBadgeTheme = (item) => {
   const status = item?.cycle_health_status || '';
-  if (status === 'risk') return 'destructive';
-  if (status === 'watch') return 'warning';
-  return 'outline';
+  if (status === 'risk') return 'red';
+  if (status === 'watch') return 'orange';
+  return 'green';
 };
 
 const getHealthBadgeLabel = (item) => {
