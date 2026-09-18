@@ -586,16 +586,28 @@ class RekrutmenSpaController extends Controller
         if ($isJobFiltered && $activeJob) {
             $rawApps = $query->get();
 
+            $screenedCount = 0;
+            $maxAutoScreen = 30;
+
             foreach ($rawApps as $app) {
                 if ($app->ai_match_score === null) {
-                    $aiResult = $this->performAiCvScreening($app, $activeJob, false);
+                    if ($screenedCount >= $maxAutoScreen) {
+                        continue;
+                    }
 
-                    $app->ai_match_score = $aiResult['score'];
-                    $app->ai_recommendation = $aiResult['recommendation'];
-                    $app->ai_summary = $aiResult['summary'];
-                    $app->ai_analyzed_at = now();
+                    try {
+                        $aiResult = $this->performAiCvScreening($app, $activeJob, false);
 
-                    $app->saveQuietly();
+                        $app->ai_match_score = $aiResult['score'];
+                        $app->ai_recommendation = $aiResult['recommendation'];
+                        $app->ai_summary = $aiResult['summary'];
+                        $app->ai_analyzed_at = now();
+
+                        $app->saveQuietly();
+                        $screenedCount++;
+                    } catch (\Throwable $e) {
+                        Log::warning("Auto AI screening failed for application #{$app->id}: ".$e->getMessage());
+                    }
                 }
             }
         } else {
@@ -710,12 +722,16 @@ class RekrutmenSpaController extends Controller
 
         // Perform AI Screening on the newly uploaded real CV
         if ($application->jobPosting) {
-            $aiResult = $this->performAiCvScreening($application, $application->jobPosting, true);
-            $application->ai_match_score = $aiResult['score'];
-            $application->ai_recommendation = $aiResult['recommendation'];
-            $application->ai_summary = $aiResult['summary'];
-            $application->ai_analyzed_at = now();
-            $application->saveQuietly();
+            try {
+                $aiResult = $this->performAiCvScreening($application, $application->jobPosting, true);
+                $application->ai_match_score = $aiResult['score'];
+                $application->ai_recommendation = $aiResult['recommendation'];
+                $application->ai_summary = $aiResult['summary'];
+                $application->ai_analyzed_at = now();
+                $application->saveQuietly();
+            } catch (\Throwable $e) {
+                Log::warning("AI screening on uploadCv failed for application #{$application->id}: ".$e->getMessage());
+            }
         }
 
         return response()->json([
@@ -831,13 +847,13 @@ class RekrutmenSpaController extends Controller
 
         $cvContent = $this->readCvContents($application);
         $pdfBase64 = null;
-        if ($cvContent !== null && strtolower(pathinfo((string) $application->resume_path, PATHINFO_EXTENSION)) === 'pdf'
+        if ($useExternalApi && $cvContent !== null && strtolower(pathinfo((string) $application->resume_path, PATHINFO_EXTENSION)) === 'pdf'
             && strlen($cvContent) <= 15 * 1024 * 1024) {
             $pdfBase64 = base64_encode($cvContent);
         }
 
         $cvText = $this->extractTextFromCvDocument($cvContent ?? '');
-        $hasRealCv = ! empty($pdfBase64) || ! empty($cvText);
+        $hasRealCv = ! empty($pdfBase64) || ! empty($cvText) || ($cvContent !== null && strlen($cvContent) > 100);
 
         // If candidate has no readable CV document
         if (! $hasRealCv) {
@@ -848,8 +864,8 @@ class RekrutmenSpaController extends Controller
             ];
         }
 
-        // 2. Try Online Gemini AI Screening if API key is available
-        $apiKey = self::getGeminiApiKey();
+        // 2. Try Online Gemini AI Screening if API key is available and external API is enabled
+        $apiKey = $useExternalApi ? self::getGeminiApiKey() : null;
         if (! empty($apiKey)) {
             $domicile = $application->address_domicile ?? $application->address_ktp ?? '-';
             $gender = $application->gender ? (is_object($application->gender) ? (method_exists($application->gender, 'getLabel') ? $application->gender->getLabel() : $application->gender->name) : (string) $application->gender) : '-';
@@ -1166,90 +1182,126 @@ PROMPT;
             return '';
         }
 
+        // If file content is excessively huge (> 15MB), truncate to avoid regex buffer explosion
+        if (strlen($content) > 15 * 1024 * 1024) {
+            $content = substr($content, 0, 15 * 1024 * 1024);
+        }
+
         $extractedText = '';
 
-        // Extract and uncompress FlateDecode streams from PDF
-        if (preg_match_all('/stream[\r\n]+(.*?)[\r\n]+endstream/is', $content, $matches)) {
-            // First pass: extract any character maps (CMap / ToUnicode / bfchar / bfrange)
+        // Extract and uncompress streams from PDF, skipping non-text streams (e.g. raster images)
+        if (preg_match_all('/(?:<<([\s\S]*?)>>\s*)?stream[\r\n]+([\s\S]*?)[\r\n]+endstream/is', $content, $matches)) {
             $cmaps = [];
-            foreach ($matches[1] as $stream) {
+            $uncompressedStreams = [];
+
+            foreach ($matches[2] as $idx => $stream) {
+                // Safety: Avoid out-of-memory errors by skipping streams exceeding 500KB or marked as images
+                $streamLen = strlen($stream);
+                $dict = $matches[1][$idx] ?? '';
+                if ($streamLen > 500000 || preg_match('/\/Subtype\s*\/Image/i', $dict)) {
+                    continue;
+                }
+
+                // Memory threshold safety guard
+                if (memory_get_usage(true) > 100 * 1024 * 1024) {
+                    break;
+                }
+
                 $uncompressed = @gzuncompress($stream);
                 if ($uncompressed === false) {
                     $uncompressed = @gzinflate($stream);
                 }
-                if ($uncompressed !== false && str_contains($uncompressed, 'beginbfchar')) {
-                    if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bf)) {
-                        foreach ($bf[1] as $idx => $src) {
-                            $decodedChar = @hex2bin($bf[2][$idx]);
-                            if ($decodedChar !== false) {
-                                $cmaps[strtolower($src)] = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
-                            }
-                        }
-                    }
-                }
-                if ($uncompressed !== false && str_contains($uncompressed, 'beginbfrange')) {
-                    if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bfr)) {
-                        foreach ($bfr[1] as $idx => $start) {
-                            $startCode = hexdec($start);
-                            $endCode = hexdec($bfr[2][$idx]);
-                            $targetStart = hexdec($bfr[3][$idx]);
-                            for ($c = $startCode; $c <= $endCode; $c++) {
-                                $src = sprintf('%0'.strlen($start).'x', $c);
-                                $tgt = sprintf('%04x', $targetStart + ($c - $startCode));
-                                $decodedChar = @hex2bin($tgt);
+
+                if ($uncompressed !== false) {
+                    $uncompressedStreams[] = $uncompressed;
+
+                    // Extract character maps (CMap / ToUnicode / bfchar / bfrange)
+                    if (str_contains($uncompressed, 'beginbfchar')) {
+                        if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bf)) {
+                            foreach ($bf[1] as $bIdx => $src) {
+                                if (count($cmaps) >= 1000) {
+                                    break;
+                                }
+                                $decodedChar = @hex2bin($bf[2][$bIdx]);
                                 if ($decodedChar !== false) {
                                     $cmaps[strtolower($src)] = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // Second pass: extract text from streams (supporting literal string and hex CMap operators)
-            foreach ($matches[1] as $stream) {
-                $uncompressed = @gzuncompress($stream);
-                if ($uncompressed === false) {
-                    $uncompressed = @gzinflate($stream);
-                }
-                if ($uncompressed !== false) {
-                    // Standard ASCII literal strings: (text) Tj
-                    if (preg_match_all('/\((.*?)\)\s*Tj/s', $uncompressed, $textMatches)) {
-                        $extractedText .= ' '.implode('', $textMatches[1]);
-                    }
-                    // Array of literal strings: [(text) 10 (text)] TJ
-                    if (preg_match_all('/\[(.*?)\]\s*TJ/s', $uncompressed, $arrayMatches)) {
-                        foreach ($arrayMatches[1] as $arr) {
-                            if (preg_match_all('/\((.*?)\)/s', $arr, $subMatches)) {
-                                $extractedText .= ' '.implode('', $subMatches[1]);
-                            }
-                        }
-                    }
-                    // Hexadecimal / CID-keyed encoded text: <hex> Tj
-                    if (preg_match_all('/<([0-9a-fA-F]{2,})>\s*Tj/s', $uncompressed, $hexMatches)) {
-                        foreach ($hexMatches[1] as $hex) {
-                            $chunk = '';
-                            $len = strlen($hex);
-                            for ($k = 0; $k < $len; $k += 2) {
-                                $c4 = $k + 4 <= $len ? strtolower(substr($hex, $k, 4)) : '';
-                                $c2 = strtolower(substr($hex, $k, 2));
-                                if ($c4 && isset($cmaps[$c4])) {
-                                    $chunk .= $cmaps[$c4];
-                                    $k += 2;
-                                } elseif (isset($cmaps[$c2])) {
-                                    $chunk .= $cmaps[$c2];
-                                } else {
-                                    $bin = @hex2bin($c2);
-                                    if ($bin !== false && ctype_print($bin)) {
-                                        $chunk .= $bin;
+                    if (str_contains($uncompressed, 'beginbfrange')) {
+                        if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bfr)) {
+                            foreach ($bfr[1] as $bIdx => $start) {
+                                if (count($cmaps) >= 1000) {
+                                    break;
+                                }
+                                $startCode = hexdec($start);
+                                $endCode = hexdec($bfr[2][$bIdx]);
+                                $targetStart = hexdec($bfr[3][$bIdx]);
+                                // Skip invalid or overly huge ranges (e.g. 0000 to FFFF) to prevent memory exhaustion
+                                if ($endCode < $startCode || ($endCode - $startCode) > 256) {
+                                    continue;
+                                }
+                                for ($c = $startCode; $c <= $endCode; $c++) {
+                                    if (count($cmaps) >= 1000) {
+                                        break;
+                                    }
+                                    $src = sprintf('%0'.strlen($start).'x', $c);
+                                    $tgt = sprintf('%04x', $targetStart + ($c - $startCode));
+                                    $decodedChar = @hex2bin($tgt);
+                                    if ($decodedChar !== false) {
+                                        $cmaps[strtolower($src)] = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
                                     }
                                 }
                             }
-                            $extractedText .= ' '.$chunk;
                         }
                     }
                 }
             }
+
+            unset($matches);
+
+            // Extract text from uncompressed streams (literal string, array, and hex CMap operators)
+            foreach ($uncompressedStreams as $uncompressed) {
+                // Standard ASCII literal strings: (text) Tj
+                if (preg_match_all('/\((.*?)\)\s*Tj/s', $uncompressed, $textMatches)) {
+                    $extractedText .= ' '.implode('', $textMatches[1]);
+                }
+                // Array of literal strings: [(text) 10 (text)] TJ
+                if (preg_match_all('/\[(.*?)\]\s*TJ/s', $uncompressed, $arrayMatches)) {
+                    foreach ($arrayMatches[1] as $arr) {
+                        if (preg_match_all('/\((.*?)\)/s', $arr, $subMatches)) {
+                            $extractedText .= ' '.implode('', $subMatches[1]);
+                        }
+                    }
+                }
+                // Hexadecimal / CID-keyed encoded text: <hex> Tj
+                if (preg_match_all('/<([0-9a-fA-F]{2,})>\s*Tj/s', $uncompressed, $hexMatches)) {
+                    foreach ($hexMatches[1] as $hex) {
+                        $chunk = '';
+                        $len = strlen($hex);
+                        for ($k = 0; $k < $len; $k += 2) {
+                            $c4 = $k + 4 <= $len ? strtolower(substr($hex, $k, 4)) : '';
+                            $c2 = strtolower(substr($hex, $k, 2));
+                            if ($c4 && isset($cmaps[$c4])) {
+                                $chunk .= $cmaps[$c4];
+                                $k += 2;
+                            } elseif (isset($cmaps[$c2])) {
+                                $chunk .= $cmaps[$c2];
+                            } else {
+                                $bin = @hex2bin($c2);
+                                if ($bin !== false && ctype_print($bin)) {
+                                    $chunk .= $bin;
+                                }
+                            }
+                        }
+                        $extractedText .= ' '.$chunk;
+                    }
+                }
+            }
+
+            unset($uncompressedStreams, $cmaps);
         }
 
         // Clean up escaped PDF characters and normalize whitespace
