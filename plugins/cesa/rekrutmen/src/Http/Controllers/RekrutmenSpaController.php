@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
 use Cesa\Rekrutmen\Filament\Resources\JobPostingResource;
 use Cesa\Rekrutmen\Filament\Resources\RequestManPowerResource;
+use Cesa\Rekrutmen\Http\Requests\SaveRecruitmentPipelineRequest;
 use Cesa\Rekrutmen\Http\Requests\SendCandidateNotificationRequest;
 use Cesa\Rekrutmen\Http\Requests\UploadCandidateCvRequest;
 use Cesa\Rekrutmen\Models\Approver;
@@ -31,6 +32,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -323,6 +326,8 @@ class RekrutmenSpaController extends Controller
                 'thumbnail_path'         => $record->thumbnail_path,
                 'thumbnail_url'          => $record->thumbnail_url,
                 'is_published'           => (bool) $record->is_published,
+                'rekrutmen_pipeline_id'  => $record->rekrutmen_pipeline_id ?? 1,
+                'pipeline_name'          => $record->rekrutmenPipeline?->name ?? 'Default Recruitment Pipeline',
                 'applications_count'     => $record->applications_count ?? 0,
                 'request_man_powers_cnt' => $record->request_man_powers_count ?? 0,
                 'closing_date'           => $record->closing_date ? $record->closing_date->format('Y-m-d') : null,
@@ -333,6 +338,7 @@ class RekrutmenSpaController extends Controller
 
         $responseData = $postings->toArray();
         $responseData['companies'] = Company::query()->whereNull('deleted_at')->orderBy('name')->get(['id', 'name']);
+        $responseData['pipelines'] = RekrutmenPipeline::query()->orderBy('id')->get(['id', 'name']);
 
         return response()->json($responseData);
     }
@@ -376,14 +382,15 @@ class RekrutmenSpaController extends Controller
     public function storeJobPosting(Request $request): JsonResponse
     {
         $request->validate([
-            'title'        => 'required|string|max:255',
-            'company_id'   => 'nullable',
-            'location'     => 'nullable|string|max:255',
-            'description'  => 'nullable|string',
-            'requirements' => 'nullable|string',
-            'closing_date' => 'nullable|date',
-            'is_published' => 'nullable',
-            'thumbnail'    => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'title'                 => 'required|string|max:255',
+            'company_id'            => 'nullable',
+            'rekrutmen_pipeline_id' => 'nullable|integer|exists:rekrutmen_pipelines,id',
+            'location'              => 'nullable|string|max:255',
+            'description'           => 'nullable|string',
+            'requirements'          => 'nullable|string',
+            'closing_date'          => 'nullable|date',
+            'is_published'          => 'nullable',
+            'thumbnail'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $title = trim($request->input('title'));
@@ -395,7 +402,13 @@ class RekrutmenSpaController extends Controller
             $slug = $baseSlug.'-'.$counter++;
         }
 
-        $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Standard Recruitment Pipeline']);
+        $pipelineId = $request->input('rekrutmen_pipeline_id');
+        if (filled($pipelineId)) {
+            $pipeline = RekrutmenPipeline::find($pipelineId);
+        }
+        if (! isset($pipeline) || ! $pipeline) {
+            $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Recruitment Pipeline']);
+        }
 
         $companyId = $request->input('company_id');
         $companyId = filled($companyId) ? (int) $companyId : null;
@@ -429,12 +442,13 @@ class RekrutmenSpaController extends Controller
             'success' => true,
             'message' => "Lowongan \"{$posting->title}\" berhasil ditambahkan!",
             'posting' => [
-                'id'            => $posting->id,
-                'title'         => $posting->title,
-                'thumbnail_url' => $posting->thumbnail_url,
-                'is_published'  => $posting->is_published,
-                'company_id'    => $posting->company_id ?? $posting->resolveCompany()?->id,
-                'company_name'  => $posting->resolveCompanyName(),
+                'id'                    => $posting->id,
+                'title'                 => $posting->title,
+                'thumbnail_url'         => $posting->thumbnail_url,
+                'is_published'          => $posting->is_published,
+                'company_id'            => $posting->company_id ?? $posting->resolveCompany()?->id,
+                'company_name'          => $posting->resolveCompanyName(),
+                'rekrutmen_pipeline_id' => $posting->rekrutmen_pipeline_id,
             ],
         ], 201);
     }
@@ -445,18 +459,32 @@ class RekrutmenSpaController extends Controller
     public function updateJobPosting(Request $request, $id): JsonResponse
     {
         $request->validate([
-            'title'            => 'required|string|max:255',
-            'company_id'       => 'nullable',
-            'location'         => 'nullable|string|max:255',
-            'description'      => 'nullable|string',
-            'requirements'     => 'nullable|string',
-            'closing_date'     => 'nullable|date',
-            'is_published'     => 'nullable',
-            'thumbnail'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
-            'remove_thumbnail' => 'nullable',
+            'title'                 => 'required|string|max:255',
+            'company_id'            => 'nullable',
+            'rekrutmen_pipeline_id' => 'nullable|integer|exists:rekrutmen_pipelines,id',
+            'location'              => 'nullable|string|max:255',
+            'description'           => 'nullable|string',
+            'requirements'          => 'nullable|string',
+            'closing_date'          => 'nullable|date',
+            'is_published'          => 'nullable',
+            'thumbnail'             => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'remove_thumbnail'      => 'nullable',
         ]);
 
         $posting = JobPosting::findOrFail($id);
+
+        if ($request->has('rekrutmen_pipeline_id')) {
+            $pipelineId = $request->filled('rekrutmen_pipeline_id') ? $request->integer('rekrutmen_pipeline_id') : 1;
+
+            if ($pipelineId !== (int) $posting->rekrutmen_pipeline_id && $posting->applications()->withTrashed()->exists()) {
+                throw ValidationException::withMessages([
+                    'rekrutmen_pipeline_id' => 'Pipeline tidak dapat diubah karena lowongan sudah memiliki riwayat pelamar.',
+                ]);
+            }
+
+            $posting->rekrutmen_pipeline_id = $pipelineId;
+        }
+
         $posting->title = $request->input('title');
 
         if ($request->has('company_id')) {
@@ -571,14 +599,25 @@ class RekrutmenSpaController extends Controller
             'Hired'                     => '#059669',
         ];
 
-        $stages = RekrutmenStage::where('rekrutmen_pipeline_id', 1)
+        $pipelineId = null;
+        if ($activeJob && $activeJob->rekrutmen_pipeline_id) {
+            $pipelineId = (int) $activeJob->rekrutmen_pipeline_id;
+        } elseif ($request->filled('pipeline_id')) {
+            $pipelineId = (int) $request->input('pipeline_id');
+            $query->whereHas('jobPosting', fn ($postingQuery) => $postingQuery->where('rekrutmen_pipeline_id', $pipelineId));
+        }
+
+        $stages = RekrutmenStage::query()
+            ->when($pipelineId, fn ($stageQuery) => $stageQuery->where('rekrutmen_pipeline_id', $pipelineId))
+            ->orderBy('rekrutmen_pipeline_id')
             ->orderBy('order_column')
             ->get(['id', 'rekrutmen_pipeline_id', 'name', 'order_column'])
             ->map(fn ($s) => [
-                'id'           => $s->id,
-                'name'         => $s->name,
-                'order_column' => $s->order_column,
-                'color'        => $colors[$s->name] ?? '#3b82f6',
+                'id'                    => $s->id,
+                'rekrutmen_pipeline_id' => $s->rekrutmen_pipeline_id,
+                'name'                  => $s->name,
+                'order_column'          => $s->order_column,
+                'color'                 => $colors[$s->name] ?? '#3b82f6',
             ]);
 
         // If a specific lowongan is selected (e.g. "Web App Developer Cirebon"),
@@ -658,7 +697,7 @@ class RekrutmenSpaController extends Controller
                 'photo_url'                  => $app->photo_path ? url("/rekrutmen/api/applications/{$app->id}/photo") : null,
                 'source'                     => $app->source ?? 'Website',
                 'job_posting_id'             => $app->job_posting_id,
-                'job_posting'                => $app->jobPosting ? ['id' => $app->jobPosting->id, 'title' => $app->jobPosting->title, 'location' => $app->jobPosting->location, 'company_name' => $app->jobPosting->resolveCompanyName()] : null,
+                'job_posting'                => $app->jobPosting ? ['id' => $app->jobPosting->id, 'title' => $app->jobPosting->title, 'rekrutmen_pipeline_id' => $app->jobPosting->rekrutmen_pipeline_id, 'location' => $app->jobPosting->location, 'company_name' => $app->jobPosting->resolveCompanyName()] : null,
                 'current_stage_id'           => $app->current_stage_id ?? 1,
                 'stage'                      => $stageData,
                 'status'                     => $app->status ? (is_object($app->status) ? $app->status->value : $app->status) : 'in_progress',
@@ -1422,7 +1461,9 @@ PROMPT;
         }
 
         $request->validate([
-            'stage_id' => 'required|exists:rekrutmen_stages,id',
+            'stage_id' => ['required', 'integer', Rule::exists('rekrutmen_stages', 'id')
+                ->where('rekrutmen_pipeline_id', $application->jobPosting?->rekrutmen_pipeline_id)
+                ->whereNull('deleted_at')],
         ]);
 
         $application->current_stage_id = $request->input('stage_id');
@@ -1589,8 +1630,9 @@ PROMPT;
     /**
      * Get master configurations (pipelines, stages, divisions, approvers).
      */
-    public function getConfigurations(): JsonResponse
+    public function getConfigurations(?Request $request = null): JsonResponse
     {
+        $request = $request ?? request();
         $divisions = Division::query()
             ->with('company:id,name')
             ->orderBy('name')
@@ -1632,26 +1674,146 @@ PROMPT;
             ->groupBy('current_stage_id')
             ->pluck('total', 'current_stage_id');
 
-        $stages = RekrutmenStage::where('rekrutmen_pipeline_id', 1)
-            ->orderBy('order_column')
+        $pipelines = RekrutmenPipeline::query()->with('activeStages')->withCount('jobPostings')
+            ->orderBy('id')
             ->get()
-            ->map(function (RekrutmenStage $s) use ($colors, $stageCandidateCounts): array {
+            ->map(function (RekrutmenPipeline $p) use ($colors, $stageCandidateCounts): array {
+                $pipelineStages = $p->activeStages
+                    ->map(function (RekrutmenStage $s) use ($colors, $stageCandidateCounts): array {
+                        return [
+                            'id'                    => $s->id,
+                            'rekrutmen_pipeline_id' => $s->rekrutmen_pipeline_id,
+                            'name'                  => $s->name,
+                            'order_column'          => $s->order_column,
+                            'color'                 => $colors[$s->name] ?? '#3b82f6',
+                            'applications_count'    => (int) ($stageCandidateCounts[$s->id] ?? 0),
+                            'is_locked'             => $s->isLockedFinalStage(),
+                        ];
+                    });
+
                 return [
-                    'id'                 => $s->id,
-                    'name'               => $s->name,
-                    'order_column'       => $s->order_column,
-                    'color'              => $colors[$s->name] ?? '#3b82f6',
-                    'applications_count' => (int) ($stageCandidateCounts[$s->id] ?? 0),
-                    'is_locked'          => $s->isLockedFinalStage(),
+                    'id'                 => $p->id,
+                    'name'               => $p->name,
+                    'description'        => $p->description,
+                    'stages_count'       => $pipelineStages->count(),
+                    'job_postings_count' => (int) $p->job_postings_count,
+                    'stages'             => $pipelineStages,
                 ];
             });
 
+        $selectedPipelineId = (int) $request->input('pipeline_id', $pipelines->first()['id'] ?? 1);
+        $selectedPipeline = $pipelines->firstWhere('id', $selectedPipelineId) ?? $pipelines->first();
+        $stages = $selectedPipeline ? $selectedPipeline['stages'] : collect();
+
         return response()->json([
-            'stages'     => $stages,
-            'divisions'  => $divisions,
-            'approvers'  => Approver::with(['division.company:id,name', 'company:id,name'])->latest()->get(),
-            'pipelines'  => RekrutmenPipeline::with('stages')->get(),
-            'companies'  => $companies,
+            'selected_pipeline_id' => $selectedPipeline['id'] ?? null,
+            'stages'               => $stages,
+            'divisions'            => $divisions,
+            'approvers'            => Approver::with(['division.company:id,name', 'company:id,name'])->latest()->get(),
+            'pipelines'            => $pipelines,
+            'companies'            => $companies,
+        ]);
+    }
+
+    /**
+     * Store a new master recruitment pipeline.
+     */
+    public function storePipeline(SaveRecruitmentPipelineRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $pipeline = RekrutmenPipeline::getConnectionResolver()->connection()->transaction(function () use ($validated): RekrutmenPipeline {
+            $pipeline = RekrutmenPipeline::create([
+                'name'        => trim($validated['name']),
+                'description' => $validated['description'] ?? null,
+                'creator_id'  => Auth::id(),
+            ]);
+
+            if (! empty($validated['clone_from_pipeline_id'])) {
+                $sourceStages = RekrutmenStage::where('rekrutmen_pipeline_id', $validated['clone_from_pipeline_id'])
+                    ->orderBy('order_column')
+                    ->get();
+
+                foreach ($sourceStages as $stage) {
+                    RekrutmenStage::create([
+                        'rekrutmen_pipeline_id' => $pipeline->id,
+                        'name'                  => $stage->name,
+                        'order_column'          => $stage->order_column,
+                        'creator_id'            => Auth::id(),
+                    ]);
+                }
+            } else {
+                $defaultStages = ['Screening CV', 'Interview HR', 'Interview User', 'Offering Letter', 'Hired'];
+                foreach ($defaultStages as $idx => $sName) {
+                    RekrutmenStage::create([
+                        'rekrutmen_pipeline_id' => $pipeline->id,
+                        'name'                  => $sName,
+                        'order_column'          => $idx + 1,
+                        'creator_id'            => Auth::id(),
+                    ]);
+                }
+            }
+
+            return $pipeline;
+        });
+
+        return response()->json([
+            'success'  => true,
+            'message'  => "Pipeline \"{$pipeline->name}\" berhasil dibuat.",
+            'pipeline' => $pipeline->load('stages'),
+        ], 201);
+    }
+
+    /**
+     * Update an existing recruitment pipeline.
+     */
+    public function updatePipeline(SaveRecruitmentPipelineRequest $request, $id): JsonResponse
+    {
+        $pipeline = RekrutmenPipeline::findOrFail($id);
+
+        $validated = $request->validated();
+
+        $pipeline->update([
+            'name'        => trim($validated['name']),
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        return response()->json([
+            'success'  => true,
+            'message'  => "Pipeline \"{$pipeline->name}\" berhasil diperbarui.",
+            'pipeline' => $pipeline,
+        ]);
+    }
+
+    /**
+     * Destroy a recruitment pipeline.
+     */
+    public function destroyPipeline(Request $request, $id): JsonResponse
+    {
+        $pipeline = RekrutmenPipeline::findOrFail($id);
+
+        if ($pipeline->id === 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pipeline standar utama tidak dapat dihapus.',
+            ], 422);
+        }
+
+        if ($pipeline->jobPostings()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pipeline ini tidak dapat dihapus karena masih digunakan oleh lowongan pekerjaan terdaftar.',
+            ], 422);
+        }
+
+        $pipeline->getConnection()->transaction(function () use ($pipeline): void {
+            $pipeline->activeStages()->delete();
+            $pipeline->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Pipeline \"{$pipeline->name}\" berhasil dihapus.",
         ]);
     }
 
@@ -1758,16 +1920,23 @@ PROMPT;
     /**
      * Delete a division.
      */
-    public function destroyDivision($id): JsonResponse
+    public function destroyDivision(Request $request, $id): JsonResponse
     {
         $division = Division::findOrFail($id);
-        $name = $division->name;
+
+        $hasApprovers = Approver::where('division_id', $division->id)->exists();
+        if ($hasApprovers) {
+            return response()->json([
+                'success' => false,
+                'message' => "Divisi \"{$division->name}\" tidak dapat dihapus karena masih digunakan pada data Approver.",
+            ], 422);
+        }
 
         $division->delete();
 
         return response()->json([
             'success' => true,
-            'message' => "Divisi \"{$name}\" berhasil dihapus.",
+            'message' => "Divisi \"{$division->name}\" berhasil dihapus.",
         ]);
     }
 
@@ -1777,12 +1946,15 @@ PROMPT;
     public function storeStage(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name'                  => 'required|string|max:255',
+            'rekrutmen_pipeline_id' => 'nullable|integer|exists:rekrutmen_pipelines,id',
+            'pipeline_id'           => 'nullable|integer|exists:rekrutmen_pipelines,id',
         ]);
 
         $name = trim($validated['name']);
+        $pipelineId = $validated['rekrutmen_pipeline_id'] ?? $validated['pipeline_id'] ?? 1;
 
-        $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Standard Recruitment Pipeline']);
+        $pipeline = RekrutmenPipeline::firstOrCreate(['id' => $pipelineId], ['name' => 'Standard Recruitment Pipeline']);
 
         $maxOrder = (int) RekrutmenStage::where('rekrutmen_pipeline_id', $pipeline->id)->max('order_column');
 
@@ -1806,13 +1978,35 @@ PROMPT;
     public function reorderStages(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'stage_ids'   => 'required|array|min:1',
-            'stage_ids.*' => 'required|integer|exists:rekrutmen_stages,id',
+            'stage_ids'             => 'required|array|min:1',
+            'stage_ids.*'           => 'required|integer|distinct|exists:rekrutmen_stages,id',
+            'rekrutmen_pipeline_id' => 'nullable|integer|exists:rekrutmen_pipelines,id',
+            'pipeline_id'           => 'nullable|integer|exists:rekrutmen_pipelines,id',
         ]);
 
         $stageIds = array_values(array_unique(array_map('intval', $validated['stage_ids'])));
+        $firstStage = RekrutmenStage::find($stageIds[0]);
+        $pipelineId = $validated['rekrutmen_pipeline_id'] ?? $validated['pipeline_id'] ?? ($firstStage?->rekrutmen_pipeline_id ?? 1);
 
-        DB::transaction(function () use ($stageIds): void {
+        $pipelineStages = RekrutmenStage::query()
+            ->where('rekrutmen_pipeline_id', $pipelineId)
+            ->orderBy('order_column')
+            ->get();
+
+        if (count(array_diff($stageIds, $pipelineStages->modelKeys())) > 0) {
+            throw ValidationException::withMessages([
+                'stage_ids' => 'Semua tahapan harus berasal dari pipeline yang dipilih.',
+            ]);
+        }
+
+        $orderedStages = collect($stageIds)
+            ->map(fn (int $stageId) => $pipelineStages->firstWhere('id', $stageId))
+            ->merge($pipelineStages->whereNotIn('id', $stageIds));
+        $stageIds = $orderedStages->reject(fn (RekrutmenStage $stage): bool => $stage->isLockedFinalStage())
+            ->merge($orderedStages->filter(fn (RekrutmenStage $stage): bool => $stage->isLockedFinalStage()))
+            ->pluck('id')->all();
+
+        RekrutmenStage::getConnectionResolver()->connection()->transaction(function () use ($stageIds, $pipelineId): void {
             // Temporary negative offsets to avoid composite unique constraint collisions on (rekrutmen_pipeline_id, order_column)
             foreach ($stageIds as $index => $id) {
                 RekrutmenStage::where('id', $id)->update([
@@ -1820,32 +2014,20 @@ PROMPT;
                 ]);
             }
 
-            // Assign the desired sequential positive order
-            foreach ($stageIds as $index => $id) {
-                RekrutmenStage::where('id', $id)->update([
-                    'order_column' => $index + 1,
-                ]);
-            }
-
-            // Ensure locked final stage (e.g. 'Hired') stays at the end of pipeline
-            $finalStage = RekrutmenStage::where('rekrutmen_pipeline_id', 1)
-                ->whereRaw('LOWER(name) = ?', [Str::lower(RekrutmenStage::FINAL_HIRED_STAGE_NAME)])
-                ->first();
-
-            if ($finalStage) {
-                $maxOtherOrder = (int) RekrutmenStage::where('rekrutmen_pipeline_id', 1)
-                    ->whereKeyNot($finalStage->id)
-                    ->max('order_column');
-
-                if ((int) $finalStage->order_column !== $maxOtherOrder + 1) {
-                    $finalStage->update([
-                        'order_column' => $maxOtherOrder + 1,
-                    ]);
+            $reservedOrders = RekrutmenStage::onlyTrashed()
+                ->where('rekrutmen_pipeline_id', $pipelineId)->pluck('order_column')->all();
+            $nextOrder = 1;
+            foreach ($stageIds as $id) {
+                while (in_array($nextOrder, $reservedOrders)) {
+                    $nextOrder++;
                 }
+
+                RekrutmenStage::whereKey($id)->update(['order_column' => $nextOrder++]);
             }
+
         });
 
-        $stages = RekrutmenStage::where('rekrutmen_pipeline_id', 1)
+        $stages = RekrutmenStage::where('rekrutmen_pipeline_id', $pipelineId)
             ->orderBy('order_column')
             ->get(['id', 'rekrutmen_pipeline_id', 'name', 'order_column']);
 

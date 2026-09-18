@@ -9,6 +9,8 @@ export default {
         './resources/**/*.blade.php',
         './resources/**/*.js',
         './resources/**/*.vue',
+        './plugins/**/*.{blade.php,js,vue}',
+        './node_modules/frappe-ui/src/**/*.{vue,js,ts}',
     ],
     theme: {
         extend: {

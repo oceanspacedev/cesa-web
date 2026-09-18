@@ -1,16 +1,16 @@
 <?php
 
 use Cesa\Rekrutmen\Http\Controllers\JobApplicationAttachmentDownloadController;
+use Cesa\Rekrutmen\Http\Controllers\PublicRequestManPowerController;
 use Cesa\Rekrutmen\Http\Controllers\RekrutmenCommunicationSettingsController;
 use Cesa\Rekrutmen\Http\Controllers\RekrutmenSpaController;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerApprovalPage;
-use Cesa\Rekrutmen\Livewire\PublicRequestManPowerForm;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerProgressPage;
 use Illuminate\Http\Middleware\SetCacheHeaders;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
-    Route::get('man-power', PublicRequestManPowerForm::class)
+    Route::get('man-power', [PublicRequestManPowerController::class, 'index'])
         ->middleware([
             SetCacheHeaders::using([
                 'no_store'        => true,
@@ -22,6 +22,10 @@ Route::middleware('web')->group(function () {
             'throttle:60,1',
         ])
         ->name('rekrutmen.public.request-man-power.form');
+
+    Route::post('man-power/api/submit', [PublicRequestManPowerController::class, 'submit'])
+        ->middleware('throttle:60,1')
+        ->name('rekrutmen.public.request-man-power.api.submit');
 
     Route::get('man-power/progress', PublicRequestManPowerProgressPage::class)
         ->name('rekrutmen.public.request-man-power.progress.lookup');
@@ -81,6 +85,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('divisions', [RekrutmenSpaController::class, 'storeDivision'])->name('rekrutmen.api.divisions.store');
         Route::put('divisions/{id}', [RekrutmenSpaController::class, 'updateDivision'])->name('rekrutmen.api.divisions.update');
         Route::delete('divisions/{id}', [RekrutmenSpaController::class, 'destroyDivision'])->name('rekrutmen.api.divisions.destroy');
+        Route::post('pipelines', [RekrutmenSpaController::class, 'storePipeline'])->name('rekrutmen.api.pipelines.store');
+        Route::put('pipelines/{id}', [RekrutmenSpaController::class, 'updatePipeline'])->name('rekrutmen.api.pipelines.update');
+        Route::delete('pipelines/{id}', [RekrutmenSpaController::class, 'destroyPipeline'])->name('rekrutmen.api.pipelines.destroy');
         Route::post('stages', [RekrutmenSpaController::class, 'storeStage'])->name('rekrutmen.api.stages.store');
         Route::post('stages/reorder', [RekrutmenSpaController::class, 'reorderStages'])->name('rekrutmen.api.stages.reorder');
         Route::put('stages/{id}', [RekrutmenSpaController::class, 'updateStage'])->name('rekrutmen.api.stages.update');

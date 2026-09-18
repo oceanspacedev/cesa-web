@@ -1,14 +1,27 @@
 <template>
-  <div class="space-y-6 pb-12">
-    <!-- Top Header Title & Subtitle -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-semibold text-zinc-900 tracking-tight">
-          Pengaturan & Master Data
-        </h1>
-        <p class="text-xs text-zinc-500 mt-1">
-          Kelola master data divisi, tahapan seleksi pelamar, konfigurasi approver, integrasi AI, serta gateway email & WhatsApp
-        </p>
+  <div class="space-y-4 pb-12 font-sans">
+    <!-- Elevated Asoy Header Card -->
+    <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0">
+          <Settings class="w-5 h-5 text-ink-gray-7" />
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+              Pengaturan & Master Data
+            </h1>
+            <FBadge theme="green" variant="subtle" size="sm" class="tabular-nums font-semibold">
+              <template #prefix>
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              </template>
+              Sistem Aktif
+            </FBadge>
+          </div>
+          <p class="text-xs text-ink-gray-5 mt-0.5">
+            Kelola master data divisi, tahapan seleksi pelamar, konfigurasi approver, integrasi AI, serta gateway email & WhatsApp
+          </p>
+        </div>
       </div>
     </div>
 
@@ -190,7 +203,7 @@
               :key="div.id"
               class="hover:bg-zinc-50/80 transition-colors"
             >
-              <TableCell class="font-mono text-zinc-400 font-semibold text-xs">#{{ div.id }}</TableCell>
+              <TableCell class="tabular-nums text-zinc-400 font-semibold text-xs">#{{ div.id }}</TableCell>
               <TableCell class="font-semibold text-zinc-900 text-xs">{{ div.name }}</TableCell>
               <TableCell class="text-zinc-700 text-xs font-medium">{{ div.company_name || div.badan_usaha || div.company?.name || '-' }}</TableCell>
               <TableCell>
@@ -239,39 +252,82 @@
         class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
       >
         <div class="p-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
-                Daftar Tahapan Seleksi Pelamar (Pipeline Stages)
-              </span>
-              <span v-if="isReorderingStages" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-[#0c2340] border border-blue-200 animate-pulse">
-                <RotateCw class="w-3 h-3 animate-spin" />
-                <span>Menyimpan urutan...</span>
-              </span>
-            </div>
-            <p class="text-[11px] text-zinc-500 mt-0.5">
-              Kelola nama dan alur tahapan seleksi kandidat pada pipeline rekrutmen. Drag & drop baris untuk memindahkan urutan alur seleksi.
-            </p>
-          </div>
           <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
+              Tahapan Seleksi Pelamar
+            </span>
+            <span v-if="isReorderingStages" class="text-[11px] text-zinc-500 flex items-center gap-1">
+              <RotateCw class="w-3 h-3 animate-spin" />
+              Menyimpan...
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Pipeline Selector Dropdown -->
+            <div class="relative min-w-[170px]">
+              <select
+                v-model="selectedPipelineId"
+                class="w-full h-8 bg-white border border-zinc-200 rounded-md pl-2.5 pr-7 text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-950 appearance-none cursor-pointer"
+              >
+                <option v-for="p in pipelines" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </option>
+              </select>
+              <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            <!-- Quick Actions for selected pipeline -->
+            <Button
+              variant="outline"
+              size="sm"
+              @click="openEditPipelineModal(currentPipeline)"
+              class="h-8 w-8 p-0 text-zinc-600 hover:text-zinc-900 border-zinc-200"
+              title="Edit nama pipeline"
+            >
+              <Pencil class="w-3.5 h-3.5" />
+            </Button>
+
+            <Button
+              v-if="currentPipeline && currentPipeline.id !== 1"
+              variant="outline"
+              size="sm"
+              @click="handleDeletePipeline(currentPipeline)"
+              class="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50 border-zinc-200"
+              title="Hapus pipeline"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+            </Button>
+
+            <!-- Create New Master Pipeline Button -->
+            <Button
+              size="sm"
+              variant="outline"
+              @click="openCreatePipelineModal"
+              class="h-8 text-xs gap-1 text-zinc-700 border-zinc-200"
+            >
+              <Plus class="w-3.5 h-3.5" />
+              <span>Pipeline Baru</span>
+            </Button>
+
+            <!-- Add Stage to current pipeline -->
             <Button
               size="sm"
               variant="default"
               @click="openCreateStageModal"
-              class="h-8 text-xs bg-[#0c2340] hover:bg-[#153459] text-white gap-1.5 cursor-pointer shadow-xs"
+              class="h-8 text-xs bg-[#0c2340] hover:bg-[#153459] text-white gap-1 shadow-xs"
             >
               <Plus class="w-3.5 h-3.5" />
               <span>Tambah Tahap</span>
             </Button>
           </div>
         </div>
+
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead class="w-24">Urutan</TableHead>
+              <TableHead class="w-20">Urutan</TableHead>
               <TableHead>Nama Tahap</TableHead>
-              <TableHead>Warna Badge</TableHead>
-              <TableHead>Total Kandidat Saat Ini</TableHead>
+              <TableHead>Total Kandidat</TableHead>
               <TableHead class="text-right w-24 pr-4">Aksi</TableHead>
             </TableRow>
           </TableHeader>
@@ -290,7 +346,7 @@
                 !stage.is_locked ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
                 draggedStageIndex === idx ? 'opacity-35 bg-zinc-100 scale-[0.99]' : '',
                 dragOverStageIndex === idx && draggedStageIndex !== idx
-                  ? 'bg-blue-50/80 border-l-4 border-l-[#0c2340] ring-1 ring-blue-200'
+                  ? 'bg-blue-50/80 border-l-4 border-l-[#0c2340]'
                   : 'hover:bg-zinc-50/80'
               ]"
             >
@@ -303,9 +359,8 @@
                         ? 'text-zinc-200 cursor-not-allowed'
                         : 'text-zinc-400 group-hover:text-zinc-700 cursor-grab active:cursor-grabbing'
                     ]"
-                    :title="stage.is_locked ? 'Tahapan final terkunci di akhir alur' : 'Klik dan geser untuk memindahkan urutan alur'"
                   />
-                  <span class="w-5 h-5 rounded-full bg-zinc-100 flex items-center justify-center text-[11px] font-mono text-zinc-700">
+                  <span class="w-5 h-5 rounded-full bg-zinc-100 flex items-center justify-center text-[11px] tabular-nums font-semibold text-zinc-700">
                     {{ idx + 1 }}
                   </span>
                 </div>
@@ -316,21 +371,14 @@
                   <span
                     v-if="stage.is_locked"
                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-100 text-zinc-600 border border-zinc-200"
-                    title="Tahapan final terkunci secara sistem"
                   >
                     Final
                   </span>
                 </div>
               </TableCell>
               <TableCell>
-                <div class="flex items-center gap-2">
-                  <span class="w-3 h-3 rounded-full border border-zinc-300 shadow-2xs shrink-0" :style="{ backgroundColor: stage.color || '#3b82f6' }"></span>
-                  <span class="font-mono text-zinc-500 text-[11px]">{{ stage.color || '#3b82f6' }}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <Badge variant="navy" class="text-[10px] px-2 py-0.5">
-                  {{ stage.applications_count || 0 }} Orang
+                <Badge variant="secondary" class="text-[10px] px-2 py-0.5 font-medium">
+                  {{ stage.applications_count || 0 }} Pelamar
                 </Badge>
               </TableCell>
               <TableCell class="text-right whitespace-nowrap pr-4">
@@ -345,7 +393,7 @@
                         ? 'text-zinc-300 cursor-not-allowed'
                         : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 cursor-pointer'
                     ]"
-                    :title="stage.is_locked ? 'Tahapan final tidak dapat diubah namanya' : 'Edit Nama Tahapan'"
+                    :title="stage.is_locked ? 'Tahap final tidak dapat diedit' : 'Edit'"
                   >
                     <Pencil class="w-3.5 h-3.5" />
                   </button>
@@ -359,7 +407,7 @@
                         ? 'text-zinc-300 cursor-not-allowed'
                         : 'text-zinc-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
                     ]"
-                    :title="stage.is_locked ? 'Tahapan final tidak dapat dihapus' : 'Hapus Tahapan'"
+                    :title="stage.is_locked ? 'Tahap final tidak dapat dihapus' : 'Hapus'"
                   >
                     <Trash2 class="w-3.5 h-3.5" />
                   </button>
@@ -367,7 +415,7 @@
               </TableCell>
             </TableRow>
             <TableRow v-if="!displayedStages.length">
-              <TableCell colspan="5" class="py-12 text-center text-xs text-zinc-500">
+              <TableCell colspan="4" class="py-12 text-center text-xs text-zinc-500">
                 Belum ada tahapan pipeline terdaftar.
               </TableCell>
             </TableRow>
@@ -410,7 +458,7 @@
                 <div class="font-medium text-xs text-zinc-800">{{ appr.division?.name || appr.divisi || '-' }}</div>
                 <div class="text-[11px] text-zinc-400">{{ appr.company?.name || appr.division?.company?.name || '-' }}</div>
               </TableCell>
-              <TableCell class="text-zinc-500 font-mono text-xs">{{ appr.email }}</TableCell>
+              <TableCell class="text-zinc-500 text-xs">{{ appr.email }}</TableCell>
             </TableRow>
             <TableRow v-if="!approvers.length">
               <TableCell colspan="5" class="py-12 text-center text-xs text-zinc-500">
@@ -749,7 +797,7 @@
                   <div class="font-semibold text-xs text-zinc-900">{{ account.name }}</div>
                   <Badge v-if="account.is_default" variant="navy" class="text-[9px] px-1.5 py-0 mt-0.5">Default</Badge>
                 </TableCell>
-                <TableCell class="font-mono text-xs text-zinc-600">{{ account.phone_number || '-' }}</TableCell>
+                <TableCell class="tabular-nums text-xs text-zinc-600">{{ account.phone_number || '-' }}</TableCell>
                 <TableCell>
                   <Badge
                     :variant="account.status === 'connected' ? 'success' : (account.status === 'connecting' ? 'warning' : 'secondary')"
@@ -832,116 +880,107 @@
         </template>
       </div>
 
-      <!-- MAIL TEMPLATES TAB -->
+      <!-- MAIL TEMPLATES TAB (Master Table View) -->
       <div
         v-else-if="activeTab === 'mail_templates'"
-        class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
+        class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden font-sans"
       >
-        <div class="p-5 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
-          <div>
-            <h3 class="text-sm font-semibold text-zinc-900">Template Email Notifikasi Pelamar</h3>
-            <p class="text-xs text-zinc-500 mt-0.5">
-              Kelola template email resmi untuk undangan psikotes, jadwal wawancara, penawaran kerja (offering), dan pengumuman.
-            </p>
+        <div class="p-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xs font-semibold text-zinc-800 uppercase tracking-wider">
+              Daftar Template Email Notifikasi Pelamar
+            </span>
+            <FBadge theme="blue" variant="subtle" size="sm">
+              {{ Object.keys(mailTemplates).length }} Template
+            </FBadge>
           </div>
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            @click="saveAllMailTemplates"
-            :disabled="isSavingTemplates"
-            class="h-9 bg-[#0c2340] hover:bg-[#153459] text-white gap-1.5 shrink-0 shadow-xs"
-          >
-            <RotateCw v-if="isSavingTemplates" class="w-3.5 h-3.5 animate-spin" />
-            <span>{{ isSavingTemplates ? 'Menyimpan...' : 'Simpan Semua Template' }}</span>
-          </Button>
+          <p class="text-xs text-zinc-500">
+            Klik tombol Edit pada baris untuk menyesuaikan subjek, pesan, dan instruksi email resmi.
+          </p>
         </div>
 
-        <div class="p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <!-- Template Selector Sidebar -->
-          <div class="space-y-1.5 lg:border-r lg:border-zinc-100 lg:pr-6">
-            <label class="block text-[11px] font-semibold uppercase text-zinc-400 tracking-wider mb-2">Pilih Kategori</label>
-            <button
-              v-for="(tpl, key) in mailTemplates"
+        <Table>
+          <TableHeader>
+            <TableRow class="bg-zinc-50/30">
+              <TableHead class="w-12 text-center">#</TableHead>
+              <TableHead class="w-64">Nama Template</TableHead>
+              <TableHead class="w-36">Tahap Terkait</TableHead>
+              <TableHead>Subjek Email Resmi</TableHead>
+              <TableHead class="w-48">Tautan Aksi (CTA)</TableHead>
+              <TableHead class="text-right w-24 pr-4">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow
+              v-for="(tpl, key, idx) in mailTemplates"
               :key="key"
-              type="button"
-              @click="selectedTemplateKey = key"
-              :class="[
-                'w-full text-left px-3 py-2.5 rounded-lg text-xs transition-all cursor-pointer flex flex-col gap-1',
-                selectedTemplateKey === key
-                  ? 'bg-[#0c2340] text-white font-semibold shadow-2xs'
-                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 font-medium'
-              ]"
+              class="hover:bg-zinc-50/80 transition-colors cursor-pointer group"
+              @click="openEditTemplateModal(key, tpl)"
             >
-              <div class="flex items-center justify-between">
-                <span>{{ tpl.name }}</span>
-              </div>
-              <span
-                :class="[
-                  'text-[10px] px-1.5 py-0.5 rounded w-fit',
-                  selectedTemplateKey === key ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-100 text-zinc-500 border border-zinc-200'
-                ]"
-              >
-                Tahap: {{ tpl.stage }}
-              </span>
-            </button>
-          </div>
-
-          <!-- Template Form Editor -->
-          <div v-if="currentMailTemplate" class="lg:col-span-3 space-y-4">
-            <div class="bg-amber-50/70 border border-amber-200 rounded-lg p-3 text-[11px] text-amber-800 leading-relaxed">
-              <strong>Tag Variabel Otomatis:</strong> Gunakan <code class="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-mono font-semibold">{nama_pelamar}</code>, <code class="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-mono font-semibold">{posisi}</code>, <code class="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-mono font-semibold">{perusahaan}</code>, dan <code class="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-amber-900 font-mono font-semibold">{lokasi}</code> yang akan otomatis digantikan dengan data asli saat email dikirim.
-            </div>
-
-            <div>
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Subjek Email</label>
-              <Input
-                type="text"
-                v-model="currentMailTemplate.subject"
-                class="h-9"
-              />
-            </div>
-
-            <div>
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Label Badge Header Email</label>
-              <Input
-                type="text"
-                v-model="currentMailTemplate.badge"
-                placeholder="Misal: Tes Online / Wawancara Kerja / Job Offer"
-                class="h-9"
-              />
-            </div>
-
-            <div>
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Isi Pesan Surat (Body)</label>
-              <textarea
-                v-model="currentMailTemplate.body"
-                rows="6"
-                class="w-full bg-white border border-zinc-200 rounded-md p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 leading-relaxed transition-colors font-sans resize-none"
-              ></textarea>
-            </div>
-
-            <div v-if="currentMailTemplate.has_link">
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Teks Tombol Aksi (CTA Button)</label>
-              <Input
-                type="text"
-                v-model="currentMailTemplate.action_label"
-                placeholder="Misal: Mulai Tes Psikotes Online"
-                class="h-9"
-              />
-            </div>
-
-            <div v-if="currentMailTemplate.has_note">
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Catatan Instruksi Default</label>
-              <textarea
-                v-model="currentMailTemplate.default_note"
-                rows="2"
-                placeholder="Petunjuk teknis pengerjaan / kehadiran..."
-                class="w-full bg-white border border-zinc-200 rounded-md p-3 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-950 focus:border-zinc-950 leading-relaxed transition-colors resize-none"
-              ></textarea>
-            </div>
-          </div>
-        </div>
+              <TableCell class="text-center tabular-nums text-zinc-400 font-semibold text-xs">
+                {{ idx + 1 }}
+              </TableCell>
+              <TableCell>
+                <div class="font-semibold text-zinc-900 text-xs">
+                  {{ tpl.name }}
+                </div>
+                <span v-if="tpl.badge" class="inline-block text-[10px] text-zinc-400 mt-0.5">
+                  Badge: {{ tpl.badge }}
+                </span>
+              </TableCell>
+              <TableCell>
+                <FBadge theme="blue" variant="subtle" size="sm" class="font-medium">
+                  {{ tpl.stage }}
+                </FBadge>
+              </TableCell>
+              <TableCell>
+                <div class="text-xs text-zinc-800 font-medium truncate max-w-md" :title="tpl.subject">
+                  {{ tpl.subject }}
+                </div>
+                <p class="text-[11px] text-zinc-400 truncate max-w-md mt-0.5 line-clamp-1">
+                  {{ tpl.body }}
+                </p>
+              </TableCell>
+              <TableCell>
+                <div v-if="tpl.has_link && (tpl.action_label || tpl.action_url)" class="space-y-1">
+                  <span
+                    v-if="tpl.action_label"
+                    class="inline-flex items-center text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded shadow-2xs"
+                  >
+                    {{ tpl.action_label }}
+                  </span>
+                  <div
+                    v-if="tpl.action_url"
+                    class="text-[10.5px] text-blue-600 hover:underline truncate max-w-[200px]"
+                    :title="tpl.action_url"
+                  >
+                    {{ tpl.action_url }}
+                  </div>
+                  <div v-else class="text-[10.5px] text-zinc-400 italic">
+                    URL belum diatur
+                  </div>
+                </div>
+                <span v-else class="text-xs text-zinc-400">-</span>
+              </TableCell>
+              <TableCell class="text-right pr-4" @click.stop>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  @click="openEditTemplateModal(key, tpl)"
+                  class="h-8 text-xs text-zinc-700 hover:text-zinc-900 hover:bg-zinc-100 gap-1.5 shadow-2xs border-zinc-200"
+                >
+                  <Pencil class="w-3.5 h-3.5 text-zinc-500" />
+                  <span>Edit</span>
+                </Button>
+              </TableCell>
+            </TableRow>
+            <TableRow v-if="!Object.keys(mailTemplates).length">
+              <TableCell colspan="6" class="py-12 text-center text-xs text-zinc-400">
+                Memuat template email...
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
     </template>
 
@@ -1079,6 +1118,252 @@
         </form>
       </DialogContent>
     </Dialog>
+
+    <!-- MODAL TAMBAH / EDIT MASTER PIPELINE -->
+    <Dialog :open="pipelineModal.open" @update:open="pipelineModal.open = $event">
+      <DialogContent class="sm:max-w-[480px] p-6 bg-white rounded-2xl">
+        <DialogHeader class="space-y-1 pb-2">
+          <DialogTitle class="text-base font-bold text-zinc-900">
+            {{ pipelineModal.isEdit ? 'Ubah Master Pipeline' : 'Tambah Master Pipeline' }}
+          </DialogTitle>
+          <DialogDescription class="text-xs text-zinc-500">
+            {{ pipelineModal.isEdit ? 'Perbarui informasi master pipeline rekrutmen.' : 'Buat master alur seleksi rekrutmen baru.' }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form @submit.prevent="savePipeline" class="space-y-4 pt-2">
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-zinc-700">Nama Pipeline <span class="text-rose-500">*</span></label>
+            <Input
+              v-model="pipelineModal.form.name"
+              placeholder="Contoh: Pipeline Divisi IT"
+              class="h-9 text-xs"
+              required
+              autofocus
+            />
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="text-xs font-semibold text-zinc-700">Deskripsi (Opsional)</label>
+            <Input
+              v-model="pipelineModal.form.description"
+              placeholder="Contoh: Alur seleksi teknis posisi IT"
+              class="h-9 text-xs"
+            />
+          </div>
+
+          <div v-if="!pipelineModal.isEdit" class="space-y-1.5">
+            <label class="text-xs font-semibold text-zinc-700">Salin Tahapan Dari</label>
+            <div class="relative">
+              <select
+                v-model="pipelineModal.form.clone_from_pipeline_id"
+                class="w-full h-9 bg-white border border-zinc-200 rounded-md px-3 text-xs text-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-900 appearance-none pr-8 cursor-pointer"
+              >
+                <option :value="null">Tahapan Standar (5 Tahap)</option>
+                <option v-for="p in pipelines" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </option>
+              </select>
+              <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+
+          <DialogFooter class="pt-4 border-t border-zinc-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="pipelineModal.open = false"
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              variant="default"
+              :disabled="pipelineModal.isSubmitting"
+              class="bg-[#0c2340] hover:bg-[#153459] text-white min-w-[120px] shadow-xs"
+            >
+              <RotateCw v-if="pipelineModal.isSubmitting" class="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              <span>{{ pipelineModal.isSubmitting ? 'Menyimpan...' : (pipelineModal.isEdit ? 'Simpan Perubahan' : 'Buat Pipeline') }}</span>
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <!-- MODAL EDIT TEMPLATE EMAIL (Frappe UI inside Shadcn Dialog) -->
+    <Dialog :open="templateModal.open" @update:open="(val) => { templateModal.open = val; }">
+      <DialogContent class="sm:max-w-2xl p-6 bg-white rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader class="space-y-1.5 pb-3 border-b border-zinc-100">
+          <div class="flex items-center justify-between gap-3">
+            <DialogTitle class="text-base font-bold text-zinc-900">
+              Edit Template: {{ templateModal.form.name }}
+            </DialogTitle>
+            <FBadge theme="blue" variant="subtle" size="sm" class="mr-6">
+              Tahap: {{ templateModal.form.stage }}
+            </FBadge>
+          </div>
+          <DialogDescription class="text-xs text-zinc-500">
+            Perbarui format subjek, isi pesan surat, dan catatan instruksi untuk tahap ini.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form @submit.prevent="saveTemplateModal" class="space-y-4 pt-4">
+          <!-- Variable Tags Info Box -->
+          <div class="bg-zinc-50 border border-zinc-200/80 rounded-lg p-3 text-xs text-zinc-600 flex items-start gap-2.5">
+            <Info class="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+            <div class="space-y-1 flex-1 min-w-0">
+              <span class="font-semibold text-zinc-800 text-xs">Variabel Dinamis:</span>
+              <p class="text-[11px] text-zinc-500">
+                Gunakan placeholder berikut untuk digantikan otomatis dengan data asli:
+              </p>
+              <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                <code class="bg-white px-2 py-0.5 rounded border border-zinc-200 text-zinc-800 font-mono text-[11px] font-medium shadow-2xs">{nama_pelamar}</code>
+                <code class="bg-white px-2 py-0.5 rounded border border-zinc-200 text-zinc-800 font-mono text-[11px] font-medium shadow-2xs">{posisi}</code>
+                <code class="bg-white px-2 py-0.5 rounded border border-zinc-200 text-zinc-800 font-mono text-[11px] font-medium shadow-2xs">{perusahaan}</code>
+                <code class="bg-white px-2 py-0.5 rounded border border-zinc-200 text-zinc-800 font-mono text-[11px] font-medium shadow-2xs">{lokasi}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subjek & Badge -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="sm:col-span-2 space-y-1.5">
+              <label class="block text-xs font-semibold text-zinc-700">
+                Subjek Email <span class="text-rose-500">*</span>
+              </label>
+              <FTextInput
+                v-model="templateModal.form.subject"
+                size="sm"
+                variant="outline"
+                placeholder="Subjek email resmi..."
+                required
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="block text-xs font-semibold text-zinc-700">
+                Label Badge Header
+              </label>
+              <FTextInput
+                v-model="templateModal.form.badge"
+                size="sm"
+                variant="outline"
+                placeholder="Misal: Tes Online"
+              />
+            </div>
+          </div>
+
+          <!-- Isi Pesan (Body) -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-semibold text-zinc-700">
+                Isi Pesan Surat (Body) <span class="text-rose-500">*</span>
+              </label>
+              <span class="text-[11px] text-zinc-400">Mendukung format baris baru</span>
+            </div>
+            <FTextarea
+              v-model="templateModal.form.body"
+              size="sm"
+              variant="outline"
+              :rows="8"
+              placeholder="Isi surat resmi..."
+              required
+            />
+          </div>
+
+          <!-- Tombol Aksi & Welcome Link (CTA) -->
+          <div class="space-y-3 pt-2 border-t border-zinc-100">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="block text-xs font-semibold text-zinc-800">Tombol Aksi & Welcome Link (CTA)</label>
+                <p class="text-[11px] text-zinc-500">Sematkan tombol dan link tujuan khusus (Welcome Link, link tes, atau link wawancara) pada email pelamar.</p>
+              </div>
+              <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-700 font-medium select-none shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  v-model="templateModal.form.has_link"
+                  class="rounded border-zinc-300 text-[#0c2340] focus:ring-0 w-4 h-4 cursor-pointer"
+                />
+                <span>Aktifkan Tombol</span>
+              </label>
+            </div>
+
+            <div v-if="templateModal.form.has_link" class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-50/70 p-3.5 rounded-xl border border-zinc-200/80">
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-zinc-700">
+                  Teks Tombol Aksi (CTA Button)
+                </label>
+                <FTextInput
+                  v-model="templateModal.form.action_label"
+                  size="sm"
+                  variant="outline"
+                  placeholder="Contoh: Buka Panduan Onboarding / Mulai Tes"
+                />
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-zinc-700">
+                  Welcome Link / Tautan URL Tombol
+                </label>
+                <FTextInput
+                  v-model="templateModal.form.action_url"
+                  size="sm"
+                  variant="outline"
+                  placeholder="https://contoh.com/welcome atau link meet/asesmen"
+                />
+              </div>
+
+              <p class="sm:col-span-2 text-[11px] text-zinc-500">
+                Tautan ini akan langsung disematkan pada tombol aksi email. Pelamar dapat langsung mengklik tombol untuk membuka link tersebut.
+              </p>
+            </div>
+          </div>
+
+          <!-- Catatan Instruksi Default (Conditional) -->
+          <div
+            v-if="templateModal.form.has_note"
+            class="space-y-1.5 pt-1"
+          >
+            <label class="block text-xs font-semibold text-zinc-700">
+              Catatan Instruksi Default
+            </label>
+            <FTextarea
+              v-model="templateModal.form.default_note"
+              size="sm"
+              variant="outline"
+              :rows="3"
+              placeholder="Petunjuk teknis pengerjaan / kehadiran..."
+            />
+          </div>
+
+          <!-- Modal Footer -->
+          <DialogFooter class="pt-4 border-t border-zinc-100 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="templateModal.open = false"
+            >
+              Batal
+            </Button>
+            <FButton
+              type="submit"
+              variant="solid"
+              size="sm"
+              :loading="isSavingTemplates"
+              class="bg-[#0c2340] hover:bg-[#153459] text-white min-w-[130px] shadow-xs"
+            >
+              <template #prefix>
+                <RotateCw v-if="isSavingTemplates" class="w-3.5 h-3.5 animate-spin" />
+              </template>
+              <span>{{ isSavingTemplates ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
+            </FButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
@@ -1090,7 +1375,11 @@ import { createRequestKey } from '../lib/utils';
 import LoadingState from '../components/LoadingState.vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import 'sweetalert2/dist/sweetalert2.min.css';
+// Frappe UI Components
+import FBadge from 'frappe-ui/src/components/Badge/Badge.vue';
+import FButton from '../components/frappe/Button.vue';
+import FTextInput from '../components/frappe/TextInput.vue';
+import FTextarea from 'frappe-ui/src/components/Textarea/Textarea.vue';
 
 // Shadcn UI Components
 import { Button } from '../components/ui/button';
@@ -1100,7 +1389,7 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 
-import { Plus, Pencil, Trash2, ChevronDown, RotateCw, GripVertical } from 'lucide-vue-next';
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, RotateCw, GripVertical, Settings, GitBranch, Info } from 'lucide-vue-next';
 
 const store = useRekrutmenStore();
 const activeTab = ref('divisions');
@@ -1115,6 +1404,18 @@ const divisionModal = ref({
     name: '',
     company_id: null,
     is_active: true,
+  },
+});
+
+const pipelineModal = ref({
+  open: false,
+  isEdit: false,
+  isSubmitting: false,
+  pipelineId: null,
+  form: {
+    name: '',
+    description: '',
+    clone_from_pipeline_id: null,
   },
 });
 
@@ -1199,6 +1500,84 @@ let whatsappCreateRequest = null;
 const currentMailTemplate = computed(() => {
   return mailTemplates.value[selectedTemplateKey.value] || null;
 });
+
+const templateModal = ref({
+  open: false,
+  key: '',
+  form: {
+    name: '',
+    stage: '',
+    subject: '',
+    badge: '',
+    body: '',
+    has_link: false,
+    action_label: '',
+    action_url: '',
+    has_note: false,
+    default_note: '',
+  },
+});
+
+const openEditTemplateModal = (key, tpl) => {
+  templateModal.value = {
+    open: true,
+    key: key,
+    form: {
+      name: tpl.name || '',
+      stage: tpl.stage || '',
+      subject: tpl.subject || '',
+      badge: tpl.badge || '',
+      body: tpl.body || '',
+      has_link: !!tpl.has_link,
+      action_label: tpl.action_label || '',
+      action_url: tpl.action_url || '',
+      has_note: !!tpl.has_note,
+      default_note: tpl.default_note || '',
+    },
+  };
+};
+
+const saveTemplateModal = async () => {
+  if (!templateModal.value.key) return;
+  const key = templateModal.value.key;
+
+  mailTemplates.value[key] = {
+    ...mailTemplates.value[key],
+    ...templateModal.value.form,
+  };
+
+  isSavingTemplates.value = true;
+  try {
+    const res = await axios.post('/rekrutmen/api/settings/mail-templates', {
+      templates: mailTemplates.value,
+    });
+    templateModal.value.open = false;
+    Swal.fire({
+      title: 'Berhasil!',
+      text: res.data.message || 'Template email berhasil diperbarui.',
+      icon: 'success',
+      confirmButtonColor: '#0c2340',
+      timer: 1800,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'rounded-2xl',
+      }
+    });
+  } catch (err) {
+    Swal.fire({
+      title: 'Gagal Menyimpan',
+      text: err.response?.data?.message || 'Terjadi kesalahan saat menyimpan template.',
+      icon: 'error',
+      confirmButtonColor: '#e11d48',
+      customClass: {
+        popup: 'rounded-2xl',
+        confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold',
+      }
+    });
+  } finally {
+    isSavingTemplates.value = false;
+  }
+};
 
 const fetchMailTemplates = async () => {
   try {
@@ -1822,7 +2201,7 @@ const whatsappStatusClass = (account) => {
 };
 
 onMounted(() => {
-  store.fetchConfigurations(false).catch(() => {});
+  store.fetchConfigurations(true).catch(() => {});
   fetchAiSettings();
   fetchMailTemplates();
   fetchMailSettings();
@@ -1838,7 +2217,32 @@ watch(activeTab, (tab) => {
 });
 
 const divisions = computed(() => store.configurations?.divisions || []);
-const stages = computed(() => store.stages || store.configurations?.stages || []);
+const pipelines = computed(() => store.pipelines?.length ? store.pipelines : (store.configurations?.pipelines || []));
+const selectedPipelineId = ref(1);
+
+watch(
+  () => pipelines.value,
+  (newPipelines) => {
+    if (newPipelines && newPipelines.length > 0) {
+      if (!selectedPipelineId.value || !newPipelines.some(p => p.id === selectedPipelineId.value)) {
+        selectedPipelineId.value = newPipelines[0].id;
+      }
+    }
+  },
+  { immediate: true }
+);
+
+const currentPipeline = computed(() => {
+  return pipelines.value.find(p => p.id === selectedPipelineId.value) || pipelines.value[0] || null;
+});
+
+const stages = computed(() => {
+  if (currentPipeline.value && currentPipeline.value.stages) {
+    return currentPipeline.value.stages;
+  }
+  return store.stages || store.configurations?.stages || [];
+});
+
 const approvers = computed(() => store.configurations?.approvers || []);
 
 // Drag and drop reordering for stages
@@ -1853,8 +2257,8 @@ const displayedStages = computed(() => {
 });
 
 watch(
-  () => stages.value,
-  (newVal) => {
+  () => [stages.value, selectedPipelineId.value],
+  ([newVal]) => {
     if (!draggedStage.value && !isReorderingStages.value) {
       localStages.value = (newVal || []).map(s => ({ ...s }));
     }
@@ -1933,7 +2337,7 @@ const handleStageDrop = async (stage, targetIdx, event) => {
   isReorderingStages.value = true;
   try {
     const stageIds = list.map(s => s.id);
-    const res = await store.reorderStages(stageIds);
+    const res = await store.reorderStages(stageIds, selectedPipelineId.value);
 
     Swal.fire({
       title: 'Berhasil!',
@@ -1961,6 +2365,137 @@ const handleStageDragEnd = () => {
   draggedStage.value = null;
   draggedStageIndex.value = null;
   dragOverStageIndex.value = null;
+};
+
+// PIPELINE MANAGEMENT METHODS
+const openCreatePipelineModal = () => {
+  pipelineModal.value = {
+    open: true,
+    isEdit: false,
+    isSubmitting: false,
+    pipelineId: null,
+    form: {
+      name: '',
+      description: '',
+      clone_from_pipeline_id: selectedPipelineId.value || null,
+    },
+  };
+};
+
+const openEditPipelineModal = (pipeline) => {
+  if (!pipeline) return;
+  pipelineModal.value = {
+    open: true,
+    isEdit: true,
+    isSubmitting: false,
+    pipelineId: pipeline.id,
+    form: {
+      name: pipeline.name || '',
+      description: pipeline.description || '',
+      clone_from_pipeline_id: null,
+    },
+  };
+};
+
+const savePipeline = async () => {
+  const name = pipelineModal.value.form.name?.trim();
+  if (!name) {
+    Swal.fire({
+      title: 'Nama Pipeline Wajib Diisi',
+      text: 'Harap masukkan nama master pipeline.',
+      icon: 'warning',
+      confirmButtonColor: '#0c2340',
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+    return;
+  }
+
+  pipelineModal.value.isSubmitting = true;
+  try {
+    let res;
+    if (pipelineModal.value.isEdit) {
+      res = await store.updatePipeline(pipelineModal.value.pipelineId, {
+        name,
+        description: pipelineModal.value.form.description?.trim() || null,
+      });
+    } else {
+      res = await store.createPipeline({
+        name,
+        description: pipelineModal.value.form.description?.trim() || null,
+        clone_from_pipeline_id: pipelineModal.value.form.clone_from_pipeline_id,
+      });
+      if (res?.pipeline?.id) {
+        selectedPipelineId.value = res.pipeline.id;
+      }
+    }
+    pipelineModal.value.open = false;
+    Swal.fire({
+      title: 'Berhasil!',
+      text: res.message || 'Master pipeline berhasil disimpan.',
+      icon: 'success',
+      confirmButtonColor: '#0c2340',
+      timer: 2000,
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+  } catch (err) {
+    Swal.fire({
+      title: 'Gagal Menyimpan Pipeline',
+      text: err.response?.data?.message || 'Terjadi kesalahan saat menyimpan master pipeline.',
+      icon: 'error',
+      confirmButtonColor: '#e11d48',
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+  } finally {
+    pipelineModal.value.isSubmitting = false;
+  }
+};
+
+const handleDeletePipeline = async (pipeline) => {
+  if (!pipeline || pipeline.id === 1) {
+    Swal.fire({
+      title: 'Tidak Dapat Dihapus',
+      text: 'Pipeline standar utama tidak dapat dihapus.',
+      icon: 'info',
+      confirmButtonColor: '#0c2340',
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+    return;
+  }
+
+  const result = await Swal.fire({
+    title: 'Hapus Master Pipeline?',
+    text: `Apakah Anda yakin ingin menghapus pipeline "${pipeline.name}" beserta seluruh tahapan yang ada di dalamnya?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Ya, Hapus Pipeline',
+    cancelButtonText: 'Batal',
+    customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold', cancelButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+  });
+
+  if (!result.isConfirmed) return;
+
+  try {
+    const res = await store.deletePipeline(pipeline.id);
+    selectedPipelineId.value = 1;
+    Swal.fire({
+      title: 'Berhasil Dihapus!',
+      text: res?.message || 'Master pipeline telah dihapus.',
+      icon: 'success',
+      confirmButtonColor: '#0c2340',
+      timer: 2000,
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+  } catch (err) {
+    Swal.fire({
+      title: 'Gagal Menghapus Pipeline',
+      text: err.response?.data?.message || 'Terjadi kesalahan saat menghapus master pipeline.',
+      icon: 'error',
+      confirmButtonColor: '#e11d48',
+      customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-lg px-4 py-2 text-xs font-semibold' },
+    });
+  }
 };
 
 const divisionCompanies = computed(() => {
@@ -2160,7 +2695,10 @@ const saveStage = async () => {
     if (stageModal.value.isEdit) {
       res = await store.updateStage(stageModal.value.stageId, { name });
     } else {
-      res = await store.createStage({ name });
+      res = await store.createStage({
+        name,
+        rekrutmen_pipeline_id: selectedPipelineId.value || 1,
+      });
     }
     stageModal.value.open = false;
     Swal.fire({

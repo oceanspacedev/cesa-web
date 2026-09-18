@@ -97,6 +97,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 '2026_09_13_180128_rekrutmen_add_whatsapp_management_permission',
                 '2026_09_13_181639_rekrutmen_add_connection_request_key_to_whatsapp_accounts',
                 '2026_09_13_225310_rekrutmen_add_file_disks_to_recruitment_tables',
+                '2026_09_14_093000_rekrutmen_grant_whatsapp_management_permission',
             ])
             ->runsMigrations()
             ->runsSeeders()

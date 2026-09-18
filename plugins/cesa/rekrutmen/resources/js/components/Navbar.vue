@@ -22,82 +22,62 @@
         <nav class="hidden md:flex items-center justify-center gap-6 lg:gap-8 text-xs absolute inset-x-0 mx-auto w-fit z-0 pointer-events-none [&>*]:pointer-events-auto">
           <router-link
             to="/admin/job-postings"
-            class="relative py-1 text-xs font-medium transition-all inline-flex flex-col items-center"
+            class="py-1 text-xs font-medium transition-colors"
             :class="[
               isActive('/admin/job-postings')
                 ? 'text-[#0c2340] font-semibold'
                 : 'text-zinc-500 hover:text-zinc-900'
             ]"
           >
-            <span>Lowongan Kerja</span>
-            <span
-              v-if="isActive('/admin/job-postings')"
-              class="absolute -bottom-2 left-0 right-0 h-[2px] bg-[#0c2340] rounded-full"
-            ></span>
+            Lowongan Kerja
           </router-link>
 
           <router-link
             to="/admin/job-applications"
-            class="relative py-1 text-xs font-medium transition-all inline-flex flex-col items-center"
+            class="py-1 text-xs font-medium transition-colors"
             :class="[
               isActive('/admin/job-applications')
                 ? 'text-[#0c2340] font-semibold'
                 : 'text-zinc-500 hover:text-zinc-900'
             ]"
           >
-            <span>Data Pelamar</span>
-            <span
-              v-if="isActive('/admin/job-applications')"
-              class="absolute -bottom-2 left-0 right-0 h-[2px] bg-[#0c2340] rounded-full"
-            ></span>
+            Data Pelamar
           </router-link>
 
           <router-link
             to="/admin/request-man-powers"
-            class="relative py-1 text-xs font-medium transition-all inline-flex flex-col items-center"
+            class="py-1 text-xs font-medium transition-colors"
             :class="[
               isActive('/admin/request-man-powers')
                 ? 'text-[#0c2340] font-semibold'
                 : 'text-zinc-500 hover:text-zinc-900'
             ]"
           >
-            <span>Permintaan FPTK</span>
-            <span
-              v-if="isActive('/admin/request-man-powers')"
-              class="absolute -bottom-2 left-0 right-0 h-[2px] bg-[#0c2340] rounded-full"
-            ></span>
+            Permintaan FPTK
           </router-link>
 
           <router-link
             to="/admin/recruitment-progress"
-            class="relative py-1 text-xs font-medium transition-all inline-flex flex-col items-center"
+            class="py-1 text-xs font-medium transition-colors"
             :class="[
               isActive('/admin/recruitment-progress')
                 ? 'text-[#0c2340] font-semibold'
                 : 'text-zinc-500 hover:text-zinc-900'
             ]"
           >
-            <span>Monitoring & Progress</span>
-            <span
-              v-if="isActive('/admin/recruitment-progress')"
-              class="absolute -bottom-2 left-0 right-0 h-[2px] bg-[#0c2340] rounded-full"
-            ></span>
+            Monitoring & Progress
           </router-link>
 
           <router-link
             to="/admin/configurations"
-            class="relative py-1 text-xs font-medium transition-all inline-flex flex-col items-center"
+            class="py-1 text-xs font-medium transition-colors"
             :class="[
               isActive('/admin/configurations')
                 ? 'text-[#0c2340] font-semibold'
                 : 'text-zinc-500 hover:text-zinc-900'
             ]"
           >
-            <span>Master Data</span>
-            <span
-              v-if="isActive('/admin/configurations')"
-              class="absolute -bottom-2 left-0 right-0 h-[2px] bg-[#0c2340] rounded-full"
-            ></span>
+            Master Data
           </router-link>
         </nav>
 

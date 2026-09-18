@@ -1,169 +1,245 @@
 <template>
-  <div class="space-y-6">
-    <!-- Header Title & Action -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-zinc-200">
-      <div>
-        <h1 class="text-xl font-bold tracking-tight text-zinc-900 flex items-center gap-2">
-          Dashboard Rekrutmen
-        </h1>
-        <p class="text-xs text-zinc-500 mt-1">
-          Pantau seluruh aktivitas rekrutmen karyawan, lowongan aktif, permintaan man power, dan pipeline pelamar secara real-time.
-        </p>
+  <div class="space-y-4 pb-12 font-sans">
+    <!-- Elevated Asoy Header Card -->
+    <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0">
+          <LayoutDashboard class="w-5 h-5 text-ink-gray-7" />
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+              Dashboard Rekrutmen
+            </h1>
+            <FBadge theme="green" variant="subtle" size="sm" class="tabular-nums font-semibold">
+              <template #prefix>
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              </template>
+              Live Monitoring
+            </FBadge>
+          </div>
+          <p class="text-xs text-ink-gray-5 mt-0.5">
+            Pantau seluruh aktivitas rekrutmen karyawan, lowongan aktif, permintaan man power, dan pipeline pelamar secara real-time.
+          </p>
+        </div>
       </div>
-      <div class="flex items-center gap-2">
+
+      <div class="flex items-center gap-2 shrink-0">
         <router-link to="/admin/job-applications">
-          <Button
-            variant="default"
-            size="sm"
-            class="h-8 bg-zinc-900 hover:bg-zinc-800 text-white gap-2 text-xs"
-          >
-            <Users class="w-3.5 h-3.5" />
-            <span>Buka Kanban Board</span>
-          </Button>
+          <FButton variant="solid" size="sm">
+            <template #prefix>
+              <KanbanSquare class="w-3.5 h-3.5" />
+            </template>
+            Buka Kanban Board
+          </FButton>
         </router-link>
       </div>
     </div>
 
-    <!-- Stat Cards Grid -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <StatCard
-        title="Lowongan Aktif"
-        :value="data?.stats?.active_postings ?? 0"
-        :subtext="`dari total ${data?.stats?.total_postings ?? 0} lowongan`"
-        :icon="Briefcase"
-        iconColor="text-zinc-400"
-      />
-      <StatCard
-        title="Total Pelamar Masuk"
-        :value="data?.stats?.total_applications ?? 0"
-        subtext="seluruh posisi"
-        :icon="Users"
-        iconColor="text-zinc-400"
-      />
-      <StatCard
-        title="Permintaan Man Power"
-        :value="data?.stats?.total_requests ?? 0"
-        subtext="FPTK terdaftar"
-        :icon="FileSpreadsheet"
-        iconColor="text-zinc-400"
-      />
-      <StatCard
-        title="FPTK Menunggu Review"
-        :value="data?.stats?.pending_requests ?? 0"
-        subtext="butuh tindakan"
-        :icon="Clock"
-        iconColor="text-amber-500"
-      />
+    <!-- Calibrated KPI Summary Cards (py-4 px-4) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Lowongan Aktif</span>
+          <span class="text-xl font-bold text-emerald-700 mt-1 block tabular-nums">
+            {{ data?.stats?.active_postings ?? 0 }}
+          </span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">
+            dari total {{ data?.stats?.total_postings ?? 0 }} lowongan
+          </span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-green-2 text-surface-green-3 flex items-center justify-center shrink-0">
+          <Briefcase class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Total Pelamar Masuk</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">
+            {{ data?.stats?.total_applications ?? 0 }}
+          </span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Seluruh posisi terdaftar</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-blue-2 text-surface-blue-3 flex items-center justify-center shrink-0">
+          <Users class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Permintaan Man Power</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">
+            {{ data?.stats?.total_requests ?? 0 }}
+          </span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Total FPTK dibuat</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-ink-gray-7 flex items-center justify-center shrink-0">
+          <FileSpreadsheet class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
+
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">FPTK Butuh Review</span>
+          <span class="text-xl font-bold text-amber-700 mt-1 block tabular-nums">
+            {{ data?.stats?.pending_requests ?? 0 }}
+          </span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Menunggu persetujuan</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-amber-600 flex items-center justify-center shrink-0">
+          <Clock class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
     </div>
 
     <!-- Two Columns: Pipeline Stages Distribution & Recent Applications -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Pipeline Distribution Card -->
-      <Card class="flex flex-col">
-        <CardHeader class="pb-3 border-b border-zinc-100 flex flex-row items-center justify-between">
-          <CardTitle class="text-sm font-semibold text-zinc-900">Distribusi Tahapan Pipeline</CardTitle>
-          <router-link to="/admin/job-applications" class="text-xs text-zinc-500 hover:text-zinc-900 font-medium">
+      <div class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col">
+        <div class="p-3.5 border-b border-outline-gray-1 flex items-center justify-between">
+          <h2 class="text-xs font-bold text-ink-gray-9 uppercase tracking-wider">Distribusi Tahapan Pipeline</h2>
+          <router-link to="/admin/job-applications" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
             Lihat Semua &rarr;
           </router-link>
-        </CardHeader>
+        </div>
 
-        <CardContent class="pt-4 flex-1 overflow-y-auto max-h-80 no-scrollbar space-y-2">
+        <div class="p-3.5 flex-1 overflow-y-auto max-h-96 space-y-2">
           <div
             v-for="stage in data?.stages_distribution"
             :key="stage.id"
-            class="flex items-center justify-between p-2.5 rounded-lg bg-zinc-50 border border-zinc-200/80 hover:border-zinc-300 transition-colors"
+            class="flex items-center justify-between p-2.5 rounded-lg bg-surface-gray-1 border border-outline-gray-1 hover:border-outline-gray-2 transition-colors"
           >
             <div class="flex items-center gap-2.5">
               <span
-                class="w-2.5 h-2.5 rounded-full"
-                :style="{ backgroundColor: stage.color || '#18181b' }"
+                class="w-2.5 h-2.5 rounded-full shrink-0"
+                :style="{ backgroundColor: stage.color || '#0c2340' }"
               ></span>
-              <span class="text-xs font-medium text-zinc-800">{{ stage.name }}</span>
+              <span class="text-xs font-medium text-ink-gray-9">{{ stage.name }}</span>
             </div>
-            <Badge variant="outline" class="text-xs font-medium bg-white">
+            <FBadge theme="gray" size="sm" class="tabular-nums">
               {{ stage.job_applications_count }} Pelamar
-            </Badge>
+            </FBadge>
           </div>
-          <div v-if="!data?.stages_distribution?.length" class="text-xs text-zinc-400 text-center py-8">
+          <div v-if="!data?.stages_distribution?.length" class="text-xs text-ink-gray-4 text-center py-8">
             Belum ada data stage pipeline.
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <!-- Recent Applications List -->
-      <Card class="lg:col-span-2 flex flex-col">
-        <CardHeader class="pb-3 border-b border-zinc-100 flex flex-row items-center justify-between">
-          <CardTitle class="text-sm font-semibold text-zinc-900">Pelamar Terbaru</CardTitle>
-          <router-link to="/admin/job-applications" class="text-xs text-zinc-500 hover:text-zinc-900 font-medium">
-            Kelola Pelamar &rarr;
+      <!-- Recent Applications (Card Feed - No Table Layout) -->
+      <div class="lg:col-span-2 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col">
+        <div class="p-3.5 border-b border-outline-gray-1 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-bold text-ink-gray-9 uppercase tracking-wider">Pelamar Terbaru</h2>
+            <span class="text-xs text-ink-gray-4">({{ data?.recent_applications?.length || 0 }})</span>
+          </div>
+          <router-link to="/admin/job-applications" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+            Kelola Semua Pelamar &rarr;
           </router-link>
-        </CardHeader>
+        </div>
 
-        <CardContent class="p-0 flex-1 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead class="font-medium text-zinc-600">Nama Pelamar</TableHead>
-                <TableHead class="font-medium text-zinc-600">Posisi Dilamar</TableHead>
-                <TableHead class="font-medium text-zinc-600">Tahapan</TableHead>
-                <TableHead class="font-medium text-zinc-600 text-right">Tanggal Masuk</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow
-                v-for="app in data?.recent_applications"
-                :key="app.id"
-                class="hover:bg-zinc-50/80 transition-colors"
+        <div class="p-3.5 flex-1 overflow-y-auto max-h-96 space-y-2.5">
+          <div
+            v-for="app in data?.recent_applications"
+            :key="app.id"
+            @click="navigateToApplication(app)"
+            class="p-3 rounded-lg bg-surface-white border border-outline-gray-2 hover:border-outline-gray-3 hover:shadow-2xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
+          >
+            <!-- Left: Avatar & Candidate Info -->
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center font-bold text-xs text-blue-700 shrink-0">
+                {{ getInitials(app.name) }}
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-ink-gray-9 group-hover:text-blue-600 transition-colors truncate">
+                  {{ app.name }}
+                </div>
+                <div class="text-[11px] text-ink-gray-5 truncate">
+                  {{ app.email }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Middle: Applied Position -->
+            <div class="min-w-0 flex-1 sm:px-4">
+              <span class="text-[10px] text-ink-gray-4 block">Posisi Dilamar:</span>
+              <span class="text-xs font-medium text-ink-gray-8 truncate block">
+                {{ app.job_posting?.title || '-' }}
+              </span>
+            </div>
+
+            <!-- Right: Stage Badge & Date -->
+            <div class="flex items-center sm:flex-col sm:items-end justify-between gap-1 shrink-0">
+              <span
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border"
+                :style="{
+                  backgroundColor: `${app.stage?.color || '#3b82f6'}15`,
+                  borderColor: `${app.stage?.color || '#3b82f6'}40`,
+                  color: app.stage?.color || '#1e40af'
+                }"
               >
-                <TableCell>
-                  <div class="font-semibold text-zinc-900">{{ app.name }}</div>
-                  <div class="text-[11px] text-zinc-400 font-mono">{{ app.email }}</div>
-                </TableCell>
-                <TableCell class="font-medium text-zinc-700">
-                  {{ app.job_posting?.title || '-' }}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" class="text-[11px] font-medium gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: app.stage?.color || '#71717a' }"></span>
-                    {{ app.stage?.name || 'Review' }}
-                  </Badge>
-                </TableCell>
-                <TableCell class="text-right text-xs text-zinc-500">
-                  {{ formatDate(app.created_at) }}
-                </TableCell>
-              </TableRow>
-              <TableRow v-if="!data?.recent_applications?.length">
-                <TableCell colspan="4" class="py-8 text-center text-xs text-zinc-400">
-                  Belum ada pelamar baru yang masuk.
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                <span class="w-1.5 h-1.5 rounded-full" :style="{ backgroundColor: app.stage?.color || '#3b82f6' }"></span>
+                {{ app.stage?.name || 'Review' }}
+              </span>
+              <span class="text-[11px] text-ink-gray-4 tabular-nums">
+                {{ formatDate(app.created_at) }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="!data?.recent_applications?.length" class="text-center py-12 text-xs text-ink-gray-4">
+            Belum ada pelamar baru yang masuk.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted } from 'vue';
-import { Briefcase, Users, FileSpreadsheet, Clock } from 'lucide-vue-next';
-import StatCard from '../components/StatCard.vue';
+import { useRouter } from 'vue-router';
+import {
+  Briefcase,
+  Users,
+  FileSpreadsheet,
+  Clock,
+  LayoutDashboard,
+  KanbanSquare,
+} from 'lucide-vue-next';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 
-// Shadcn UI Components
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '../components/ui/table';
+// Frappe UI Components
+import FButton from '../components/frappe/Button.vue';
+import FBadge from 'frappe-ui/src/components/Badge/Badge.vue';
 
 const store = useRekrutmenStore();
+const router = useRouter();
 const data = computed(() => store.dashboardData);
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
   const d = new Date(dateStr);
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const navigateToApplication = (app) => {
+  if (!app?.id) return;
+  router.push({
+    path: '/admin/job-applications',
+    query: {
+      application_id: app.id,
+      ...(app.job_posting_id || app.job_posting?.id ? { job_id: app.job_posting_id || app.job_posting.id } : {}),
+    }
+  });
 };
 
 onMounted(() => {

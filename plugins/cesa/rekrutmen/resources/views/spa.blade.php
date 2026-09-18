@@ -15,7 +15,7 @@
     </style>
     @vite(['resources/css/app.css', 'plugins/cesa/rekrutmen/resources/js/app.js'])
 </head>
-<body class="h-full antialiased bg-slate-50 text-slate-900 overflow-x-hidden">
+<body class="rekrutmen-spa h-full antialiased bg-slate-50 text-slate-900 overflow-x-hidden">
     <div id="rekrutmen-app" data-user="{{ json_encode($user) }}" data-plugins="{{ json_encode($plugins ?? []) }}"></div>
 </body>
 </html>

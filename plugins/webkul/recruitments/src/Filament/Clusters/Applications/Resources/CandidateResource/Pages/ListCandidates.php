@@ -130,7 +130,6 @@ class ListCandidates extends ListRecords
                         ->orderBy('recruitments_candidates.created_at', 'desc');
                 }),
             'created_recently' => PresetView::make(__('recruitments::filament/clusters/applications/resources/candidate/pages/list-candidate.tabs.created-recently'))
-                ->icon('heroicon-s-sparkles')
                 ->modifyQueryUsing(function (Builder $query) {
                     return $query
                         ->join('recruitments_applicants', 'recruitments_applicants.candidate_id', '=', 'recruitments_candidates.id')

@@ -1,77 +1,95 @@
 <template>
-  <div class="space-y-6">
-    <div class="pb-2 border-b border-zinc-200">
-      <h1 class="text-xl font-bold tracking-tight text-zinc-900 flex items-center gap-2">
-        Pengaturan Master Rekrutmen
-      </h1>
-      <p class="text-xs text-zinc-500 mt-1">
-        Konfigurasi pipeline tahapan seleksi, divisi terdaftar, dan parameter operasional.
-      </p>
+  <div class="space-y-4 pb-12 font-sans">
+    <!-- Elevated Asoy Header Card -->
+    <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0">
+          <Settings class="w-5 h-5 text-ink-gray-7" />
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+              Pengaturan Master Rekrutmen
+            </h1>
+            <FBadge theme="green" variant="subtle" size="sm" class="tabular-nums font-semibold">
+              <template #prefix>
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              </template>
+              Sistem Aktif
+            </FBadge>
+          </div>
+          <p class="text-xs text-ink-gray-5 mt-0.5">
+            Konfigurasi pipeline tahapan seleksi, divisi terdaftar, dan parameter operasional.
+          </p>
+        </div>
+      </div>
     </div>
 
-    <!-- Master Data Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Master Data Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Pipeline Stages List -->
-      <Card class="flex flex-col">
-        <CardHeader class="pb-3 border-b border-zinc-100 flex flex-row items-center justify-between">
-          <CardTitle class="text-sm font-semibold text-zinc-900">Tahapan Seleksi Pipeline</CardTitle>
-          <Badge variant="secondary" class="text-xs font-medium">
+      <div class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col">
+        <div class="p-3.5 border-b border-outline-gray-1 flex items-center justify-between">
+          <h2 class="text-xs font-bold text-ink-gray-9 uppercase tracking-wider">Tahapan Seleksi Pipeline</h2>
+          <FBadge theme="gray" size="sm" class="tabular-nums">
             {{ masterData?.stages?.length || 0 }} Tahap
-          </Badge>
-        </CardHeader>
-        <CardContent class="pt-4 space-y-2 max-h-96 overflow-y-auto no-scrollbar">
+          </FBadge>
+        </div>
+        <div class="p-3.5 space-y-2 max-h-96 overflow-y-auto">
           <div
             v-for="(stage, idx) in masterData?.stages"
             :key="stage.id"
-            class="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-200/80 rounded-lg hover:border-zinc-300 transition-colors"
+            class="flex items-center justify-between p-3 bg-surface-gray-1 border border-outline-gray-1 rounded-lg hover:border-outline-gray-2 transition-colors"
           >
             <div class="flex items-center gap-3">
-              <span class="text-xs font-mono text-zinc-400 w-4">{{ idx + 1 }}.</span>
-              <span class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: stage.color || '#18181b' }"></span>
-              <span class="text-xs font-semibold text-zinc-900">{{ stage.name }}</span>
+              <span class="text-xs tabular-nums text-ink-gray-4 w-4">{{ idx + 1 }}.</span>
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: stage.color || '#0c2340' }"></span>
+              <span class="text-xs font-semibold text-ink-gray-9">{{ stage.name }}</span>
             </div>
-            <Badge variant="outline" class="text-[10px] font-mono text-zinc-500 bg-white">
+            <FBadge theme="gray" size="sm" class="tabular-nums text-[10px]">
               Urutan #{{ stage.sort_order }}
-            </Badge>
+            </FBadge>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <!-- Divisions List -->
-      <Card class="flex flex-col">
-        <CardHeader class="pb-3 border-b border-zinc-100 flex flex-row items-center justify-between">
-          <CardTitle class="text-sm font-semibold text-zinc-900">Divisi Terdaftar</CardTitle>
-          <Badge variant="secondary" class="text-xs font-medium">
+      <div class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col">
+        <div class="p-3.5 border-b border-outline-gray-1 flex items-center justify-between">
+          <h2 class="text-xs font-bold text-ink-gray-9 uppercase tracking-wider">Divisi Terdaftar</h2>
+          <FBadge theme="gray" size="sm" class="tabular-nums">
             {{ masterData?.divisions?.length || 0 }} Divisi
-          </Badge>
-        </CardHeader>
-        <CardContent class="pt-4 space-y-2 max-h-96 overflow-y-auto no-scrollbar">
+          </FBadge>
+        </div>
+        <div class="p-3.5 space-y-2 max-h-96 overflow-y-auto">
           <div
             v-for="div in masterData?.divisions"
             :key="div.id"
-            class="flex items-center justify-between p-3 bg-zinc-50 border border-zinc-200/80 rounded-lg hover:border-zinc-300 transition-colors"
+            class="flex items-center justify-between p-3 bg-surface-gray-1 border border-outline-gray-1 rounded-lg hover:border-outline-gray-2 transition-colors"
           >
             <div>
-              <span class="text-xs font-semibold text-zinc-900">{{ div.name }}</span>
-              <div class="text-[11px] text-zinc-500 mt-0.5">{{ div.company_name || div.badan_usaha || div.company?.name || '-' }}</div>
+              <span class="text-xs font-semibold text-ink-gray-9">{{ div.name }}</span>
+              <div class="text-[11px] text-ink-gray-5 mt-0.5">
+                {{ div.company_name || div.badan_usaha || div.company?.name || '-' }}
+              </div>
             </div>
-            <Badge variant="success" class="text-[10px] font-medium">
+            <FBadge theme="green" size="sm" class="text-[10px]">
               Aktif
-            </Badge>
+            </FBadge>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted } from 'vue';
+import { Settings } from 'lucide-vue-next';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 
-// Shadcn UI Components
-import { Badge } from '../components/ui/badge';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+// Frappe UI Components
+import FBadge from 'frappe-ui/src/components/Badge/Badge.vue';
 
 const store = useRekrutmenStore();
 const masterData = computed(() => store.configurations);

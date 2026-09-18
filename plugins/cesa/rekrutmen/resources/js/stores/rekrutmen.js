@@ -8,6 +8,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     companies: [],
     applications: [],
     stages: [],
+    pipelines: [],
     activeJob: null,
     progressData: null,
     progressReport: null,
@@ -81,6 +82,13 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
           this.postings = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
           if (res.data.companies && Array.isArray(res.data.companies)) {
             this.companies = res.data.companies;
+          }
+          if (res.data.pipelines && Array.isArray(res.data.pipelines)) {
+            const currentPipelines = new Map(this.pipelines.map(pipeline => [String(pipeline.id), pipeline]));
+            this.pipelines = res.data.pipelines.map(pipeline => ({
+              ...currentPipelines.get(String(pipeline.id)),
+              ...pipeline,
+            }));
           }
         }
       } catch (err) {
@@ -367,8 +375,8 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         if (res.data) {
           this.configurationsData = res.data;
           this.configurations = res.data;
-          if (res.data.stages) {
-            this.stages = res.data.stages;
+          if (res.data.pipelines) {
+            this.pipelines = res.data.pipelines;
           }
         }
       } catch (err) {
@@ -377,6 +385,24 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         this.loading.configurations = false;
       }
       return this.configurations;
+    },
+
+    async createPipeline(payload) {
+      const res = await axios.post('/rekrutmen/api/pipelines', payload);
+      await this.fetchConfigurations(true);
+      return res.data;
+    },
+
+    async updatePipeline(id, payload) {
+      const res = await axios.put(`/rekrutmen/api/pipelines/${id}`, payload);
+      await this.fetchConfigurations(true);
+      return res.data;
+    },
+
+    async deletePipeline(id) {
+      const res = await axios.delete(`/rekrutmen/api/pipelines/${id}`);
+      await this.fetchConfigurations(true);
+      return res.data;
     },
 
     async createDivision(payload) {
@@ -415,34 +441,27 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       return res.data;
     },
 
-    async reorderStages(stageIds) {
-      if (Array.isArray(this.stages) && this.stages.length) {
-        const idMap = new Map(stageIds.map((id, idx) => [Number(id), idx]));
-        this.stages.sort((a, b) => {
-          const orderA = idMap.has(Number(a.id)) ? idMap.get(Number(a.id)) : 999;
-          const orderB = idMap.has(Number(b.id)) ? idMap.get(Number(b.id)) : 999;
-          return orderA - orderB;
-        });
-        this.stages.forEach((s, idx) => {
-          s.order_column = idx + 1;
-        });
+    async reorderStages(stageIds, pipelineId = null) {
+      const payload = { stage_ids: stageIds };
+      if (pipelineId) {
+        payload.pipeline_id = pipelineId;
+        payload.rekrutmen_pipeline_id = pipelineId;
       }
 
-      const res = await axios.post('/rekrutmen/api/stages/reorder', {
-        stage_ids: stageIds,
-      });
+      const res = await axios.post('/rekrutmen/api/stages/reorder', payload);
 
-      if (res.data?.stages && Array.isArray(this.stages)) {
-        const currentStagesMap = new Map(this.stages.map(s => [s.id, s]));
-        this.stages = res.data.stages.map(serverStage => {
-          const current = currentStagesMap.get(serverStage.id) || {};
-          return {
-            ...current,
+      if (Array.isArray(res.data?.stages)) {
+        const currentStages = new Map(this.stages.map(stage => [String(stage.id), stage]));
+        const returnedStageIds = new Set(res.data.stages.map(stage => String(stage.id)));
+        this.stages = [
+          ...this.stages.filter(stage => !returnedStageIds.has(String(stage.id))),
+          ...res.data.stages.map(serverStage => ({
+            ...currentStages.get(String(serverStage.id)),
             ...serverStage,
-            order_column: serverStage.order_column,
-          };
-        });
+          })),
+        ];
       }
+      await this.fetchConfigurations(true);
       return res.data;
     }
   }

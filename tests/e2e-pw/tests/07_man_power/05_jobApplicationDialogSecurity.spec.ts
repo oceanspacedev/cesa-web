@@ -21,6 +21,7 @@ test.beforeAll(async () => {
     const result = await build({
         root: repositoryRoot,
         configFile: false,
+        resolve: { alias: { "frappe-ui/src": path.join(repositoryRoot, "node_modules/frappe-ui/src") } },
         logLevel: "error",
         plugins: [
             {
@@ -85,7 +86,7 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
         const request = route.request();
         const pathname = new URL(request.url()).pathname;
         if (request.isNavigationRequest()) {
-            await route.fulfill({ contentType: "text/html", body: '<html><body><div id="app"></div></body></html>' });
+            await route.fulfill({ contentType: "text/html", body: '<html><body class="rekrutmen-spa"><div id="app"></div></body></html>' });
         } else if (pathname === "/rekrutmen/api/applications") {
             await route.fulfill({ json: {
                 applications: [application],
@@ -106,7 +107,7 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
     await page.goto(`${origin}/admin/job-applications${jobTitle ? "?job_id=7" : ""}`);
     await page.addStyleTag({ content: styles });
     await page.addScriptTag({ content: javascript });
-    const candidateRow = page.getByRole("row").filter({ hasText: "candidate@example.test" });
+    const candidateRow = page.getByRole("group").filter({ hasText: "candidate@example.test" });
     await expect(candidateRow).toBeVisible();
     return { candidateRow, evaluationRequests, finishEvaluation };
 }
@@ -120,7 +121,7 @@ for (const [scenario, candidateName] of [["ordinary", "BUDI SANTOSO"], ["HTML-sh
     test(`selected candidate evaluation renders ${scenario} names literally in every dialog`, async ({ page }) => {
         const { candidateRow, evaluationRequests, finishEvaluation } = await mountApplications(page, candidateName);
         await candidateRow.getByRole("checkbox").check();
-        const evaluateButton = page.getByRole("button", { name: "Evaluasi AI (1 Terpilih)", exact: true }).first();
+        const evaluateButton = page.getByRole("button", { name: "Evaluasi AI (1)", exact: true }).first();
         await evaluateButton.click();
 
         await expect(page.locator(".swal2-title")).toHaveText(`Evaluasi AI: ${candidateName}?`);
@@ -165,7 +166,7 @@ test("individual evaluation treats candidate names and API success messages as t
 test("filtered evaluation renders an HTML-shaped job title literally", async ({ page }) => {
     const jobTitle = `ENGINEER ${maliciousName}`;
     const { evaluationRequests, finishEvaluation } = await mountApplications(page, "BUDI SANTOSO", jobTitle);
-    await page.getByRole("button", { name: "Evaluasi Kualifikasi", exact: true }).click();
+    await page.getByRole("button", { name: "Evaluasi AI", exact: true }).first().click();
     await expect(page.locator(".swal2-title")).toHaveText(`Screening AI: ${jobTitle}`);
     await expect(page.locator(".swal2-html-container b")).toHaveText(jobTitle);
     await expectNoInjectedMarkup(page);

@@ -1,38 +1,50 @@
 <template>
-  <div class="space-y-6 pb-12">
-    <!-- Top Header Title & Action Button -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-2.5">
-          <h1 class="text-xl font-semibold text-zinc-900 tracking-tight">
-            Permintaan Tenaga Kerja (FPTK)
-          </h1>
-          <Badge variant="outline" class="font-mono text-[11px] text-zinc-600 bg-zinc-50 border-zinc-200">
-            {{ requests.length }} Pengajuan
-          </Badge>
+  <div class="space-y-4 pb-12">
+    <!-- Top Header: Title & Primary Actions (Elevated "Asoy" Card) -->
+    <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3.5">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0 text-ink-gray-8 shadow-2xs">
+          <FileSpreadsheet class="w-5 h-5 stroke-[1.75]" />
         </div>
-        <p class="text-xs text-zinc-500 mt-1">
-          Kelola dan pantau permohonan penambahan personil (Manpower Request) dari seluruh cabang dan divisi
-        </p>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+              Permintaan Tenaga Kerja (FPTK)
+            </h1>
+            <FBadge theme="blue" variant="subtle" size="sm" class="tabular-nums font-semibold">
+              <template #prefix>
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></span>
+              </template>
+              {{ requests.length }} Pengajuan
+            </FBadge>
+          </div>
+          <p class="text-xs text-ink-gray-5 mt-0.5">
+            Kelola dan pantau permohonan penambahan personil (Manpower Request) dari seluruh cabang dan divisi
+          </p>
+        </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <Button
+      <div class="flex items-center gap-2 shrink-0">
+        <FButton
+          theme="gray"
           variant="outline"
           size="sm"
+          :icon-left="RotateCw"
+          :loading="isRefreshing"
           @click="refreshData"
-          :disabled="isRefreshing"
-          class="text-xs h-8 text-zinc-700 hover:text-zinc-900"
         >
-          <RotateCw :class="['w-3.5 h-3.5 mr-1.5', isRefreshing ? 'animate-spin' : '']" />
-          <span>Segarkan</span>
-        </Button>
+          Segarkan
+        </FButton>
 
-        <a href="/man-power" target="_blank" class="inline-flex">
-          <Button size="sm" variant="default" class="bg-[#0c2340] hover:bg-[#153459] text-white text-xs h-8 gap-1.5 shadow-xs">
-            <Plus class="w-3.5 h-3.5" />
-            <span>Buat FPTK Baru</span>
-          </Button>
+        <a href="/man-power" target="_blank">
+          <FButton
+            theme="gray"
+            variant="solid"
+            size="sm"
+            :icon-left="Plus"
+          >
+            Buat FPTK Baru
+          </FButton>
         </a>
       </div>
     </div>
@@ -40,31 +52,28 @@
     <!-- Floating Toast Notification -->
     <teleport to="body">
       <transition
-        enter-active-class="transition duration-250 ease-out"
-        enter-from-class="transform translate-y-3 opacity-0 scale-95"
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="transform translate-y-2 opacity-0 scale-95"
         enter-to-class="transform translate-y-0 opacity-100 scale-100"
-        leave-active-class="transition duration-200 ease-in"
+        leave-active-class="transition duration-150 ease-in"
         leave-from-class="transform translate-y-0 opacity-100 scale-100"
-        leave-to-class="transform translate-y-3 opacity-0 scale-95"
+        leave-to-class="transform translate-y-2 opacity-0 scale-95"
       >
         <div
           v-if="toastMessage"
-          class="fixed bottom-6 right-6 z-50 max-w-sm w-auto p-3 rounded-xl border flex items-center gap-3 text-xs font-medium shadow-lg backdrop-blur-md"
-          :class="[
-            toastType === 'success'
-              ? 'bg-white/95 border-emerald-200 text-emerald-900 shadow-emerald-950/10'
-              : 'bg-white/95 border-rose-200 text-rose-900 shadow-rose-950/10'
-          ]"
+          class="fixed bottom-6 right-6 z-50 max-w-sm w-auto p-3 rounded-lg border border-outline-gray-2 bg-surface-white text-ink-gray-9 shadow-lg flex items-center gap-3 text-xs font-medium select-none"
         >
-          <div :class="['w-7 h-7 rounded-lg flex items-center justify-center shrink-0', toastType === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700']">
-            <CheckCircle2 v-if="toastType === 'success'" class="w-4 h-4" />
-            <AlertCircle v-else class="w-4 h-4" />
-          </div>
+          <span
+            :class="[
+              'w-2 h-2 rounded-full shrink-0',
+              toastType === 'success' ? 'bg-emerald-500' : 'bg-rose-500'
+            ]"
+          ></span>
           <span class="pr-2">{{ toastMessage }}</span>
           <button
             type="button"
             @click="toastMessage = null"
-            class="text-zinc-400 hover:text-zinc-700 font-bold p-1 rounded-md hover:bg-zinc-100 cursor-pointer ml-auto"
+            class="text-ink-gray-4 hover:text-ink-gray-7 font-bold p-1 rounded hover:bg-surface-gray-2 cursor-pointer ml-auto"
           >
             &times;
           </button>
@@ -72,90 +81,73 @@
       </transition>
     </teleport>
 
-    <!-- KPI Summary Metrics (Polished Brand-Aligned Cards) -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <Card class="hover:border-blue-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Total FPTK</span>
-          <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-            <FileSpreadsheet class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-zinc-900">{{ requests.length }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Akumulasi permohonan personil
-          </p>
-        </CardContent>
-      </Card>
+    <!-- Calibrated KPI Cards (Comfortable vertical proportion py-4 px-4) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <!-- Total FPTK -->
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Total FPTK</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">{{ requests.length }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Akumulasi permohonan personil</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-blue-2 text-surface-blue-3 flex items-center justify-center shrink-0">
+          <FileSpreadsheet class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
 
-      <Card class="hover:border-emerald-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Disetujui</span>
-          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
-            <CheckCircle2 class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-emerald-700">{{ approvedCount }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Siap/sedang diproses rekrutmen
-          </p>
-        </CardContent>
-      </Card>
+      <!-- Disetujui -->
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Disetujui</span>
+          <span class="text-xl font-bold text-emerald-700 mt-1 block tabular-nums">{{ approvedCount }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Siap/sedang diproses</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-green-2 text-surface-green-3 flex items-center justify-center shrink-0">
+          <CheckCircle2 class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
 
-      <Card class="hover:border-amber-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Menunggu Approval</span>
-          <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-            <Clock class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-amber-700">{{ pendingCount }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Perlu persetujuan manajemen
-          </p>
-        </CardContent>
-      </Card>
+      <!-- Menunggu Approval -->
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Menunggu Approval</span>
+          <span class="text-xl font-bold text-amber-700 mt-1 block tabular-nums">{{ pendingCount }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Perlu persetujuan manajemen</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-amber-600 flex items-center justify-center shrink-0">
+          <Clock class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
 
-      <Card class="hover:border-indigo-200 hover:shadow-xs transition-all duration-200 bg-white">
-        <CardHeader class="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-          <span class="text-xs font-medium text-zinc-500">Kebutuhan Personil</span>
-          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
-            <Users class="w-4 h-4" />
-          </div>
-        </CardHeader>
-        <CardContent class="p-4 pt-0">
-          <div class="text-2xl font-bold tracking-tight text-zinc-900">{{ totalNeededPersonnel }}</div>
-          <p class="text-[11px] text-zinc-500 mt-0.5">
-            Total orang yang diajukan
-          </p>
-        </CardContent>
-      </Card>
+      <!-- Kebutuhan Personil -->
+      <div class="py-4 px-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-ink-gray-5 block">Kebutuhan Personil</span>
+          <span class="text-xl font-bold text-ink-gray-9 mt-1 block tabular-nums">{{ totalNeededPersonnel }}</span>
+          <span class="text-[11px] text-ink-gray-4 block mt-0.5">Total orang diajukan</span>
+        </div>
+        <div class="w-9 h-9 rounded-lg bg-surface-gray-2 text-ink-gray-7 flex items-center justify-center shrink-0">
+          <Users class="w-4.5 h-4.5 stroke-[1.75]" />
+        </div>
+      </div>
     </div>
 
     <!-- Filters & Toolbar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white rounded-xl border border-zinc-200 shadow-2xs">
+    <div class="p-2.5 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
       <!-- Status Filter Tabs -->
-      <div class="inline-flex items-center p-1 bg-zinc-100/90 border border-zinc-200/80 rounded-lg text-xs overflow-x-auto no-scrollbar">
+      <div class="inline-flex items-center p-0.5 bg-surface-gray-2 rounded-md border border-outline-gray-2 overflow-x-auto no-scrollbar">
         <button
           type="button"
           @click="statusFilter = 'all'"
           :class="[
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shrink-0 select-none flex items-center gap-1.5',
+            'px-2.5 h-7 rounded text-xs font-medium transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 select-none leading-none',
             statusFilter === 'all'
-              ? 'bg-white text-[#0c2340] shadow-xs font-semibold'
-              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50'
+              ? 'bg-surface-white text-ink-gray-8 shadow-2xs font-semibold'
+              : 'text-ink-gray-5 hover:text-ink-gray-8'
           ]"
         >
           <span>Semua FPTK</span>
-          <span
-            :class="[
-              'px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none',
-              statusFilter === 'all' ? 'bg-blue-50 text-[#0c2340]' : 'bg-zinc-200/70 text-zinc-500'
-            ]"
-          >
+          <span :class="['text-[10px] tabular-nums leading-none', statusFilter === 'all' ? 'text-ink-gray-8 font-semibold' : 'text-ink-gray-4']">
             {{ requests.length }}
           </span>
         </button>
@@ -164,19 +156,15 @@
           type="button"
           @click="statusFilter = 'approved'"
           :class="[
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shrink-0 select-none flex items-center gap-1.5',
+            'px-2.5 h-7 rounded text-xs font-medium transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 select-none leading-none',
             statusFilter === 'approved'
-              ? 'bg-white text-emerald-700 shadow-xs font-semibold'
-              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50'
+              ? 'bg-surface-white text-emerald-800 shadow-2xs font-semibold'
+              : 'text-ink-gray-5 hover:text-ink-gray-8'
           ]"
         >
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
           <span>Disetujui</span>
-          <span
-            :class="[
-              'px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none',
-              statusFilter === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-200/70 text-zinc-500'
-            ]"
-          >
+          <span :class="['text-[10px] tabular-nums leading-none', statusFilter === 'approved' ? 'text-emerald-800 font-semibold' : 'text-ink-gray-4']">
             {{ approvedCount }}
           </span>
         </button>
@@ -185,111 +173,122 @@
           type="button"
           @click="statusFilter = 'pending'"
           :class="[
-            'px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shrink-0 select-none flex items-center gap-1.5',
+            'px-2.5 h-7 rounded text-xs font-medium transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 select-none leading-none',
             statusFilter === 'pending'
-              ? 'bg-white text-amber-700 shadow-xs font-semibold'
-              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50'
+              ? 'bg-surface-white text-amber-800 shadow-2xs font-semibold'
+              : 'text-ink-gray-5 hover:text-ink-gray-8'
           ]"
         >
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
           <span>Menunggu</span>
-          <span
-            :class="[
-              'px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none',
-              statusFilter === 'pending' ? 'bg-amber-50 text-amber-700' : 'bg-zinc-200/70 text-zinc-500'
-            ]"
-          >
+          <span :class="['text-[10px] tabular-nums leading-none', statusFilter === 'pending' ? 'text-amber-800 font-semibold' : 'text-ink-gray-4']">
             {{ pendingCount }}
           </span>
         </button>
       </div>
 
       <!-- Search Input -->
-      <div class="relative w-full sm:w-80">
-        <Search class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-        <Input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Cari nomor FPTK, posisi, divisi..."
-          class="pl-8 h-8 text-xs bg-zinc-50 focus:bg-white"
-        />
-        <button
-          v-if="searchQuery"
-          type="button"
-          @click="searchQuery = ''"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-xs font-bold"
-        >
-          &times;
-        </button>
-      </div>
+      <FTextInput
+        v-model="searchQuery"
+        size="md"
+        variant="outline"
+        placeholder="Cari nomor FPTK, posisi, divisi..."
+        class="w-full sm:w-64"
+      >
+        <template #prefix>
+          <Search class="w-3.5 h-3.5 text-zinc-400" />
+        </template>
+      </FTextInput>
     </div>
 
     <!-- SKELETON LOADING STATE -->
-    <div v-if="isLoading" class="bg-white rounded-xl border border-zinc-200 shadow-2xs p-4 space-y-3">
-      <div v-for="i in 5" :key="i" class="flex items-center justify-between gap-4 py-3 border-b border-zinc-100 last:border-0">
-        <div class="space-y-1.5 w-1/4">
-          <Skeleton class="h-4 w-36" />
-          <Skeleton class="h-3 w-20" />
+    <div v-if="isLoading" class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs p-4 space-y-3">
+      <div v-for="i in 4" :key="i" class="flex items-center justify-between gap-4 py-3 border-b border-outline-gray-1 last:border-0">
+        <div class="space-y-1.5 w-1/3">
+          <Skeleton class="h-4 w-40" />
+          <Skeleton class="h-3 w-24" />
         </div>
-        <Skeleton class="h-4 w-16" />
-        <Skeleton class="h-4 w-16" />
-        <Skeleton class="h-4 w-16" />
+        <Skeleton class="h-4 w-20" />
         <Skeleton class="h-4 w-28" />
-        <Skeleton class="h-5 w-20 rounded-full" />
+        <Skeleton class="h-6 w-20 rounded-full" />
       </div>
     </div>
 
-    <!-- DATA TABLE CARD: Shadcn Table Component -->
-    <div v-else class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead class="w-[28%]">No. FPTK & Posisi</TableHead>
-            <TableHead class="w-[24%]">Divisi & Badan Usaha</TableHead>
-            <TableHead class="w-[10%]">Kebutuhan</TableHead>
-            <TableHead class="w-[16%]">Progres Pemenuhan</TableHead>
-            <TableHead class="w-[12%]">Tgl Pengajuan</TableHead>
-            <TableHead class="w-[10%]">Status</TableHead>
-            <TableHead class="w-[8%] text-right">Aksi</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow v-for="item in filteredRequests" :key="item.id" class="group hover:bg-blue-50/30 transition-colors">
-            <TableCell class="py-3.5">
-              <div
-                @click="openRequestDetail(item)"
-                class="font-semibold text-xs text-zinc-900 hover:text-[#0c2340] cursor-pointer transition-colors"
-              >
-                {{ item.posisi_dibutuhkan || item.position_name || item.position_title || 'Staff' }}
-              </div>
-              <div class="text-[11px] text-zinc-400 font-mono mt-0.5">
-                #{{ item.id || item.request_number }}
-              </div>
-            </TableCell>
+    <!-- FPTK REQUEST CARDS FEED (No Table Layout) -->
+    <div v-else class="space-y-3">
+      <!-- Summary Strip -->
+      <div class="px-3.5 py-2.5 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between text-xs text-ink-gray-5">
+        <span class="font-medium text-ink-gray-7">Daftar Pengajuan FPTK</span>
+        <span class="text-[11px] text-ink-gray-4">Menampilkan {{ filteredRequests.length }} dari {{ requests.length }} permohonan</span>
+      </div>
 
-            <TableCell class="py-3.5">
-              <div class="font-medium text-zinc-800 text-xs truncate max-w-[220px]">
-                {{ item.division_name || item.department || item.division?.name || '-' }}
+      <!-- Cards Feed -->
+      <div v-if="filteredRequests.length" class="space-y-2.5">
+        <div
+          v-for="item in filteredRequests"
+          :key="item.id"
+          class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs hover:shadow-xs hover:border-outline-gray-3 transition-all group"
+        >
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+            <!-- Left Info -->
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <FBadge theme="gray" variant="subtle" size="sm" class="tabular-nums font-semibold">
+                  #{{ item.id || item.request_number }}
+                </FBadge>
+                <h3
+                  class="font-bold text-sm text-ink-gray-9 hover:text-blue-600 transition-colors cursor-pointer truncate"
+                  @click="openRequestDetail(item)"
+                >
+                  {{ item.posisi_dibutuhkan || item.position_name || item.position_title || 'Staff' }}
+                </h3>
+                <FBadge
+                  :theme="getBadgeTheme(item.status || item.approval_status)"
+                  variant="subtle"
+                  size="sm"
+                  class="font-semibold"
+                >
+                  {{ item.status || item.approval_status || 'Pending' }}
+                </FBadge>
               </div>
-              <div class="text-[11px] text-zinc-500 truncate max-w-[220px] mt-0.5">
-                {{ item.business_entity_name || item.company_name || '-' }}
-              </div>
-              <div class="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                <MapPin class="w-3 h-3 text-zinc-400 shrink-0" />
-                <span class="truncate">{{ item.lokasi_penempatan || item.branch || item.location || '-' }}</span>
-              </div>
-            </TableCell>
 
-            <TableCell class="py-3.5 font-semibold text-zinc-900 text-xs">
-              {{ item.jumlah_karyawan_dibutuhkan || item.quantity || 1 }} Orang
-            </TableCell>
+              <!-- Division, Company, Location & Date Meta -->
+              <div class="flex items-center gap-3 text-xs text-ink-gray-5 mt-2 flex-wrap">
+                <span class="flex items-center gap-1 font-medium text-ink-gray-7">
+                  <Building2 class="w-3.5 h-3.5 text-ink-gray-4 shrink-0" />
+                  {{ item.division_name || item.department || item.division?.name || '-' }}
+                  <span v-if="item.business_entity_name || item.company_name" class="text-ink-gray-4 font-normal">
+                    ({{ item.business_entity_name || item.company_name }})
+                  </span>
+                </span>
+                <span class="text-outline-gray-3">&bull;</span>
+                <span class="flex items-center gap-1">
+                  <MapPin class="w-3.5 h-3.5 text-ink-gray-4 shrink-0" />
+                  {{ item.lokasi_penempatan || item.branch || item.location || '-' }}
+                </span>
+                <span class="text-outline-gray-3">&bull;</span>
+                <span class="flex items-center gap-1 text-[11px] text-ink-gray-4">
+                  <Calendar class="w-3 h-3 text-ink-gray-4 shrink-0" />
+                  {{ item.tanggal_pengajuan || item.submission_date || item.created_at || '-' }}
+                </span>
+                <span v-if="item.nama_pengaju" class="text-outline-gray-3">&bull;</span>
+                <span v-if="item.nama_pengaju" class="text-[11px] text-ink-gray-5">
+                  Diajukan: <strong class="font-medium text-ink-gray-7">{{ item.nama_pengaju }}</strong>
+                </span>
+              </div>
+            </div>
 
-            <TableCell class="py-3.5">
-              <div class="w-28 space-y-1">
-                <div class="flex items-center justify-between text-[10px] font-medium text-zinc-600">
-                  <span>{{ item.fulfilled_count || 0 }}/{{ item.jumlah_karyawan_dibutuhkan || item.quantity || 1 }}</span>
-                  <span class="font-mono font-semibold text-zinc-700">{{ Math.min(100, Math.round(((item.fulfilled_count || 0) / (item.jumlah_karyawan_dibutuhkan || item.quantity || 1)) * 100)) }}%</span>
+            <!-- Right Controls: Progress & Action -->
+            <div class="flex items-center gap-4 shrink-0 justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-outline-gray-1">
+              <!-- Fulfillment Progress -->
+              <div class="w-36 space-y-1 text-right">
+                <div class="flex items-center justify-between text-[11px] font-medium text-ink-gray-6">
+                  <span>Kebutuhan:</span>
+                  <span class="tabular-nums font-bold text-ink-gray-9">
+                    {{ item.fulfilled_count || 0 }} / {{ item.jumlah_karyawan_dibutuhkan || item.quantity || 1 }} Org
+                  </span>
                 </div>
-                <div class="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+                <div class="w-full bg-surface-gray-2 rounded-full h-1.5 overflow-hidden">
                   <div
                     :class="[
                       'h-1.5 rounded-full transition-all duration-300',
@@ -299,43 +298,50 @@
                         ? 'bg-blue-600'
                         : Math.round(((item.fulfilled_count || 0) / (item.jumlah_karyawan_dibutuhkan || item.quantity || 1)) * 100) > 0
                         ? 'bg-amber-500'
-                        : 'bg-zinc-300'
+                        : 'bg-outline-gray-2'
                     ]"
                     :style="{ width: `${Math.min(100, Math.round(((item.fulfilled_count || 0) / (item.jumlah_karyawan_dibutuhkan || item.quantity || 1)) * 100))}%` }"
                   ></div>
                 </div>
               </div>
-            </TableCell>
 
-            <TableCell class="py-3.5 text-zinc-600 text-xs whitespace-nowrap">
-              {{ item.tanggal_pengajuan || item.submission_date || item.created_at || '-' }}
-            </TableCell>
-
-            <TableCell class="py-3.5">
-              <Badge :variant="getBadgeVariant(item.status || item.approval_status)" class="text-[10px] px-2 py-0.5">
-                {{ item.status || item.approval_status || 'Pending' }}
-              </Badge>
-            </TableCell>
-
-            <TableCell class="py-3.5 text-right whitespace-nowrap">
-              <Button
+              <!-- Detail Action Button -->
+              <FButton
+                theme="gray"
                 variant="outline"
-                size="xs"
+                size="sm"
+                :icon-left="Eye"
                 @click="openRequestDetail(item)"
-                class="h-7 text-zinc-700 hover:text-blue-950 hover:bg-blue-50/60 hover:border-blue-300 transition-colors"
               >
                 Detail
-              </Button>
-            </TableCell>
-          </TableRow>
+              </FButton>
+            </div>
+          </div>
+        </div>
+      </div>
 
-          <TableRow v-if="!filteredRequests.length">
-            <TableCell colspan="7" class="py-12 text-center text-xs text-zinc-500">
-              Tidak ada data permohonan tenaga kerja yang sesuai kriteria.
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <!-- Empty State -->
+      <div
+        v-else
+        class="py-16 text-center bg-surface-white rounded-lg border border-outline-gray-2 p-8 shadow-2xs flex flex-col items-center justify-center gap-2"
+      >
+        <div class="w-12 h-12 rounded-full bg-surface-gray-2 text-ink-gray-4 flex items-center justify-center">
+          <FileSpreadsheet class="w-6 h-6 stroke-[1.5]" />
+        </div>
+        <p class="text-sm font-semibold text-ink-gray-8">Tidak ada data permohonan tenaga kerja</p>
+        <p class="text-xs text-ink-gray-5 max-w-sm">
+          Tidak ada pengajuan FPTK yang sesuai dengan filter atau pencarian Anda saat ini.
+        </p>
+        <FButton
+          theme="gray"
+          variant="outline"
+          size="sm"
+          class="mt-2"
+          @click="statusFilter = 'all'; searchQuery = '';"
+        >
+          Reset Semua Filter
+        </FButton>
+      </div>
     </div>
 
     <!-- SLIDE-OVER SHEET: FPTK Detail Drawer -->
@@ -344,98 +350,103 @@
         <SheetHeader>
           <div class="flex items-center gap-2">
             <SheetTitle>Detail Permintaan FPTK</SheetTitle>
-            <Badge v-if="selectedRequest" :variant="getBadgeVariant(selectedRequest.status || selectedRequest.approval_status)" class="text-[10px]">
+            <FBadge v-if="selectedRequest" :theme="getBadgeTheme(selectedRequest.status || selectedRequest.approval_status)" variant="subtle" size="sm" class="font-semibold">
               {{ selectedRequest.status || selectedRequest.approval_status || 'Pending' }}
-            </Badge>
+            </FBadge>
           </div>
           <SheetDescription>
             Nomor Pengajuan #{{ selectedRequest?.id || selectedRequest?.request_number }}
           </SheetDescription>
         </SheetHeader>
 
-        <div v-if="selectedRequest" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs text-zinc-900">
-          <div class="border border-zinc-200 rounded-lg p-4 space-y-3 bg-zinc-50/50">
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Posisi Dibutuhkan:</span>
-              <span class="font-semibold text-zinc-900 text-right">{{ selectedRequest.posisi_dibutuhkan || selectedRequest.position_name || selectedRequest.position_title }}</span>
+        <div v-if="selectedRequest" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs text-ink-gray-9">
+          <div class="border border-outline-gray-2 rounded-lg p-4 space-y-3 bg-surface-gray-1">
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Posisi Dibutuhkan:</span>
+              <span class="font-bold text-ink-gray-9 text-right">{{ selectedRequest.posisi_dibutuhkan || selectedRequest.position_name || selectedRequest.position_title }}</span>
             </div>
 
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Divisi / Departemen:</span>
-              <span class="font-medium text-zinc-800 text-right">{{ selectedRequest.division_name || selectedRequest.department || selectedRequest.division?.name || '-' }}</span>
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Divisi / Departemen:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.division_name || selectedRequest.department || selectedRequest.division?.name || '-' }}</span>
             </div>
 
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Badan Usaha:</span>
-              <span class="font-medium text-zinc-800 text-right">{{ selectedRequest.business_entity_name || selectedRequest.company_name || '-' }}</span>
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Badan Usaha:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.business_entity_name || selectedRequest.company_name || '-' }}</span>
             </div>
 
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Lokasi Penempatan:</span>
-              <span class="font-medium text-zinc-800 text-right">{{ selectedRequest.lokasi_penempatan || selectedRequest.branch || selectedRequest.location || '-' }}</span>
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Lokasi Penempatan:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.lokasi_penempatan || selectedRequest.branch || selectedRequest.location || '-' }}</span>
             </div>
 
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Jumlah Kebutuhan:</span>
-              <span class="font-bold text-zinc-900 text-right">{{ selectedRequest.jumlah_karyawan_dibutuhkan || selectedRequest.quantity || 1 }} Orang</span>
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Jumlah Kebutuhan:</span>
+              <span class="font-bold text-ink-gray-9 text-right">{{ selectedRequest.jumlah_karyawan_dibutuhkan || selectedRequest.quantity || 1 }} Orang</span>
             </div>
 
-            <div class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Tanggal Pengajuan:</span>
-              <span class="font-medium text-zinc-800 text-right">{{ selectedRequest.tanggal_pengajuan || selectedRequest.submission_date || selectedRequest.created_at || '-' }}</span>
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Tanggal Pengajuan:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.tanggal_pengajuan || selectedRequest.submission_date || selectedRequest.created_at || '-' }}</span>
             </div>
 
-            <div v-if="selectedRequest.nama_pengaju" class="flex justify-between items-start pb-2 border-b border-zinc-200/70">
-              <span class="text-zinc-500 font-medium">Diajukan Oleh:</span>
-              <span class="font-medium text-zinc-800 text-right">{{ selectedRequest.nama_pengaju }} ({{ selectedRequest.posisi_pengaju || '-' }})</span>
+            <div v-if="selectedRequest.nama_pengaju" class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Diajukan Oleh:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.nama_pengaju }} ({{ selectedRequest.posisi_pengaju || '-' }})</span>
             </div>
 
             <div>
-              <span class="text-zinc-500 font-medium block mb-1.5">Alasan / Kualifikasi Kebutuhan:</span>
-              <p class="text-zinc-700 leading-relaxed whitespace-pre-line bg-white p-3 rounded-md border border-zinc-200 text-xs">
+              <span class="text-ink-gray-5 font-medium block mb-1.5">Alasan / Kualifikasi Kebutuhan:</span>
+              <p class="text-ink-gray-7 leading-relaxed whitespace-pre-line bg-surface-white p-3 rounded-lg border border-outline-gray-2 text-xs shadow-2xs">
                 {{ selectedRequest.requirements_kualifikasi || selectedRequest.keterangan || selectedRequest.reason || selectedRequest.justification || 'Kebutuhan operasional penambahan personil' }}
               </p>
             </div>
           </div>
         </div>
 
-        <SheetFooter class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between w-full border-t border-zinc-200 bg-zinc-50/50 p-4 gap-2">
-          <Button variant="outline" size="sm" @click="selectedRequest = null" :disabled="isActionLoading" class="text-xs h-8 text-zinc-700">
+        <SheetFooter class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between w-full border-t border-outline-gray-2 bg-surface-gray-1 p-4 gap-2">
+          <FButton theme="gray" variant="outline" size="sm" @click="selectedRequest = null" :disabled="isActionLoading">
             Tutup
-          </Button>
+          </FButton>
 
           <div v-if="selectedRequest && canTakeAction(selectedRequest)" class="flex items-center gap-2">
-            <Button
+            <FButton
+              theme="red"
               variant="outline"
               size="sm"
-              class="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 text-xs h-8 gap-1.5"
+              :icon-left="XCircle"
               @click="handleReject(selectedRequest)"
-              :disabled="isActionLoading"
+              :loading="isActionLoading"
             >
-              <XCircle class="w-3.5 h-3.5" />
-              <span>Tolak</span>
-            </Button>
+              Tolak
+            </FButton>
 
-            <Button
+            <FButton
+              theme="gray"
+              variant="solid"
               size="sm"
-              class="bg-zinc-900 hover:bg-zinc-800 text-white text-xs h-8 gap-1.5"
+              :icon-left="CheckCircle2"
               @click="handleApprove(selectedRequest)"
-              :disabled="isActionLoading"
+              :loading="isActionLoading"
             >
-              <CheckCircle2 class="w-3.5 h-3.5" />
-              <span>Setujui (Approve)</span>
-            </Button>
+              Setujui (Approve)
+            </FButton>
           </div>
 
-          <div v-else-if="selectedRequest" class="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-            <span v-if="String(selectedRequest.status || selectedRequest.approval_status || '').toLowerCase().includes('approv')" class="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1.5">
-              <CheckCircle2 class="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sudah Disetujui</span>
-            </span>
-            <span v-else-if="String(selectedRequest.status || selectedRequest.approval_status || '').toLowerCase().includes('reject')" class="text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-md flex items-center gap-1.5">
-              <XCircle class="w-3.5 h-3.5 text-rose-600" />
-              <span>Permintaan Ditolak</span>
-            </span>
+          <div v-else-if="selectedRequest" class="flex items-center gap-1.5 text-xs text-ink-gray-5 font-medium">
+            <FBadge v-if="String(selectedRequest.status || selectedRequest.approval_status || '').toLowerCase().includes('approv')" theme="green" variant="subtle" size="sm" class="font-semibold">
+              <template #prefix>
+                <CheckCircle2 class="w-3.5 h-3.5 text-emerald-600" />
+              </template>
+              Sudah Disetujui
+            </FBadge>
+            <FBadge v-else-if="String(selectedRequest.status || selectedRequest.approval_status || '').toLowerCase().includes('reject')" theme="red" variant="subtle" size="sm" class="font-semibold">
+              <template #prefix>
+                <XCircle class="w-3.5 h-3.5 text-rose-600" />
+              </template>
+              Permintaan Ditolak
+            </FBadge>
           </div>
         </SheetFooter>
       </SheetContent>
@@ -449,14 +460,14 @@ import { useRekrutmenStore } from '../stores/rekrutmen';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
+// Frappe UI Components
+import FButton from '../components/frappe/Button.vue';
+import FBadge from 'frappe-ui/src/components/Badge/Badge.vue';
+import FTextInput from '../components/frappe/TextInput.vue';
+
 // Shadcn UI Components
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Card, CardHeader, CardContent } from '../components/ui/card';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '../components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
 import { Skeleton } from '../components/ui/skeleton';
-import { Input } from '../components/ui/input';
 import { isApprovedManPowerRequest, isPendingManPowerRequest } from '../lib/requestManPowerStatus';
 
 // Icons
@@ -471,6 +482,9 @@ import {
   RotateCw,
   MapPin,
   XCircle,
+  Calendar,
+  Building2,
+  Eye,
 } from 'lucide-vue-next';
 
 const store = useRekrutmenStore();
@@ -545,6 +559,13 @@ const getBadgeVariant = (status) => {
   if (s.includes('approv') || s.includes('setuju')) return 'success';
   if (s.includes('reject') || s.includes('tolak')) return 'destructive';
   return 'warning';
+};
+
+const getBadgeTheme = (status) => {
+  const s = String(status || '').toLowerCase();
+  if (s.includes('approv') || s.includes('setuju')) return 'green';
+  if (s.includes('reject') || s.includes('tolak')) return 'red';
+  return 'orange';
 };
 
 const openRequestDetail = (item) => {
