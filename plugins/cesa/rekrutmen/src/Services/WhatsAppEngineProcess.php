@@ -3,6 +3,7 @@
 namespace Cesa\Rekrutmen\Services;
 
 use Illuminate\Support\Facades\File;
+use RuntimeException;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -18,7 +19,7 @@ class WhatsAppEngineProcess
             return true;
         }
 
-        if (app()->runningUnitTests()) {
+        if (! $this->client->isLocalEngine() || app()->runningUnitTests()) {
             return false;
         }
 
@@ -54,6 +55,10 @@ class WhatsAppEngineProcess
 
     public function start(): void
     {
+        if (! $this->client->isLocalEngine()) {
+            throw new RuntimeException('Engine WhatsApp eksternal dikelola oleh service terpisah.');
+        }
+
         File::ensureDirectoryExists($this->sessionRoot());
         File::ensureDirectoryExists(dirname($this->pidPath()));
         File::ensureDirectoryExists(dirname($this->logPath()));
@@ -123,6 +128,10 @@ class WhatsAppEngineProcess
 
     public function installDependencies(): bool
     {
+        if (! $this->client->isLocalEngine()) {
+            return false;
+        }
+
         $nodeModules = $this->workingDirectory().DIRECTORY_SEPARATOR.'node_modules';
 
         if (is_file($nodeModules.'/@whiskeysockets/baileys/package.json') && is_file($nodeModules.'/pino/package.json') && is_file($nodeModules.'/qrcode/package.json')) {

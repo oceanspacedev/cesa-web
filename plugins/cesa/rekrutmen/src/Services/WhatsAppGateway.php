@@ -105,7 +105,7 @@ class WhatsAppGateway
         if (! $this->ensureEngine()) {
             return [
                 'success' => false,
-                'message' => 'Engine WhatsApp belum siap. Pastikan Node.js terpasang, lalu jalankan php artisan rekrutmen:whatsapp-engine.',
+                'message' => $this->engine->unavailableMessage(),
             ];
         }
 

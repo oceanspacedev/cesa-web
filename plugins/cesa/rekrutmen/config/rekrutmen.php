@@ -1,5 +1,7 @@
 <?php
 
+$engineDriver = env('REKRUTMEN_WHATSAPP_ENGINE_DRIVER', env('WAG_ENGINE_URL') ? 'wag_hub' : 'local');
+
 return [
     'disk' => env('REKRUTMEN_FILESYSTEM_DISK', 's3'),
 
@@ -24,8 +26,10 @@ return [
         ],
         'whatsapp' => [
             'enabled'      => env('REKRUTMEN_WHATSAPP_ENABLED', true),
-            'engine_url'   => env('REKRUTMEN_WHATSAPP_ENGINE_URL', 'http://127.0.0.1:3318'),
-            'auto_start'   => env('REKRUTMEN_WHATSAPP_ENGINE_AUTO_START', true),
+            'engine_driver' => $engineDriver,
+            'engine_url'   => env('REKRUTMEN_WHATSAPP_ENGINE_URL', $engineDriver === 'local' ? 'http://127.0.0.1:3318' : env('WAG_ENGINE_URL')),
+            'engine_token' => env('REKRUTMEN_WHATSAPP_ENGINE_TOKEN', $engineDriver === 'local' ? null : env('WAG_ENGINE_TOKEN')),
+            'auto_start'   => env('REKRUTMEN_WHATSAPP_ENGINE_AUTO_START', $engineDriver === 'local'),
             'node_binary'  => env('REKRUTMEN_WHATSAPP_NODE_BINARY', 'node'),
             'endpoint'     => env('WAG_URL', 'https://waghub.mekayastudio.com'),
             'api_key'      => env('WAG_TOKEN'),

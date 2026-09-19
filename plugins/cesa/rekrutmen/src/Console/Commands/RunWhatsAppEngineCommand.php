@@ -17,10 +17,28 @@ class RunWhatsAppEngineCommand extends Command
     /**
      * @var string
      */
-    protected $description = 'Jalankan engine WhatsApp rekrutmen untuk scan QR / tautkan nomor tanpa API key';
+    protected $description = 'Periksa service WhatsApp eksternal atau jalankan engine WhatsApp lokal';
 
     public function handle(WhatsAppEngineProcess $process, WhatsAppEngineClient $client): int
     {
+        if (! $client->isLocalEngine()) {
+            if ($this->option('install')) {
+                $this->error('Engine WhatsApp eksternal dikelola oleh service terpisah; instalasi Node.js di CESA tidak diperlukan.');
+
+                return self::FAILURE;
+            }
+
+            if ($client->isReady()) {
+                $this->info('Service WhatsApp eksternal siap.');
+
+                return self::SUCCESS;
+            }
+
+            $this->error($client->unavailableMessage());
+
+            return self::FAILURE;
+        }
+
         if ($this->option('install')) {
             if (! $process->installDependencies()) {
                 $this->error('Gagal menginstal dependensi Node.js untuk engine WhatsApp.');

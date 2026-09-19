@@ -17,12 +17,13 @@ class WhatsAppEngineClient
     {
         try {
             $response = $this->http()->timeout(2)->get($this->url('/health'));
+            $payload = $response->json();
 
-            if (! $response->successful()) {
+            if (! is_array($payload)) {
                 return ['ok' => false];
             }
 
-            return is_array($response->json()) ? $response->json() : ['ok' => false];
+            return array_merge($payload, ['ok' => $response->successful() && (bool) ($payload['ok'] ?? false)]);
         } catch (Throwable) {
             return ['ok' => false];
         }
@@ -112,11 +113,37 @@ class WhatsAppEngineClient
 
     public function baseUrl(): string
     {
-        return rtrim((string) config('rekrutmen.notifications.whatsapp.engine_url', 'http://127.0.0.1:3318'), '/');
+        return rtrim(trim((string) config('rekrutmen.notifications.whatsapp.engine_url', 'http://127.0.0.1:3318')), '/');
+    }
+
+    public function isLocalEngine(): bool
+    {
+        $url = parse_url($this->baseUrl());
+
+        return config('rekrutmen.notifications.whatsapp.engine_driver', 'local') === 'local'
+            && is_array($url)
+            && ($url['scheme'] ?? null) === 'http'
+            && in_array($url['host'] ?? null, ['127.0.0.1', 'localhost', '[::1]'], true)
+            && empty($url['path'])
+            && ! isset($url['user'])
+            && ! isset($url['pass'])
+            && ! isset($url['query'])
+            && ! isset($url['fragment']);
+    }
+
+    public function unavailableMessage(): string
+    {
+        return $this->isLocalEngine()
+            ? 'Engine WhatsApp belum siap. Pastikan Node.js terpasang, lalu jalankan php artisan rekrutmen:whatsapp-engine.'
+            : 'Engine WhatsApp eksternal belum siap. Periksa URL, token engine, dan host engine di WAG Hub.';
     }
 
     protected function url(string $path): string
     {
+        if ($this->baseUrl() === '') {
+            throw new RuntimeException('URL engine WhatsApp belum dikonfigurasi.');
+        }
+
         return $this->baseUrl().$path;
     }
 
@@ -124,9 +151,13 @@ class WhatsAppEngineClient
     {
         $timeout = (int) config('rekrutmen.notifications.whatsapp.http_timeout', 20);
 
-        return Http::connectTimeout(2)->timeout(max(5, $timeout))
+        $request = Http::connectTimeout(2)->timeout(max(5, $timeout))
             ->acceptJson()
             ->asJson();
+
+        $token = trim((string) config('rekrutmen.notifications.whatsapp.engine_token'));
+
+        return $token !== '' ? $request->withToken($token) : $request;
     }
 
     /**

@@ -143,6 +143,46 @@ Visit `http://localhost:8000` and log in with your admin credentials!
 
 ## 🧩 Plugin System
 
+### WhatsApp through a standalone WAG Hub
+
+CESA can use WAG Hub as a separate WhatsApp service. WAG Hub owns the WhatsApp
+runtime and session credentials; CESA only calls its HTTP API. Node.js and Baileys
+are not required on the CESA server in this mode.
+
+Create an application in WAG Hub, configure its engine host, and issue an
+`engine:use` credential. Configure CESA with:
+
+```dotenv
+WAG_ENGINE_URL=https://gateway.example.com/api/v1/engine
+WAG_ENGINE_TOKEN=your-engine-credential
+REKRUTMEN_WHATSAPP_ENGINE_DRIVER=wag_hub
+REKRUTMEN_WHATSAPP_ENGINE_AUTO_START=false
+```
+
+Existing installations must remove stale `REKRUTMEN_WHATSAPP_ENGINE_URL` and
+`REKRUTMEN_WHATSAPP_ENGINE_TOKEN` overrides, or set them to the corresponding
+shared values above. Those overrides take precedence. CESA sends the engine
+credential in the Authorization header, so tokens do not need to appear in URLs.
+The older WAG Hub `/engine` endpoint remains compatible.
+
+Run `php artisan config:clear`, restart queue workers with
+`php artisan queue:restart`, and run `php artisan rekrutmen:whatsapp-engine --ensure`
+to check the remote service. Then link a sender with QR or pairing in Recruitment
+Settings. Recruitment sends remain tied to the selected sender, and uncertain
+send outcomes are reconciled with the same idempotency key.
+
+`WAG_URL` and `WAG_TOKEN` still configure routed notifications and lead number
+validation. Use their separate Hub API credential; `engine:use` is for sessions.
+When the remote service is unavailable, CESA reports it and never starts a local
+Node process, including when `--ensure` is used.
+
+Existing local installations remain supported when `WAG_ENGINE_URL` is unset.
+To choose the bundled engine explicitly, set
+`REKRUTMEN_WHATSAPP_ENGINE_DRIVER=local`,
+`REKRUTMEN_WHATSAPP_ENGINE_URL=http://127.0.0.1:3318`, and
+`REKRUTMEN_WHATSAPP_ENGINE_AUTO_START=true`. Install its dependencies with
+`php artisan rekrutmen:whatsapp-engine --install`.
+
 AureusERP features a powerful modular plugin system that allows you to customize your ERP installation based on your business needs. Choose only the modules you need to keep your system lean and efficient.
 
 ### 📦 Core Plugins (System Plugins)

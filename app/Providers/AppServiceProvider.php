@@ -28,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(Authenticatable::class, User::class);
+        $this->app->singleton(\App\Services\WhatsApp\WagHubClient::class);
     }
 
     /**
