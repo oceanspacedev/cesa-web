@@ -22,7 +22,6 @@ class PayrollServiceProvider extends PackageServiceProvider
         $package->name(static::$name)
             ->hasConfigFile()
             ->hasTranslations()
-            ->hasViews()
             ->hasRoute('api')
             ->hasDependencies([
                 'presensi',

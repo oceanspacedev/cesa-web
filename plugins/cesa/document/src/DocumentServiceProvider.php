@@ -20,7 +20,6 @@ class DocumentServiceProvider extends PackageServiceProvider
     {
         $package->name(static::$name)
             ->hasTranslations()
-            ->hasViews()
             ->hasMigrations([
                 '2025_08_25_000001_create_documents_table',
                 '2026_05_15_010000_add_creator_id_to_documents_table',

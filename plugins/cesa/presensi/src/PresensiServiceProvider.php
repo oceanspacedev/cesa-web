@@ -32,7 +32,6 @@ class PresensiServiceProvider extends PackageServiceProvider
         $package->name(static::$name)
             ->hasConfigFile()
             ->hasTranslations()
-            ->hasViews()
             ->hasRoute('api')
             ->hasMigrations([
                 '2024_06_25_062004_presensi_create_offices_table',

@@ -58,9 +58,11 @@ test('cesa service providers declare only real package assets', function (): voi
             "{$pluginName} config declarations should match config files.",
         );
 
-        if (cesaDirectoryHasFiles("{$pluginPath}/resources/views")) {
-            Assert::assertStringContainsString('->hasViews()', $providerSource, "{$pluginName} has views but does not declare hasViews().");
-        }
+        Assert::assertSame(
+            cesaDirectoryHasFiles("{$pluginPath}/resources/views"),
+            str_contains($providerSource, '->hasViews()'),
+            "{$pluginName} view declarations should match non-empty view directories.",
+        );
 
         if (cesaDirectoryHasFiles("{$pluginPath}/resources/lang")) {
             Assert::assertStringContainsString('->hasTranslations()', $providerSource, "{$pluginName} has translations but does not declare hasTranslations().");
