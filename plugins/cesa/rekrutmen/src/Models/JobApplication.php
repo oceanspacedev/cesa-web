@@ -6,6 +6,7 @@ use Cesa\Rekrutmen\Enums\ActivityEntryResult;
 use Cesa\Rekrutmen\Enums\JobApplicationGender;
 use Cesa\Rekrutmen\Enums\JobApplicationMaritalStatus;
 use Cesa\Rekrutmen\Enums\JobApplicationStatus;
+use Cesa\Rekrutmen\Services\AiScreeningService;
 use Cesa\Rekrutmen\Services\MailThrottleService;
 use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -54,6 +56,8 @@ class JobApplication extends Model
      */
     protected ?array $originalActiveWhatsappOwnership = null;
 
+    protected bool $screeningInputsChanged = false;
+
     protected $table = 'rekrutmen_job_applications';
 
     protected $fillable = [
@@ -84,27 +88,49 @@ class JobApplication extends Model
         'ai_recommendation',
         'ai_summary',
         'ai_analyzed_at',
+        'ai_screening_status',
+        'ai_screening_error',
+        'ai_screening_token',
+        'ai_screening_fingerprint',
+        'ai_screening_requested_at',
+        'ai_screening_started_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'gender'         => JobApplicationGender::class,
-            'birth_date'     => 'date',
-            'marital_status' => JobApplicationMaritalStatus::class,
-            'status'         => JobApplicationStatus::class,
-            'ai_match_score' => 'integer',
-            'ai_analyzed_at' => 'datetime',
-            'position'       => 'decimal:10',
-            'created_at'     => 'datetime',
-            'updated_at'     => 'datetime',
-            'deleted_at'     => 'datetime',
+            'gender'                    => JobApplicationGender::class,
+            'birth_date'                => 'date',
+            'marital_status'            => JobApplicationMaritalStatus::class,
+            'status'                    => JobApplicationStatus::class,
+            'ai_match_score'            => 'integer',
+            'ai_analyzed_at'            => 'datetime',
+            'ai_screening_requested_at' => 'datetime',
+            'ai_screening_started_at'   => 'datetime',
+            'position'                  => 'decimal:10',
+            'created_at'                => 'datetime',
+            'updated_at'                => 'datetime',
+            'deleted_at'                => 'datetime',
         ];
     }
 
     protected static function booted(): void
     {
         static::saving(function (JobApplication $application): void {
+            $application->screeningInputsChanged = (! $application->exists
+                || $application->isDirty(['resume_path', 'resume_disk', 'job_posting_id']))
+                && Schema::hasColumn($application->getTable(), 'ai_screening_status');
+
+            if ($application->screeningInputsChanged) {
+                $application->forceFill([
+                    'ai_screening_status'       => 'pending',
+                    'ai_screening_token'        => null,
+                    'ai_screening_error'        => null,
+                    'ai_screening_requested_at' => null,
+                    'ai_screening_started_at'   => null,
+                ]);
+            }
+
             $application->normalizeTransactionalInput();
             $application->snapshotOriginalActiveEmailOwnership();
             $application->snapshotOriginalActiveWhatsappOwnership();
@@ -130,6 +156,11 @@ class JobApplication extends Model
             $application->explicitAttachmentDisks = [];
             $application->reassignOriginalActiveEmailIfNeeded();
             $application->reassignOriginalActiveWhatsappIfNeeded();
+
+            if ($application->screeningInputsChanged) {
+                $application->screeningInputsChanged = false;
+                app(AiScreeningService::class)->queue($application, force: true, automatic: true);
+            }
         });
 
         static::created(function (JobApplication $application): void {

@@ -92,7 +92,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
         $this->assertCount(1, $response->json('applications'));
         $this->assertEquals($posting->id, $response->json('active_job.id'));
         $this->assertEquals('Web App Developer Cirebon', $response->json('active_job.title'));
-        $this->assertNotNull($response->json('applications.0.ai_match_score'));
+        $this->assertNull($response->json('applications.0.ai_match_score'));
+        $this->assertSame('pending', $response->json('applications.0.ai_screening_status'));
     }
 
     public function test_can_fetch_progress_report_via_spa_api(): void

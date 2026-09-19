@@ -70,6 +70,7 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::delete('job-postings/{id}', [RekrutmenSpaController::class, 'destroyJobPosting'])->name('rekrutmen.api.job-postings.destroy');
 
         Route::get('applications', [RekrutmenSpaController::class, 'getApplications'])->name('rekrutmen.api.applications');
+        Route::get('applications/ai-status', [RekrutmenSpaController::class, 'aiScreeningStatus'])->name('rekrutmen.api.applications.ai-status');
         Route::get('applications/{id}/cv', [RekrutmenSpaController::class, 'viewCv'])->name('rekrutmen.api.applications.cv');
         Route::post('applications/{id}/upload-cv', [RekrutmenSpaController::class, 'uploadCv'])->name('rekrutmen.api.applications.upload-cv');
         Route::get('applications/{id}/photo', [RekrutmenSpaController::class, 'viewPhoto'])->name('rekrutmen.api.applications.photo');
@@ -92,9 +93,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('stages/reorder', [RekrutmenSpaController::class, 'reorderStages'])->name('rekrutmen.api.stages.reorder');
         Route::put('stages/{id}', [RekrutmenSpaController::class, 'updateStage'])->name('rekrutmen.api.stages.update');
         Route::delete('stages/{id}', [RekrutmenSpaController::class, 'destroyStage'])->name('rekrutmen.api.stages.destroy');
-        Route::get('settings/ai', [RekrutmenSpaController::class, 'getAiSettings'])->name('rekrutmen.api.settings.ai');
-        Route::post('settings/ai', [RekrutmenSpaController::class, 'saveAiSettings'])->name('rekrutmen.api.settings.ai.save');
-        Route::post('settings/ai/test', [RekrutmenSpaController::class, 'testAiConnection'])->name('rekrutmen.api.settings.ai.test');
+        Route::get('settings/ai', [RekrutmenSpaController::class, 'getAiSettings'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai');
+        Route::post('settings/ai', [RekrutmenSpaController::class, 'saveAiSettings'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai.save');
+        Route::post('settings/ai/test', [RekrutmenSpaController::class, 'testAiConnection'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai.test');
         Route::get('settings/mail-templates', [RekrutmenSpaController::class, 'getMailTemplates'])->name('rekrutmen.api.settings.mail-templates');
         Route::post('settings/mail-templates', [RekrutmenSpaController::class, 'saveMailTemplates'])->name('rekrutmen.api.settings.mail-templates.save');
         Route::get('settings/mail', [RekrutmenCommunicationSettingsController::class, 'getMailSettings'])->name('rekrutmen.api.settings.mail');

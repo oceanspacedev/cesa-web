@@ -7,6 +7,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     postings: [],
     companies: [],
     applications: [],
+    aiScreeningProgress: null,
     stages: [],
     pipelines: [],
     activeJob: null,
@@ -275,16 +276,13 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       }
     },
 
-    async analyzeCandidateWithAi(appId) {
+    async analyzeCandidateWithAi(appId, force = false) {
       try {
-        const res = await axios.post(`/rekrutmen/api/applications/${appId}/analyze-ai`);
+        const res = await axios.post(`/rekrutmen/api/applications/${appId}/analyze-ai`, { force });
         const updated = res.data.application;
         const app = this.applications.find(a => Number(a.id) === Number(appId));
         if (app && updated) {
-          app.ai_match_score = updated.ai_match_score;
-          app.ai_recommendation = updated.ai_recommendation;
-          app.ai_summary = updated.ai_summary;
-          app.ai_analyzed_at = updated.ai_analyzed_at;
+          Object.assign(app, updated);
         }
         return res.data;
       } catch (err) {
@@ -293,50 +291,27 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       }
     },
 
-    async batchAnalyzeWithAi(jobId = null, onProgress = null, applicationIds = null) {
-      const chunkSize = 2;
-      let offset = 0;
-      let totalProcessed = 0;
-      let total = null;
-      let lastRes = null;
-
-      try {
-        while (true) {
-          const payload = {
-            job_id: jobId,
-            force: true,
-            chunk_size: chunkSize,
-            offset: offset,
-          };
-          if (Array.isArray(applicationIds) && applicationIds.length) {
-            payload.application_ids = [...applicationIds];
-          }
-
-          const res = await axios.post('/rekrutmen/api/applications/batch-analyze-ai', payload);
-
-          lastRes = res.data;
-          totalProcessed += res.data.count || 0;
-          total = res.data.total;
-
-          if (onProgress) {
-            onProgress({ processed: totalProcessed, total, offset });
-          }
-
-          if (!res.data.has_more) {
-            break;
-          }
-          offset = res.data.next_offset;
-        }
-
-        await this.fetchApplications(jobId ? { job_id: jobId } : {}, true);
-        return {
-          ...lastRes,
-          message: `Berhasil menyelesaikan screening AI untuk ${totalProcessed} dari ${total} kandidat!`,
-        };
-      } catch (err) {
-        console.error('Failed batch AI analysis', err);
-        throw err;
+    async batchAnalyzeWithAi(jobId = null, applicationIds = null, force = false) {
+      const payload = { job_id: jobId, force };
+      if (Array.isArray(applicationIds) && applicationIds.length) {
+        payload.application_ids = [...applicationIds];
       }
+      const res = await axios.post('/rekrutmen/api/applications/batch-analyze-ai', payload);
+      return res.data;
+    },
+
+    async fetchAiScreeningStatus(jobId = null, applicationIds = [], signal = undefined) {
+      const params = { job_id: jobId };
+      if (applicationIds.length) params.ids = applicationIds.slice(0, 200);
+      const res = await axios.get('/rekrutmen/api/applications/ai-status', { params, signal, timeout: 10000 });
+      if (signal?.aborted) return null;
+      this.aiScreeningProgress = res.data;
+      const updates = new Map((res.data.applications || []).map(app => [String(app.id), app]));
+      this.applications.forEach(app => {
+        const update = updates.get(String(app.id));
+        if (update) Object.assign(app, update);
+      });
+      return res.data;
     },
 
     async syncCandidateCvs() {

@@ -61,7 +61,7 @@
           @click="startRescreening"
           :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI khusus untuk 1 pelamar terpilih' : (selectedAppIds.length > 1 ? `Jalankan evaluasi kualifikasi AI khusus untuk ${selectedAppIds.length} pelamar terpilih` : 'Jalankan evaluasi kualifikasi otomatis untuk pelamar')"
         >
-          {{ selectedAppIds.length === 1 ? 'Evaluasi AI (1)' : (selectedAppIds.length > 1 ? `Evaluasi AI (${selectedAppIds.length})` : 'Evaluasi AI') }}
+          {{ selectedAppIds.length ? `Analisis ulang (${selectedAppIds.length})` : 'Analisis yang belum dinilai' }}
         </FButton>
 
         <!-- View Switcher (Daftar / Kanban) -->
@@ -95,6 +95,23 @@
         </div>
       </div>
     </div>
+
+    <section v-if="store.aiScreeningProgress" aria-label="Progres analisis CV" class="rounded-lg border border-outline-gray-2 bg-surface-white p-4 space-y-3 shadow-2xs">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-xs font-bold text-ink-gray-9">Analisis CV: {{ aiCounts.completed || 0 }} / {{ store.aiScreeningProgress.total || 0 }} selesai</h2>
+          <p class="mt-1 text-xs text-ink-gray-5">Analisis tetap diproses walau halaman ditutup. Keputusan seleksi tetap di tangan HR.</p>
+        </div>
+        <FBadge v-if="aiActiveCount" theme="blue" variant="subtle" size="sm">{{ aiActiveCount }} dalam proses</FBadge>
+      </div>
+      <div class="h-1.5 overflow-hidden rounded-full bg-surface-gray-2" role="progressbar" aria-label="CV selesai dianalisis" :aria-valuenow="aiCounts.completed || 0" :aria-valuemax="store.aiScreeningProgress.total || 0" aria-valuemin="0">
+        <div class="h-full rounded-full bg-emerald-500 transition-all" :style="{ width: `${aiProgressPercent}%` }"></div>
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs text-ink-gray-7" aria-live="polite">
+        <span v-for="status in aiStatusOptions" :key="status.value">{{ status.label }}: {{ aiCounts[status.value] || 0 }}</span>
+      </div>
+      <p v-if="aiProgressError" role="status" class="text-xs text-amber-700">{{ aiProgressError }}</p>
+    </section>
 
     <!-- Notification Progress Bar -->
     <section v-if="notificationProgress" aria-label="Progres pengiriman notifikasi" class="rounded-lg border border-outline-gray-2 bg-surface-white p-4 space-y-3 shadow-2xs">
@@ -389,7 +406,7 @@
             @click="rescreenSelectedCandidates"
             :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI hanya untuk 1 pelamar terpilih' : 'Jalankan evaluasi kualifikasi AI hanya untuk kandidat terpilih'"
           >
-            {{ selectedAppIds.length === 1 ? 'Evaluasi AI (1)' : `Evaluasi AI (${selectedAppIds.length})` }}
+            {{ `Analisis ulang (${selectedAppIds.length})` }}
           </FButton>
 
           <FButton
@@ -496,8 +513,10 @@
             <!-- Right Side: AI Match Score + Stage Selector + Actions -->
             <div class="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-outline-gray-1">
               <!-- AI Match Score -->
-              <div class="shrink-0" @click.stop>
-                <div v-if="app.ai_match_score !== null && app.ai_match_score !== undefined">
+              <div class="shrink-0 space-y-1.5" @click.stop>
+                <FBadge :theme="aiStatusTheme(app)" variant="subtle" size="sm">{{ aiStatusLabel(app) }}</FBadge>
+                <p v-if="aiNeedsReview(app)" class="max-w-56 text-[11px] text-amber-700" :title="app.ai_screening_error">{{ app.ai_screening_error || 'Periksa CV atau coba analisis kembali.' }}</p>
+                <div v-if="hasAiResult(app)">
                   <button
                     type="button"
                     @click="openAnalysisModal(app)"
@@ -514,7 +533,7 @@
                     </FBadge>
                   </button>
                 </div>
-                <div v-else>
+                <div v-else-if="!isAiInProgress(app)">
                   <FButton
                     theme="gray"
                     variant="outline"
@@ -524,7 +543,7 @@
                     @click="rescreenSingleCandidate(app)"
                     title="Klik untuk evaluasi kualifikasi kandidat ini dengan AI"
                   >
-                    Evaluasi AI
+                    Analisis CV
                   </FButton>
                 </div>
               </div>
@@ -659,7 +678,7 @@
               </div>
 
               <FBadge
-                v-if="app.ai_match_score !== null && app.ai_match_score !== undefined"
+                v-if="hasAiResult(app)"
                 :theme="app.ai_match_score >= 75 ? 'green' : (app.ai_match_score >= 50 ? 'orange' : 'gray')"
                 variant="subtle"
                 size="sm"
@@ -671,6 +690,10 @@
               </FBadge>
             </div>
 
+            <div class="pb-2">
+              <FBadge :theme="aiStatusTheme(app)" variant="subtle" size="sm">{{ aiStatusLabel(app) }}</FBadge>
+              <p v-if="aiNeedsReview(app)" class="mt-1 text-[11px] text-amber-700">{{ app.ai_screening_error || 'Perlu pemeriksaan CV.' }}</p>
+            </div>
             <!-- Role / Details Subtitle -->
             <div v-if="!activeJobId && app.job_posting?.title" class="text-[11px] font-medium text-ink-gray-6 mt-2 pt-2 border-t border-outline-gray-1 line-clamp-1">
               {{ app.job_posting.title }}
@@ -745,6 +768,10 @@
               </FBadge>
             </div>
 
+            <div class="pb-2">
+              <FBadge :theme="aiStatusTheme(app)" variant="subtle" size="sm">{{ aiStatusLabel(app) }}</FBadge>
+              <p v-if="aiNeedsReview(app)" class="mt-1 text-[11px] text-amber-700">{{ app.ai_screening_error || 'Perlu pemeriksaan CV.' }}</p>
+            </div>
             <!-- Role / Details Subtitle -->
             <div v-if="!activeJobId && app.job_posting?.title" class="text-[11px] font-medium text-ink-gray-6 mt-2 pt-2 border-t border-outline-gray-1 line-clamp-1">
               {{ app.job_posting.title }}
@@ -877,23 +904,23 @@
                   <h3 class="text-xs font-semibold text-zinc-900 tracking-tight">Evaluasi Kualifikasi Pelamar</h3>
                 </div>
                 <Badge
-                  v-if="selectedApp.ai_match_score !== null && selectedApp.ai_match_score !== undefined"
+                  v-if="hasAiResult(selectedApp)"
                   :variant="selectedApp.ai_match_score >= 75 ? 'success' : (selectedApp.ai_match_score >= 50 ? 'warning' : 'secondary')"
                   class="text-[10px] px-2 py-0.5"
                 >
                   {{ selectedApp.ai_match_score }}% &bull; {{ formatAiRecommendation(selectedApp.ai_recommendation) }}
                 </Badge>
-                <span v-else class="text-[11px] text-zinc-400 italic">Belum dievaluasi</span>
+                <FBadge v-else :theme="aiStatusTheme(selectedApp)" variant="subtle" size="sm">{{ aiStatusLabel(selectedApp) }}</FBadge>
               </div>
 
               <!-- Summary Text -->
               <p class="text-xs text-zinc-700 leading-relaxed font-normal bg-white p-3 rounded-lg border border-zinc-200 whitespace-pre-line shadow-2xs">
-                {{ selectedApp.ai_summary || 'Evaluasi kualifikasi membandingkan kriteria posisi dengan berkas CV pelamar.' }}
+                {{ aiSummary(selectedApp) }}
               </p>
 
               <!-- Actions -->
               <div class="flex items-center justify-between pt-0.5 text-[11px] text-zinc-400">
-                <span v-if="selectedApp.ai_analyzed_at">Diperbarui: {{ selectedApp.ai_analyzed_at }}</span>
+                <span v-if="hasAiResult(selectedApp) && selectedApp.ai_analyzed_at">Diperbarui: {{ selectedApp.ai_analyzed_at }}</span>
                 <span v-else></span>
                 <div class="flex items-center gap-2">
                   <FButton
@@ -902,14 +929,16 @@
                     size="sm"
                     :icon-left="RotateCw"
                     :loading="isScreening"
+                    :disabled="isAiInProgress(selectedApp)"
                     @click="rescreenSingleCandidate(selectedApp)"
                   >
-                    Evaluasi Ulang
+                    {{ hasAiResult(selectedApp) ? 'Analisis Ulang' : 'Analisis CV' }}
                   </FButton>
                   <FButton
                     theme="gray"
                     variant="solid"
                     size="sm"
+                    :disabled="!hasAiResult(selectedApp)"
                     @click="openAnalysisModal(selectedApp)"
                   >
                     Detail Komparasi &rarr;
@@ -1150,11 +1179,13 @@
                   <td class="py-2.5 px-4 text-zinc-500 font-medium bg-zinc-50">Kesesuaian Kualifikasi</td>
                   <td class="py-2.5 px-4">
                     <Badge
+                      v-if="hasAiResult(analysisModalApp)"
                       :variant="analysisModalApp.ai_match_score >= 75 ? 'success' : (analysisModalApp.ai_match_score >= 50 ? 'warning' : 'secondary')"
                       class="text-xs font-semibold px-2.5 py-0.5"
                     >
                       {{ analysisModalApp.ai_match_score }}% Match &bull; {{ formatAiRecommendation(analysisModalApp.ai_recommendation) }}
                     </Badge>
+                    <FBadge v-else :theme="aiStatusTheme(analysisModalApp)" variant="subtle" size="sm">{{ aiStatusLabel(analysisModalApp) }}</FBadge>
                   </td>
                 </tr>
               </tbody>
@@ -1174,10 +1205,10 @@
             </div>
 
             <div class="p-4 bg-zinc-50 rounded-lg border border-zinc-200 text-zinc-700 leading-relaxed text-xs whitespace-pre-line shadow-2xs">
-              {{ analysisModalApp.ai_summary || 'Kandidat memiliki kualifikasi yang relevan dengan persyaratan posisi lowongan ini.' }}
+              {{ aiSummary(analysisModalApp) }}
             </div>
 
-            <div v-if="analysisModalApp.ai_analyzed_at" class="text-[11px] text-zinc-400 text-right">
+            <div v-if="hasAiResult(analysisModalApp) && analysisModalApp.ai_analyzed_at" class="text-[11px] text-zinc-400 text-right">
               Terakhir dievaluasi: {{ analysisModalApp.ai_analyzed_at }}
             </div>
           </div>
@@ -1191,9 +1222,10 @@
             size="sm"
             :icon-left="RotateCw"
             :loading="isScreening"
+            :disabled="isAiInProgress(analysisModalApp)"
             @click="rescreenSingleCandidate(analysisModalApp)"
           >
-            Evaluasi Ulang CV
+            {{ hasAiResult(analysisModalApp) ? 'Analisis Ulang CV' : 'Analisis CV' }}
           </FButton>
 
           <div class="flex items-center gap-2">
@@ -1712,6 +1744,64 @@ const selectedApp = ref(null);
 const analysisModalApp = ref(null);
 const dragOverStageId = ref(null);
 const isScreening = ref(false);
+const aiProgressError = ref('');
+const aiStatusOptions = [
+  { value: 'pending', label: 'Menunggu' },
+  { value: 'queued', label: 'Antre' },
+  { value: 'processing', label: 'Proses' },
+  { value: 'completed', label: 'Selesai' },
+  { value: 'needs_review', label: 'Perlu pemeriksaan' },
+  { value: 'failed', label: 'Gagal' },
+];
+const hasAiResult = (app) => app?.ai_screening_status === 'completed' && app.ai_match_score !== null && app.ai_match_score !== undefined;
+const isAiInProgress = (app) => ['queued', 'processing'].includes(app?.ai_screening_status);
+const aiNeedsReview = (app) => ['needs_review', 'failed'].includes(app?.ai_screening_status);
+const aiStatusLabel = (app) => aiStatusOptions.find(status => status.value === app?.ai_screening_status)?.label || 'Menunggu';
+const aiStatusTheme = (app) => ({ completed: 'green', queued: 'blue', processing: 'blue', needs_review: 'orange', failed: 'red' }[app?.ai_screening_status] || 'gray');
+const aiSummary = (app) => {
+  if (hasAiResult(app)) return app.ai_summary || 'Analisis selesai. Tinjau kecocokan kandidat sebelum mengambil keputusan.';
+  if (aiNeedsReview(app)) return app.ai_screening_error || 'CV perlu diperiksa. Perbaiki dokumen atau coba analisis kembali.';
+  if (isAiInProgress(app)) return 'CV sedang dalam antrean analisis. Hasil akan muncul otomatis, dan tetap diproses walau halaman ditutup.';
+  return 'CV belum dianalisis. Mulai analisis untuk membandingkan CV dengan persyaratan lowongan.';
+};
+const aiCounts = computed(() => store.aiScreeningProgress?.counts || {});
+const aiActiveCount = computed(() => (aiCounts.value.queued || 0) + (aiCounts.value.processing || 0));
+const aiProgressPercent = computed(() => store.aiScreeningProgress?.total ? Math.round((aiCounts.value.completed || 0) / store.aiScreeningProgress.total * 100) : 0);
+let isAiViewActive = false;
+let aiLastTotal = null;
+let aiStatusOffset = 0;
+const aiPoller = createPoller({
+  interval: 5000,
+  maxDuration: Infinity,
+  request: async (jobId, signal) => {
+    if (document.hidden) return null;
+    const priorityIds = [...new Set([selectedApp.value?.id, analysisModalApp.value?.id].filter(Boolean))];
+    const candidateIds = applications.value.map(app => app.id).filter(id => !priorityIds.includes(id));
+    if (aiStatusOffset >= candidateIds.length) aiStatusOffset = 0;
+    const ids = [...priorityIds, ...candidateIds.slice(aiStatusOffset, aiStatusOffset + 200 - priorityIds.length)];
+    aiStatusOffset += 200 - priorityIds.length;
+    return store.fetchAiScreeningStatus(jobId, ids, signal);
+  },
+  onData: (data) => {
+    if (!data) return;
+    aiProgressError.value = '';
+    if ((aiLastTotal !== null && aiLastTotal !== data.total) || (aiLastTotal === null && data.total > applications.value.length)) {
+      store.fetchApplications(activeJobId.value ? { job_id: activeJobId.value } : '', true).catch(() => {});
+    }
+    aiLastTotal = data.total;
+    for (const app of data.applications || []) {
+      if (String(selectedApp.value?.id) === String(app.id)) Object.assign(selectedApp.value, app);
+      if (String(analysisModalApp.value?.id) === String(app.id)) Object.assign(analysisModalApp.value, app);
+    }
+  },
+  onError: () => {
+    aiProgressError.value = 'Status belum dapat diperbarui. Akan dicoba kembali secara otomatis.';
+  },
+});
+const resumeAiPolling = () => {
+  if (isAiViewActive && !document.hidden) aiPoller.start(activeJobId.value);
+  else aiPoller.stop();
+};
 
 // Bulk selection state
 const selectedAppIds = ref([]);
@@ -1836,9 +1926,14 @@ onMounted(() => {
   }
   checkHeartbeat();
   heartbeatTimer = setInterval(checkHeartbeat, 25000);
+  isAiViewActive = true;
+  document.addEventListener('visibilitychange', resumeAiPolling);
+  resumeAiPolling();
 });
 
 onActivated(() => {
+  isAiViewActive = true;
+  resumeAiPolling();
   const targetId = activeJobId.value;
   store.fetchApplications(targetId ? { job_id: targetId } : '', true).catch(() => {});
   if (!store.postings?.length) {
@@ -1847,14 +1942,25 @@ onActivated(() => {
 });
 
 onUnmounted(() => {
+  isAiViewActive = false;
+  aiPoller.stop();
+  document.removeEventListener('visibilitychange', resumeAiPolling);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   notificationPoller.stop();
 });
-onDeactivated(() => notificationPoller.stop());
+onDeactivated(() => {
+  isAiViewActive = false;
+  aiPoller.stop();
+  notificationPoller.stop();
+});
 
 watch(
   () => activeJobId.value,
   (newId) => {
+    store.aiScreeningProgress = null;
+    aiLastTotal = null;
+    aiStatusOffset = 0;
+    resumeAiPolling();
     store.fetchApplications(newId ? { job_id: newId } : '', true).catch(() => {});
   }
 );
@@ -1925,9 +2031,9 @@ const rejectedCandidateCount = computed(() => {
   return applications.value.filter(a => a.status === 'rejected').length;
 });
 
-const recommendedCount = computed(() => applications.value.filter(a => a.ai_match_score >= 75).length);
-const consideredCount = computed(() => applications.value.filter(a => a.ai_match_score >= 50 && a.ai_match_score < 75).length);
-const notSuitableCount = computed(() => applications.value.filter(a => a.ai_match_score !== null && a.ai_match_score < 50).length);
+const recommendedCount = computed(() => applications.value.filter(a => hasAiResult(a) && a.ai_match_score >= 75).length);
+const consideredCount = computed(() => applications.value.filter(a => hasAiResult(a) && a.ai_match_score >= 50 && a.ai_match_score < 75).length);
+const notSuitableCount = computed(() => applications.value.filter(a => hasAiResult(a) && a.ai_match_score < 50).length);
 
 const filteredApplications = computed(() => {
   let list = applications.value;
@@ -1945,11 +2051,11 @@ const filteredApplications = computed(() => {
 
   // Filter by Match Score
   if (matchFilter.value === 'recommended') {
-    list = list.filter(a => a.ai_match_score >= 75);
+    list = list.filter(a => hasAiResult(a) && a.ai_match_score >= 75);
   } else if (matchFilter.value === 'considered') {
-    list = list.filter(a => a.ai_match_score >= 50 && a.ai_match_score < 75);
+    list = list.filter(a => hasAiResult(a) && a.ai_match_score >= 50 && a.ai_match_score < 75);
   } else if (matchFilter.value === 'not_suitable') {
-    list = list.filter(a => a.ai_match_score !== null && a.ai_match_score < 50);
+    list = list.filter(a => hasAiResult(a) && a.ai_match_score < 50);
   }
 
   if (!searchQuery.value) return list;
@@ -2048,7 +2154,7 @@ const handleCvUploadForApplicant = async (event) => {
   isUploadingCv.value = true;
   Swal.fire({
     title: 'Mengunggah CV...',
-    html: '<div class="text-xs text-slate-500 mt-2">Sedang menyimpan dokumen dan melakukan evaluasi kualifikasi...</div>',
+    html: '<div class="text-xs text-slate-500 mt-2">Sedang menyimpan dokumen CV...</div>',
     allowOutsideClick: false,
     showConfirmButton: false,
     didOpen: () => {
@@ -2063,6 +2169,9 @@ const handleCvUploadForApplicant = async (event) => {
 
     isUploadingCv.value = false;
     if (res.data?.success) {
+      selectedApp.value.ai_screening_status = res.data.ai_screening_status;
+      selectedApp.value.ai_screening_error = res.data.ai_screening_error;
+      selectedApp.value.has_resume = true;
       selectedApp.value.resume_path = res.data.resume_path;
       selectedApp.value.resume_url = res.data.resume_url;
       if (res.data.ai_match_score !== undefined) {
@@ -2077,6 +2186,9 @@ const handleCvUploadForApplicant = async (event) => {
         found.resume_path = res.data.resume_path;
         found.resume_url = res.data.resume_url;
         found.has_resume = true;
+        found.ai_screening_status = res.data.ai_screening_status;
+        found.ai_screening_error = res.data.ai_screening_error;
+        found.ai_analyzed_at = res.data.ai_analyzed_at;
         found.ai_match_score = res.data.ai_match_score;
         found.ai_recommendation = res.data.ai_recommendation;
         found.ai_summary = res.data.ai_summary;
@@ -2085,7 +2197,7 @@ const handleCvUploadForApplicant = async (event) => {
       Swal.fire({
         icon: 'success',
         title: 'CV Berhasil Diunggah!',
-        text: 'Dokumen CV asli pelamar telah tersimpan dan ditampilkan di pratinjau.',
+        text: isAiInProgress(selectedApp.value) ? 'CV tersimpan dan masuk antrean analisis. Hasil akan muncul otomatis.' : 'CV tersimpan. Analisis dapat dimulai dari tombol Analisis CV.',
         timer: 2200,
         showConfirmButton: false,
         iconColor: '#10b981',
@@ -2154,294 +2266,82 @@ const startSyncCvs = async () => {
   }
 };
 
+const showAiQueued = (response) => {
+  toastMessage.value = response.message || 'CV masuk antrean analisis. Tetap diproses walau halaman ditutup.';
+  toastType.value = 'success';
+  resumeAiPolling();
+};
+
+const showAiQueueError = (error) => {
+  toastMessage.value = error.response?.data?.message || 'CV belum berhasil masuk antrean. Silakan coba lagi.';
+  toastType.value = 'error';
+};
+
 const rescreenSelectedCandidates = async () => {
-  if (!selectedAppIds.value.length) return;
-  const count = selectedAppIds.value.length;
-
-  if (count === 1) {
-    const targetId = selectedAppIds.value[0];
-    const targetApp = applications.value.find(a => Number(a.id) === Number(targetId));
-    const candidateName = targetApp ? targetApp.full_name : 'Pelamar Terpilih';
-
-    const confirm = await Swal.fire({
-      titleText: `Evaluasi AI: ${candidateName}?`,
-      html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-        Sistem AI hanya akan mengevaluasi kualifikasi CV untuk kandidat <b>${escapeHtml(candidateName)}</b> saja.<br><br>
-        Apakah Anda ingin melanjutkan evaluasi AI kandidat ini?
-      </div>`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Evaluasi Sekarang',
-      cancelButtonText: 'Batal',
-      confirmButtonColor: '#0c2340',
-      cancelButtonColor: '#64748b',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-      }
-    });
-
-    if (!confirm.isConfirmed) return;
-
-    if (targetApp) {
-      await rescreenSingleCandidate(targetApp);
-    } else {
-      isScreening.value = true;
-      Swal.fire({
-        title: 'Mengevaluasi Pelamar',
-        html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi kandidat...</div>`,
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        customClass: {
-          popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-          title: 'text-sm font-bold text-slate-900',
-        },
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
-      try {
-        const res = await store.analyzeCandidateWithAi(targetId);
-        Swal.fire({
-          icon: 'success',
-          title: 'Evaluasi Berhasil',
-          html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
-          timer: 2000,
-          showConfirmButton: false,
-          iconColor: '#10b981',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-          }
-        });
-      } catch (err) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Gagal',
-          html: '<div class="text-xs text-slate-600 mt-1">Gagal mengevaluasi data pelamar.</div>',
-          confirmButtonColor: '#739ec5',
-          customClass: {
-            popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-            title: 'text-sm font-bold text-slate-900',
-            confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
-          }
-        });
-      } finally {
-        isScreening.value = false;
-      }
-    }
-    selectedAppIds.value = [];
-    return;
-  }
-
+  if (!selectedAppIds.value.length || isScreening.value) return;
+  const ids = [...selectedAppIds.value];
   const confirm = await Swal.fire({
-    title: `Evaluasi ${count} Pelamar Terpilih?`,
-    html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-      Sistem AI hanya akan mengevaluasi kualifikasi CV untuk <b>${count} pelamar yang Anda centang</b>.<br><br>
-      Apakah Anda ingin melanjutkan evaluasi ulang AI?
-    </div>`,
+    title: `Analisis ulang ${ids.length} pelamar terpilih?`,
+    text: 'Hasil sebelumnya akan diperbarui. Analisis tetap berjalan walau halaman ditutup.',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonText: `Evaluasi ${count} Pelamar`,
+    confirmButtonText: 'Analisis Ulang',
     cancelButtonText: 'Batal',
     confirmButtonColor: '#0c2340',
-    cancelButtonColor: '#64748b',
-    customClass: {
-      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-      title: 'text-sm font-bold text-slate-900',
-    }
   });
-
   if (!confirm.isConfirmed) return;
-
   isScreening.value = true;
-  Swal.fire({
-    title: `Evaluasi AI: ${count} Pelamar Terpilih`,
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Mengevaluasi kualifikasi pelamar yang dipilih...</div>
-           <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: false,
-    customClass: {
-      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-      title: 'text-sm font-bold text-slate-900',
-    },
-    didOpen: () => {
-      Swal.showLoading();
-    }
-  });
-
   try {
-    const res = await store.batchAnalyzeWithAi(activeJobId.value, ({ processed, total }) => {
-      const el = document.getElementById('swal-progress');
-      if (el) {
-        const pct = total ? Math.round((processed / total) * 100) : 0;
-        el.textContent = `Memproses ${processed} dari ${total} kandidat (${pct}%)`;
-      }
-    }, [...selectedAppIds.value]);
-
-    isScreening.value = false;
+    const response = await store.batchAnalyzeWithAi(activeJobId.value, ids, true);
     selectedAppIds.value = [];
-    Swal.fire({
-      icon: 'success',
-      title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi kualifikasi ${count} pelamar berhasil diperbarui.`)}</div>`,
-      timer: 3000,
-      showConfirmButton: false,
-      iconColor: '#10b981',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-      }
-    });
-  } catch (e) {
+    showAiQueued(response);
+  } catch (error) {
+    showAiQueueError(error);
+  } finally {
     isScreening.value = false;
-    Swal.fire({
-      icon: 'error',
-      title: 'Gagal Evaluasi',
-      html: '<div class="text-xs text-slate-600 mt-1">Terjadi kesalahan saat memproses evaluasi kualifikasi pelamar terpilih.</div>',
-      confirmButtonColor: '#739ec5',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-        confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
-      }
-    });
   }
 };
 
 const startRescreening = async () => {
-  if (selectedAppIds.value.length > 0) {
-    return rescreenSelectedCandidates();
-  }
-  // If no job filter, show warning first
-  if (!activeJobId.value) {
-    const confirm = await Swal.fire({
-      title: 'Evaluasi Semua Pelamar?',
-      html: `<div class="text-xs text-slate-600 mt-1 leading-relaxed">
-        Anda tidak mencentang pelamar dan tidak sedang memfilter ke lowongan tertentu.<br><br>
-        Evaluasi AI akan berjalan untuk <b>seluruh pelamar</b>.<br><br>
-        <i>Tips: Centang kotak pada nama pelamar jika hanya ingin mengevaluasi 1 atau beberapa orang saja.</i>
-      </div>`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Lanjutkan Evaluasi Semua',
-      cancelButtonText: 'Batal',
-      confirmButtonColor: '#0c2340',
-      cancelButtonColor: '#64748b',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-      }
-    });
-    if (!confirm.isConfirmed) return;
-  }
-
-  const jobTitle = activeJobTitle.value;
+  if (isScreening.value) return;
+  if (selectedAppIds.value.length) return rescreenSelectedCandidates();
   isScreening.value = true;
-  Swal.fire({
-    titleText: jobTitle ? `Screening AI: ${jobTitle}` : 'Evaluasi Kualifikasi',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">${jobTitle ? `Mengevaluasi kandidat terhadap kualifikasi lowongan <b>${escapeHtml(jobTitle)}</b>...` : 'Menyiapkan evaluasi kandidat...'}</div>
-           <div id="swal-progress" class="text-xs font-semibold text-slate-700 mt-2"></div>`,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: false,
-    customClass: {
-      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-      title: 'text-sm font-bold text-slate-900',
-    },
-    didOpen: () => {
-      Swal.showLoading();
-    }
-  });
-
   try {
-    const res = await store.batchAnalyzeWithAi(activeJobId.value, ({ processed, total }) => {
-      const el = document.getElementById('swal-progress');
-      if (el) {
-        const pct = total ? Math.round((processed / total) * 100) : 0;
-        el.textContent = `Memproses ${processed} dari ${total} kandidat (${pct}%)`;
-      }
-    });
+    showAiQueued(await store.batchAnalyzeWithAi(activeJobId.value));
+  } catch (error) {
+    showAiQueueError(error);
+  } finally {
     isScreening.value = false;
-    Swal.fire({
-      icon: 'success',
-      title: 'Evaluasi Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Evaluasi kualifikasi berhasil diperbarui.')}</div>`,
-      timer: 3000,
-      showConfirmButton: false,
-      iconColor: '#10b981',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-      }
-    });
-  } catch (e) {
-    isScreening.value = false;
-    Swal.fire({
-      icon: 'error',
-      title: 'Gagal Evaluasi',
-      html: '<div class="text-xs text-slate-600 mt-1">Terjadi kesalahan saat memproses evaluasi kualifikasi.</div>',
-      confirmButtonColor: '#739ec5',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-        confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
-      }
-    });
   }
 };
 
 const rescreenSingleCandidate = async (app) => {
-  if (!app) return;
+  if (!app || isScreening.value || isAiInProgress(app)) return;
+  if (hasAiResult(app)) {
+    const confirm = await Swal.fire({
+      titleText: `Analisis ulang ${app.full_name}?`,
+      text: 'Hasil sebelumnya akan diperbarui. Analisis tetap berjalan walau halaman ditutup.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Analisis Ulang',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#0c2340',
+    });
+    if (!confirm.isConfirmed) return;
+  }
   isScreening.value = true;
-  Swal.fire({
-    title: 'Mengevaluasi Pelamar',
-    html: `<div class="text-xs text-slate-500 mt-2 leading-relaxed">Menganalisis data kualifikasi <b>${escapeHtml(app.full_name)}</b>...</div>`,
-    allowOutsideClick: false,
-    allowEscapeKey: false,
-    showConfirmButton: false,
-    customClass: {
-      popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-      title: 'text-sm font-bold text-slate-900',
-    },
-    didOpen: () => {
-      Swal.showLoading();
-    }
-  });
-
   try {
-    const res = await store.analyzeCandidateWithAi(app.id);
-    isScreening.value = false;
-    if (res.application && selectedApp.value && selectedApp.value.id === app.id) {
-      selectedApp.value = { ...selectedApp.value, ...res.application };
+    const response = await store.analyzeCandidateWithAi(app.id, hasAiResult(app));
+    if (response.application) {
+      Object.assign(app, response.application);
+      if (String(selectedApp.value?.id) === String(app.id)) Object.assign(selectedApp.value, response.application);
+      if (String(analysisModalApp.value?.id) === String(app.id)) Object.assign(analysisModalApp.value, response.application);
     }
-    Swal.fire({
-      icon: 'success',
-      title: 'Evaluasi Berhasil',
-      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || `Evaluasi untuk "${app.full_name}" berhasil diperbarui.`)}</div>`,
-      timer: 2000,
-      showConfirmButton: false,
-      iconColor: '#10b981',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-      }
-    });
-  } catch (e) {
+    showAiQueued(response);
+  } catch (error) {
+    showAiQueueError(error);
+  } finally {
     isScreening.value = false;
-    Swal.fire({
-      icon: 'error',
-      title: 'Gagal',
-      html: '<div class="text-xs text-slate-600 mt-1">Gagal mengevaluasi data pelamar.</div>',
-      confirmButtonColor: '#739ec5',
-      customClass: {
-        popup: 'rounded-2xl border border-slate-100 shadow-2xl p-6 font-sans',
-        title: 'text-sm font-bold text-slate-900',
-        confirmButton: 'px-4 py-2 rounded-xl text-xs font-bold'
-      }
-    });
   }
 };
 

@@ -1,8 +1,8 @@
 <?php
 
-use Cesa\Rekrutmen\Http\Controllers\RekrutmenSpaController;
 use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\JobPosting;
+use Cesa\Rekrutmen\Services\AiScreeningService;
 use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -177,12 +177,12 @@ it('reads fresh CV contents for screening without mixing disks or cached replace
     $application->update(['resume_path' => $path, 'resume_disk' => 's3']);
     Storage::disk('public')->put($path, 'collision');
     config(['rekrutmen.disk' => 'public']);
-    $method = new ReflectionMethod(RekrutmenSpaController::class, 'readCvContents');
-    $controller = app(RekrutmenSpaController::class);
+    $method = new ReflectionMethod(AiScreeningService::class, 'readCvContents');
+    $screening = app(AiScreeningService::class);
 
-    expect($method->invoke($controller, $application))->toBe('original');
+    expect($method->invoke($screening, $application))->toBe('original');
     Storage::disk('s3')->put($path, 'replacement');
-    expect($method->invoke($controller, $application))->toBe('replacement');
+    expect($method->invoke($screening, $application))->toBe('replacement');
 });
 
 it('keeps SPA thumbnails on their source disk and stores replacements on the selected disk', function (string $firstDisk, string $nextDisk): void {

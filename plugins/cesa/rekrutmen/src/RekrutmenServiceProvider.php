@@ -34,7 +34,9 @@ use Cesa\Rekrutmen\Services\WhatsAppEngineProcess;
 use Cesa\Rekrutmen\Services\WhatsAppGateway;
 use Cesa\Rekrutmen\Services\WhatsAppThrottleService;
 use Filament\Panel;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Livewire;
 use Webkul\PluginManager\Console\Commands\InstallCommand;
 use Webkul\PluginManager\Console\Commands\UninstallCommand;
@@ -98,6 +100,8 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 '2026_09_13_181639_rekrutmen_add_connection_request_key_to_whatsapp_accounts',
                 '2026_09_13_225310_rekrutmen_add_file_disks_to_recruitment_tables',
                 '2026_09_14_093000_rekrutmen_grant_whatsapp_management_permission',
+                '2026_09_18_233749_rekrutmen_add_ai_screening_queue_fields',
+                '2026_09_18_234915_rekrutmen_add_ai_management_permission',
             ])
             ->runsMigrations()
             ->runsSeeders()
@@ -119,6 +123,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
+        Gate::define('manage_rekrutmen_ai', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_ai'));
         Gate::define('manage_rekrutmen_whatsapp', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_whatsapp'));
         Panel::configureUsing(function (Panel $panel): void {
             $panel->plugin(RekrutmenPlugin::make());
@@ -150,6 +155,10 @@ class RekrutmenServiceProvider extends PackageServiceProvider
         Gate::policy(JobApplication::class, JobApplicationPolicy::class);
         Gate::policy(JobApplicationHistory::class, JobApplicationHistoryPolicy::class);
         Gate::policy(RequestManPower::class, RequestManPowerPolicy::class);
+
+        RateLimiter::for('rekrutmen-ai', fn (): Limit => Limit::perMinute(
+            max(1, (int) config('services.openai_compatible.requests_per_minute', 20)),
+        )->by('rekrutmen-ai-provider'));
 
         // Register snapshot metadata for database backup/restore
         $this->registerSnapshotMetadata();

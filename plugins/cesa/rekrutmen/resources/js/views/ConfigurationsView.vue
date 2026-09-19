@@ -476,19 +476,44 @@
       >
         <Card>
           <CardHeader class="border-b border-zinc-100 pb-4">
-            <CardTitle>Konfigurasi Google Gemini API</CardTitle>
+            <CardTitle>Konfigurasi OpenAI Compatible API</CardTitle>
             <CardDescription>
               Kunci API ini digunakan untuk analisis dan evaluasi kualifikasi CV kandidat pelamar secara otomatis.
             </CardDescription>
           </CardHeader>
-          <CardContent class="p-6 space-y-4">
+          <CardContent v-if="!aiSettingsDenied" class="p-6 space-y-4">
+            <label class="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 cursor-pointer">
+              <input v-model="aiForm.automatic" type="checkbox" class="mt-0.5 rounded border-zinc-300 accent-[#0c2340]" />
+              <span>
+                <span class="block text-xs font-semibold text-zinc-900">Analisis otomatis CV baru</span>
+                <span class="mt-1 block text-xs text-zinc-500">CV baru atau yang diperbarui langsung masuk antrean. Analisis tetap berjalan walau halaman ditutup. Keputusan seleksi tetap di tangan HR.</span>
+              </span>
+            </label>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div class="sm:col-span-2">
+                <label for="ai-base-url" class="mb-1.5 block text-xs font-medium text-zinc-800">Endpoint API</label>
+                <Input id="ai-base-url" v-model="aiForm.base_url" type="url" placeholder="https://router.rizqis.com/v1" class="font-mono h-9" />
+              </div>
+              <div>
+                <label for="ai-model" class="mb-1.5 block text-xs font-medium text-zinc-800">Model</label>
+                <Input id="ai-model" v-model="aiForm.model" placeholder="ID model dari provider" class="font-mono h-9" />
+              </div>
+              <div class="flex flex-col justify-center gap-1 text-xs">
+                <span class="text-zinc-500">Provider</span>
+                <span class="font-mono text-zinc-800">{{ aiSettings.provider || 'openai_compatible' }}</span>
+              </div>
+            </div>
+
             <div>
-              <label class="block font-medium text-xs text-zinc-800 mb-1.5">Gemini API Key</label>
+              <label for="ai-api-key" class="block font-medium text-xs text-zinc-800 mb-1.5">OpenAI Compatible API Key</label>
               <div class="relative">
                 <Input
                   :type="showApiKey ? 'text' : 'password'"
+                  id="ai-api-key"
                   v-model="aiFormKey"
-                  placeholder="AQ.Ab8RN... atau AIzaSy..."
+                  autocomplete="new-password"
+                  :disabled="aiForm.clear_api_key"
+                  :placeholder="aiSettings.has_api_key ? 'Kosongkan untuk tetap memakai key tersimpan' : 'sk-...'"
                   class="font-mono pr-24 h-9"
                 />
                 <button
@@ -501,6 +526,15 @@
               </div>
             </div>
 
+            <div class="space-y-2 text-xs text-zinc-500">
+              <p>{{ aiSettings.has_api_key ? (aiSettings.is_database ? 'API key sudah tersimpan di Master Rekrutmen.' : 'API key tersedia dari konfigurasi server.') : 'API key belum dikonfigurasi.' }} Key tersimpan tidak ditampilkan kembali.</p>
+              <label v-if="aiSettings.has_api_key" class="flex items-center gap-2 text-rose-700 cursor-pointer">
+                <input v-model="aiForm.clear_api_key" type="checkbox" class="rounded border-zinc-300 accent-rose-700" />
+                Hapus API key tersimpan saat menyimpan
+              </label>
+              <p v-if="aiForm.clear_api_key">API key dihapus; analisis berhenti sampai key baru disimpan.</p>
+            </div>
+
             <div v-if="aiSettings.updated_at" class="text-[11px] text-zinc-400">
               Terakhir diperbarui: {{ aiSettings.updated_at }}
             </div>
@@ -511,7 +545,7 @@
                 variant="outline"
                 size="sm"
                 @click="testAiConnection"
-                :disabled="isTestingAi || !aiFormKey"
+                :disabled="isTestingAi || aiForm.clear_api_key || (!aiFormKey.trim() && !aiSettings.has_api_key) || !aiForm.base_url || !aiForm.model"
                 class="gap-1.5"
               >
                 <RotateCw v-if="isTestingAi" class="w-3.5 h-3.5 animate-spin" />
@@ -530,6 +564,9 @@
                 <span>{{ isSavingAi ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
               </Button>
             </div>
+          </CardContent>
+          <CardContent v-else class="p-6">
+            <p role="alert" class="text-sm text-zinc-600">Anda tidak memiliki akses untuk mengelola pengaturan AI.</p>
           </CardContent>
         </Card>
       </div>
@@ -1430,11 +1467,17 @@ const stageModal = ref({
 });
 
 const aiSettings = ref({
-  api_key: '',
+  has_api_key: false,
+  automatic: false,
+  provider: '',
+  base_url: '',
+  model: '',
   is_database: false,
   has_env: false,
   updated_at: null,
 });
+const aiSettingsDenied = ref(false);
+const aiForm = ref({ automatic: false, base_url: '', model: '', clear_api_key: false });
 const aiFormKey = ref('');
 const showApiKey = ref(false);
 const isTestingAi = ref(false);
@@ -1645,19 +1688,23 @@ const saveAllMailTemplates = async () => {
 const fetchAiSettings = async () => {
   try {
     const res = await axios.get('/rekrutmen/api/settings/ai');
+    aiSettingsDenied.value = false;
     if (res.data) {
       aiSettings.value = res.data;
-      aiFormKey.value = res.data.api_key || '';
+      aiForm.value = { automatic: !!res.data.automatic, base_url: res.data.base_url || '', model: res.data.model || '', clear_api_key: false };
+      aiFormKey.value = '';
+      showApiKey.value = false;
     }
   } catch (err) {
-    console.error('Failed fetching AI settings', err);
+    aiSettingsDenied.value = err.response?.status === 403;
+    if (!aiSettingsDenied.value) console.error('Failed fetching AI settings', err);
   }
 };
 
 const saveAiSettings = async () => {
   const result = await Swal.fire({
-    title: 'Simpan Kunci API Gemini?',
-    text: 'Kunci baru akan disimpan ke database dan langsung aktif untuk proses screening CV.',
+    title: 'Simpan Pengaturan Analisis CV?',
+    text: aiForm.value.clear_api_key ? 'API key akan dihapus. Analisis CV berhenti sampai key baru disimpan.' : 'Pengaturan ini berlaku untuk analisis CV berikutnya. API key yang dikosongkan tetap memakai key tersimpan.',
     icon: 'question',
     showCancelButton: true,
     confirmButtonText: 'Ya, Simpan',
@@ -1677,12 +1724,13 @@ const saveAiSettings = async () => {
   isSavingAi.value = true;
   try {
     const res = await axios.post('/rekrutmen/api/settings/ai', {
+      ...aiForm.value,
       api_key: aiFormKey.value,
     });
     await fetchAiSettings();
     Swal.fire({
       title: 'Berhasil!',
-      text: res.data.message || 'API Key berhasil diperbarui di database.',
+      text: res.data.message || 'Pengaturan analisis CV berhasil disimpan.',
       icon: 'success',
       confirmButtonColor: '#0c2340',
       timer: 2000,
@@ -1694,7 +1742,7 @@ const saveAiSettings = async () => {
   } catch (err) {
     Swal.fire({
       title: 'Gagal Menyimpan',
-      text: err.response?.data?.message || 'Terjadi kesalahan saat menyimpan API Key.',
+      text: err.response?.data?.message || 'Terjadi kesalahan saat menyimpan pengaturan analisis CV.',
       icon: 'error',
       confirmButtonColor: '#e11d48',
       customClass: {
@@ -1711,6 +1759,8 @@ const testAiConnection = async () => {
   isTestingAi.value = true;
   try {
     const res = await axios.post('/rekrutmen/api/settings/ai/test', {
+      base_url: aiForm.value.base_url,
+      model: aiForm.value.model,
       api_key: aiFormKey.value,
     });
     if (res.data.success) {
@@ -1728,7 +1778,7 @@ const testAiConnection = async () => {
   } catch (err) {
     Swal.fire({
       title: 'Koneksi Gagal',
-      text: err.response?.data?.message || 'Gagal menghubungi Gemini API.',
+      text: err.response?.data?.message || 'Gagal menghubungi OpenAI Compatible API.',
       icon: 'error',
       confirmButtonColor: '#e11d48',
       customClass: {

@@ -66,7 +66,7 @@ test.beforeAll(async () => {
     }
 });
 
-async function mountApplications(page: Page, candidateName: string, jobTitle?: string) {
+async function mountApplications(page: Page, candidateName: string, jobTitle?: string, completed = false) {
     const evaluationRequests: { path: string; method: string; body: unknown }[] = [];
     let finishEvaluation!: (response: Record<string, unknown>) => void;
     const evaluationResponse = new Promise<Record<string, unknown>>((resolve) => {
@@ -77,7 +77,8 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
         full_name: candidateName,
         email: "candidate@example.test",
         status: "in_progress",
-        ai_match_score: null,
+        ai_screening_status: completed ? 'completed' : 'pending',
+        ai_match_score: completed ? 81 : null,
         job_posting_id: 7,
         job_posting: { id: 7, title: jobTitle || "Engineer" },
     };
@@ -99,7 +100,9 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
             await route.fulfill({ json: { processed: 0 } });
         } else if (pathname.endsWith("/analyze-ai") || pathname.endsWith("/batch-analyze-ai")) {
             evaluationRequests.push({ path: pathname, method: request.method(), body: request.postDataJSON() });
-            await route.fulfill({ json: await evaluationResponse });
+            await route.fulfill({ status: 202, json: await evaluationResponse });
+        } else if (pathname.endsWith('/ai-status')) {
+            await route.fulfill({ json: { total: 1, counts: { [application.ai_screening_status]: 1 }, applications: [application] } });
         } else {
             await route.abort();
         }
@@ -114,69 +117,86 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
 
 async function expectNoInjectedMarkup(page: Page) {
     await expect(page.locator(".swal2-title, .swal2-html-container").locator("img, script, [onerror]")).toHaveCount(0);
+    await expect(page.locator('[onerror]')).toHaveCount(0);
     expect(await page.evaluate(() => Reflect.get(globalThis, "__evaluationXss"))).toBeUndefined();
 }
 
 for (const [scenario, candidateName] of [["ordinary", "BUDI SANTOSO"], ["HTML-shaped", maliciousName]]) {
-    test(`selected candidate evaluation renders ${scenario} names literally in every dialog`, async ({ page }) => {
+    test(`selected candidate queues safely with ${scenario} names`, async ({ page }) => {
         const { candidateRow, evaluationRequests, finishEvaluation } = await mountApplications(page, candidateName);
+        await expect(candidateRow).toContainText(candidateName);
         await candidateRow.getByRole("checkbox").check();
-        const evaluateButton = page.getByRole("button", { name: "Evaluasi AI (1)", exact: true }).first();
+        const evaluateButton = page.getByRole("button", { name: "Analisis ulang (1)", exact: true }).first();
         await evaluateButton.click();
-
-        await expect(page.locator(".swal2-title")).toHaveText(`Evaluasi AI: ${candidateName}?`);
-        await expect(page.locator(".swal2-html-container b")).toHaveText(candidateName);
+        await expect(page.locator(".swal2-title")).toHaveText('Analisis ulang 1 pelamar terpilih?');
         await expectNoInjectedMarkup(page);
         await page.getByRole("button", { name: "Batal", exact: true }).click();
         await expect(page.locator(".swal2-popup")).toHaveCount(0);
         expect(evaluationRequests).toEqual([]);
 
         await evaluateButton.click();
-        await page.getByRole("button", { name: "Evaluasi Sekarang", exact: true }).click();
-        await expect(page.locator(".swal2-title")).toHaveText("Mengevaluasi Pelamar");
-        await expect(page.locator(".swal2-html-container b")).toHaveText(candidateName);
+        await page.getByRole("button", { name: "Analisis Ulang", exact: true }).click();
+        await expect(page.locator(".swal2-popup")).toHaveCount(0);
         await expectNoInjectedMarkup(page);
         await expect.poll(() => evaluationRequests).toEqual([{
-            path: "/rekrutmen/api/applications/41/analyze-ai", method: "POST", body: null,
+            path: "/rekrutmen/api/applications/batch-analyze-ai", method: "POST", body: { job_id: null, application_ids: [41], force: true },
         }]);
 
-        finishEvaluation({ success: true });
-        await expect(page.locator(".swal2-title")).toHaveText("Evaluasi Berhasil");
-        await expect(page.locator(".swal2-html-container")).toHaveText(`Evaluasi untuk "${candidateName}" berhasil diperbarui.`);
+        const message = `CV ${candidateName} masuk antrean.`;
+        finishEvaluation({ success: true, queued: 1, total: 1, skipped: 0, message });
+        await expect(page.getByText(message, { exact: true })).toBeVisible();
         await expectNoInjectedMarkup(page);
         await expect(candidateRow.getByRole("checkbox")).not.toBeChecked();
     });
 }
 
-test("individual evaluation treats candidate names and API success messages as text", async ({ page }) => {
+test("individual evaluation treats API queue messages as text without a blocking modal", async ({ page }) => {
     const { candidateRow, evaluationRequests, finishEvaluation } = await mountApplications(page, maliciousName);
-    await candidateRow.getByRole("button", { name: "Evaluasi AI", exact: true }).click();
-    await expect(page.locator(".swal2-title")).toHaveText("Mengevaluasi Pelamar");
-    await expect(page.locator(".swal2-html-container b")).toHaveText(maliciousName);
+    await candidateRow.getByRole("button", { name: "Analisis CV", exact: true }).click();
+    await expect(page.locator(".swal2-popup")).toHaveCount(0);
     await expectNoInjectedMarkup(page);
-    await expect.poll(() => evaluationRequests.length).toBe(1);
+    await expect.poll(() => evaluationRequests).toEqual([{
+        path: '/rekrutmen/api/applications/41/analyze-ai', method: 'POST', body: { force: false },
+    }]);
 
-    const message = `Evaluasi selesai untuk ${maliciousName}`;
-    finishEvaluation({ success: true, message });
-    await expect(page.locator(".swal2-title")).toHaveText("Evaluasi Berhasil");
-    await expect(page.locator(".swal2-html-container")).toHaveText(message);
+    const message = `Analisis dijadwalkan untuk ${maliciousName}`;
+    finishEvaluation({ success: true, queued: true, message });
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
     await expectNoInjectedMarkup(page);
 });
 
-test("filtered evaluation renders an HTML-shaped job title literally", async ({ page }) => {
+test("individual reanalysis renders a candidate name literally and forces only after confirmation", async ({ page }) => {
+    const { candidateRow, evaluationRequests, finishEvaluation } = await mountApplications(page, maliciousName, undefined, true);
+    await candidateRow.getByRole('button', { name: 'Detail', exact: true }).click();
+    await page.getByRole('button', { name: 'Analisis Ulang', exact: true }).click();
+    await expect(page.locator('.swal2-title')).toHaveText(`Analisis ulang ${maliciousName}?`);
+    await expectNoInjectedMarkup(page);
+    await page.getByRole('button', { name: 'Batal', exact: true }).click();
+    expect(evaluationRequests).toEqual([]);
+    await page.getByRole('button', { name: 'Analisis Ulang', exact: true }).click();
+    await page.locator('.swal2-confirm').click();
+    await expect.poll(() => evaluationRequests).toEqual([{
+        path: '/rekrutmen/api/applications/41/analyze-ai', method: 'POST', body: { force: true },
+    }]);
+    finishEvaluation({ success: true, queued: true, message: 'Analisis ulang masuk antrean.' });
+    await expect(page.getByText('Analisis ulang masuk antrean.', { exact: true })).toBeVisible();
+    await expectNoInjectedMarkup(page);
+});
+
+test("filtered evaluation treats an HTML-shaped job title literally and queues once", async ({ page }) => {
     const jobTitle = `ENGINEER ${maliciousName}`;
     const { evaluationRequests, finishEvaluation } = await mountApplications(page, "BUDI SANTOSO", jobTitle);
-    await page.getByRole("button", { name: "Evaluasi AI", exact: true }).first().click();
-    await expect(page.locator(".swal2-title")).toHaveText(`Screening AI: ${jobTitle}`);
-    await expect(page.locator(".swal2-html-container b")).toHaveText(jobTitle);
+    await expect(page.getByRole('heading', { name: `Pelamar: ${jobTitle}`, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Analisis yang belum dinilai", exact: true }).click();
+    await expect(page.locator('.swal2-popup')).toHaveCount(0);
     await expectNoInjectedMarkup(page);
-    await expect.poll(() => evaluationRequests.length).toBe(1);
-    expect(evaluationRequests[0]).toMatchObject({
+    await expect.poll(() => evaluationRequests).toEqual([{
         path: "/rekrutmen/api/applications/batch-analyze-ai",
         method: "POST",
-        body: { job_id: "7", force: true },
-    });
-    finishEvaluation({ success: true, count: 1, total: 1, has_more: false });
-    await expect(page.locator(".swal2-title")).toHaveText("Evaluasi Selesai");
+        body: { job_id: "7", force: false },
+    }]);
+    const message = `Antrean analisis untuk ${jobTitle} berhasil dibuat.`;
+    finishEvaluation({ success: true, queued: 1, total: 1, skipped: 0, message });
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
     await expectNoInjectedMarkup(page);
 });

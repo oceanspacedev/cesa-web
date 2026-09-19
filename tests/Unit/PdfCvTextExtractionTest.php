@@ -1,26 +1,20 @@
 <?php
 
-use Cesa\Rekrutmen\Http\Controllers\RekrutmenSpaController;
+use Cesa\Rekrutmen\Services\CvTextExtractor;
 
 it('safely extracts text from valid PDF streams without memory issues', function () {
-    $controller = new RekrutmenSpaController;
-    $ref = new ReflectionClass($controller);
-    $method = $ref->getMethod('extractTextFromCvDocument');
-    $method->setAccessible(true);
+    $extractor = new CvTextExtractor;
 
     $textStream = gzcompress('BT /F1 12 Tf (Candidate Name John Doe Experienced Sales Consultant Jakarta) Tj ET');
     $pdf = "1 0 obj\n<< /Length ".strlen($textStream)." /Filter /FlateDecode >>\nstream\n".$textStream."\nendstream\nendobj";
 
-    $extracted = $method->invoke($controller, $pdf);
+    $extracted = $extractor->extract($pdf);
 
     expect($extracted)->toContain('Candidate Name John Doe Experienced Sales Consultant Jakarta');
 });
 
 it('skips raster image streams to prevent memory exhaustion', function () {
-    $controller = new RekrutmenSpaController;
-    $ref = new ReflectionClass($controller);
-    $method = $ref->getMethod('extractTextFromCvDocument');
-    $method->setAccessible(true);
+    $extractor = new CvTextExtractor;
 
     // Simulated image stream with /Subtype /Image
     $dummyImageData = gzcompress(str_repeat('IMAGE_RAW_BYTE', 1000));
@@ -31,16 +25,13 @@ it('skips raster image streams to prevent memory exhaustion', function () {
 
     $combinedPdf = $imagePdf."\n".$textPdf;
 
-    $extracted = $method->invoke($controller, $combinedPdf);
+    $extracted = $extractor->extract($combinedPdf);
 
     expect($extracted)->toContain('Experienced Sales Consultant with five years background in retail');
 });
 
 it('safely handles massive bfrange fonts without allocating huge memory', function () {
-    $controller = new RekrutmenSpaController;
-    $ref = new ReflectionClass($controller);
-    $method = $ref->getMethod('extractTextFromCvDocument');
-    $method->setAccessible(true);
+    $extractor = new CvTextExtractor;
 
     // CMap with huge range: <0000> <ffff> <0000>
     $cmapData = "beginbfrange\n<0000> <ffff> <0000>\nendbfrange";
@@ -53,7 +44,7 @@ it('safely handles massive bfrange fonts without allocating huge memory', functi
     $pdf = $cmapObj."\n".$textObj;
 
     $memBefore = memory_get_usage(true);
-    $extracted = $method->invoke($controller, $pdf);
+    $extracted = $extractor->extract($pdf);
     $memAfter = memory_get_usage(true);
 
     // Memory difference should be negligible (< 5MB)

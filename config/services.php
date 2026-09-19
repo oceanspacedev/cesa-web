@@ -35,8 +35,12 @@ return [
         ],
     ],
 
-    'gemini' => [
-        'api_key' => env('GEMINI_API_KEY'),
+    'openai_compatible' => [
+        'automatic'           => env('REKRUTMEN_AI_AUTOMATIC', true),
+        'requests_per_minute' => env('REKRUTMEN_AI_REQUESTS_PER_MINUTE', 20),
+        'base_url'            => env('OPENAI_COMPATIBLE_BASE_URL', 'https://router.rizqis.com/v1'),
+        'api_key'             => env('OPENAI_COMPATIBLE_API_KEY'),
+        'model'               => env('OPENAI_COMPATIBLE_MODEL', 'ag/gemini-3.7-flash-low'),
     ],
 
 ];
