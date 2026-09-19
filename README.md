@@ -143,45 +143,61 @@ Visit `http://localhost:8000` and log in with your admin credentials!
 
 ## 🧩 Plugin System
 
-### WhatsApp through a standalone WAG Hub
+### WhatsApp melalui WAG Hub
 
-CESA can use WAG Hub as a separate WhatsApp service. WAG Hub owns the WhatsApp
-runtime and session credentials; CESA only calls its HTTP API. Node.js and Baileys
-are not required on the CESA server in this mode.
+WAG Hub menjalankan koneksi WhatsApp sebagai service terpisah. CESA menampilkan
+QR/pairing, status, dan logout melalui API; sesi dan kredensial WhatsApp disimpan
+di server WAG Hub. CESA tidak perlu menjalankan Node.js untuk WhatsApp.
+WAG Hub menyediakan provider bawaan dan routing ke WAHA, GOWA, Fonnte, atau
+WABA. Nomor yang dipilih di UI Rekrutmen dipakai melalui API sesi; notifikasi
+dengan pemilihan provider/fallback memakai API `/api/v1/messages`.
 
-Create an application in WAG Hub, configure its engine host, and issue an
-`engine:use` credential. Configure CESA with:
+1. Di WAG Hub, buat **Aplikasi Klien** untuk CESA, lalu klik **Hubungkan aplikasi**.
+2. Salin dua nilai yang ditampilkan ke `.env` CESA:
 
 ```dotenv
-WAG_ENGINE_URL=https://gateway.example.com/api/v1/engine
-WAG_ENGINE_TOKEN=your-engine-credential
-REKRUTMEN_WHATSAPP_ENGINE_DRIVER=wag_hub
-REKRUTMEN_WHATSAPP_ENGINE_AUTO_START=false
+WAG_URL=https://gateway.example.com
+WAG_TOKEN=token-aplikasi-cesa
 ```
 
-Existing installations must remove stale `REKRUTMEN_WHATSAPP_ENGINE_URL` and
-`REKRUTMEN_WHATSAPP_ENGINE_TOKEN` overrides, or set them to the corresponding
-shared values above. Those overrides take precedence. CESA sends the engine
-credential in the Authorization header, so tokens do not need to appear in URLs.
-The older WAG Hub `/engine` endpoint remains compatible.
+3. Jalankan:
 
-Run `php artisan config:clear`, restart queue workers with
-`php artisan queue:restart`, and run `php artisan rekrutmen:whatsapp-engine --ensure`
-to check the remote service. Then link a sender with QR or pairing in Recruitment
-Settings. Recruitment sends remain tied to the selected sender, and uncertain
-send outcomes are reconciled with the same idempotency key.
+```bash
+php artisan config:clear
+php artisan queue:restart
+php artisan wag:status
+```
 
-`WAG_URL` and `WAG_TOKEN` still configure routed notifications and lead number
-validation. Use their separate Hub API credential; `engine:use` is for sessions.
-When the remote service is unavailable, CESA reports it and never starts a local
-Node process, including when `--ensure` is used.
+4. Buka pengaturan WhatsApp di Rekrutmen, hubungkan nomor dengan QR/pairing,
+   lalu pilih nomor pengirim. Token disimpan di backend, bukan di browser.
 
-Existing local installations remain supported when `WAG_ENGINE_URL` is unset.
-To choose the bundled engine explicitly, set
-`REKRUTMEN_WHATSAPP_ENGINE_DRIVER=local`,
-`REKRUTMEN_WHATSAPP_ENGINE_URL=http://127.0.0.1:3318`, and
-`REKRUTMEN_WHATSAPP_ENGINE_AUTO_START=true`. Install its dependencies with
-`php artisan rekrutmen:whatsapp-engine --install`.
+`App\Services\WhatsApp\WagHubClient` dapat digunakan oleh modul apa pun;
+client ini tidak bergantung pada plugin Rekrutmen:
+
+```php
+$engine = app(\App\Services\WhatsApp\WagHubClient::class)->engine();
+$session = $engine->startSession('support-1', 'qr');
+$session = $engine->session('support-1'); // Poll sampai connected.
+$result = $engine->sendText('support-1', '6281234567890', 'Halo', 'order-123');
+$result = $engine->message('support-1', 'order-123');
+$engine->logout('support-1');
+```
+
+Gunakan kunci pengiriman yang sama untuk satu pesan bisnis. Jika hasilnya
+`unknown`, periksa status sebelum mengirim ulang. Token baru dari tombol
+**Hubungkan aplikasi** sudah memiliki izin sesi, pesan, dan validasi nomor.
+
+**Migrasi konfigurasi lama:** hapus override `REKRUTMEN_WHATSAPP_ENGINE_*`,
+`WAG_ENGINE_URL`, dan `WAG_ENGINE_TOKEN` yang sudah tidak dipakai. Nilai lama yang
+terisi tetap didahulukan untuk kompatibilitas. Token terpisah `WAG_ENGINE_TOKEN`
+masih dapat dipakai jika token Hub lama belum memiliki izin `engine:use`.
+Engine lokal lama hanya aktif jika dipilih eksplisit dengan
+`REKRUTMEN_WHATSAPP_ENGINE_DRIVER=local`; mode bawaan sekarang WAG Hub.
+Sesi lokal lama perlu ditautkan ulang di WAG Hub saat migrasi.
+
+Aplikasi lain seperti DND membuat aplikasi klien dan token sendiri di WAG Hub,
+lalu memakai kontrak `/api/v1/engine` yang sama. Tidak perlu memasang plugin
+Rekrutmen atau menyalin engine Node.js ke aplikasi tersebut.
 
 AureusERP features a powerful modular plugin system that allows you to customize your ERP installation based on your business needs. Choose only the modules you need to keep your system lean and efficient.
 

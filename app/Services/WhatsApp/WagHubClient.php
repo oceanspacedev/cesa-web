@@ -2,7 +2,6 @@
 
 namespace App\Services\WhatsApp;
 
-use Cesa\Rekrutmen\Services\WhatsAppEngineClient;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -17,8 +16,11 @@ use RuntimeException;
 class WagHubClient
 {
     protected string $url;
+
     protected string $token;
+
     protected string $engineUrl;
+
     protected string $engineToken;
 
     public function __construct(
@@ -27,10 +29,10 @@ class WagHubClient
         ?string $engineUrl = null,
         ?string $engineToken = null,
     ) {
-        $this->url = rtrim($url ?: (string) env('WAG_URL', 'https://waghub.mekayastudio.com'), '/');
-        $this->token = trim($token ?: (string) env('WAG_TOKEN'));
-        $this->engineUrl = rtrim($engineUrl ?: (string) env('WAG_ENGINE_URL', $this->url . '/api/v1/engine'), '/');
-        $this->engineToken = trim($engineToken ?: (string) env('WAG_ENGINE_TOKEN'));
+        $this->url = rtrim($url ?? (string) config('wag.url'), '/');
+        $this->token = trim($token ?? (string) config('wag.token'));
+        $this->engineUrl = rtrim($engineUrl ?? ($url !== null ? $this->url.'/api/v1/engine' : (string) config('wag.engine_url')), '/');
+        $this->engineToken = trim($engineToken ?? $token ?? (string) config('wag.engine_token'));
     }
 
     public function isConfigured(): bool
@@ -66,9 +68,9 @@ class WagHubClient
     /**
      * Kirim pesan notifikasi melalui Hub API (/api/v1/messages) dengan idempotency key dan fallback routing.
      *
-     * @param string $phone Nomor WhatsApp tujuan (format lokal 08... atau internasional 628...)
-     * @param string $text Isi pesan teks
-     * @param array<string, mixed> $options Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose, client_reference, timeout
+     * @param  string  $phone  Nomor WhatsApp tujuan (format lokal 08... atau internasional 628...)
+     * @param  string  $text  Isi pesan teks
+     * @param  array<string, mixed>  $options  Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose, client_reference, timeout
      * @return array<string, mixed>
      */
     public function sendMessage(string $phone, string $text, array $options = []): array
@@ -81,38 +83,38 @@ class WagHubClient
         $mode = (string) ($options['mode'] ?? 'async');
         $purpose = (string) ($options['purpose'] ?? 'notification');
         $routeKey = (string) ($options['route_key'] ?? 'default');
-        $clientReference = (string) ($options['client_reference'] ?? 'cesa-web');
+        $clientReference = (string) ($options['client_reference'] ?? config('app.name'));
         $timeout = (int) ($options['timeout'] ?? 10);
 
         $payload = [
             'recipient' => [
-                'type' => 'phone',
+                'type'  => 'phone',
                 'value' => $phone,
             ],
             'message' => [
                 'type' => 'text',
                 'text' => $text,
             ],
-            'purpose' => $purpose,
-            'mode' => $mode,
-            'route_key' => $routeKey,
+            'purpose'          => $purpose,
+            'mode'             => $mode,
+            'route_key'        => $routeKey,
             'client_reference' => $clientReference,
         ];
 
         if (isset($options['attachment'])) {
             $payload['message'] = array_merge($payload['message'], [
-                'type' => $options['attachment_type'] ?? 'document',
+                'type'       => $options['attachment_type'] ?? 'document',
                 'attachment' => $options['attachment'],
             ]);
         }
 
-        $response = Http::timeout($timeout)
+        $response = Http::withoutRedirecting()->connectTimeout(2)->timeout($timeout)
             ->acceptJson()
             ->withHeaders([
-                'Authorization' => 'Bearer ' . $this->token,
+                'Authorization'   => 'Bearer '.$this->token,
                 'Idempotency-Key' => $idempotencyKey,
             ])
-            ->post($this->url . '/api/v1/messages', $payload);
+            ->post($this->url.'/api/v1/messages', $payload);
 
         return $response->json() ?? ['ok' => $response->successful(), 'status' => $response->status()];
     }
@@ -120,8 +122,6 @@ class WagHubClient
     /**
      * Cek apakah nomor terdaftar di WhatsApp (/api/v1/numbers/check).
      *
-     * @param string $phone
-     * @param int $timeout
      * @return array<string, mixed>
      */
     public function validateNumber(string $phone, int $timeout = 5): array
@@ -130,10 +130,10 @@ class WagHubClient
             throw new RuntimeException('WAG Hub URL atau Token belum dikonfigurasi di file .env (WAG_URL, WAG_TOKEN).');
         }
 
-        $response = Http::timeout($timeout)
+        $response = Http::withoutRedirecting()->connectTimeout(2)->timeout($timeout)
             ->acceptJson()
             ->withToken($this->token)
-            ->post($this->url . '/api/v1/numbers/check', [
+            ->post($this->url.'/api/v1/numbers/check', [
                 'phone' => $phone,
             ]);
 
@@ -141,10 +141,10 @@ class WagHubClient
     }
 
     /**
-     * Akses instance WhatsAppEngineClient untuk lifecycle sesi QR / pairing code Rekrutmen/HR.
+     * Client sesi WhatsApp untuk modul atau aplikasi apa pun.
      */
-    public function engine(): WhatsAppEngineClient
+    public function engine(): WagHubEngineClient
     {
-        return app(WhatsAppEngineClient::class);
+        return new WagHubEngineClient($this->engineUrl, $this->engineToken);
     }
 }

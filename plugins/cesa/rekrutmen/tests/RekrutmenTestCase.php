@@ -76,9 +76,11 @@ abstract class RekrutmenTestCase extends TestCase
     protected function fakeRekrutmenWhatsAppEngine(array $session = []): void
     {
         config([
-            'rekrutmen.notifications.whatsapp.engine_url' => 'http://127.0.0.1:3318',
-            'rekrutmen.notifications.whatsapp.auto_start' => false,
-            'rekrutmen.notifications.whatsapp.enabled'    => true,
+            'rekrutmen.notifications.whatsapp.engine_driver' => 'wag_hub',
+            'rekrutmen.notifications.whatsapp.engine_token'  => 'test-engine-token',
+            'rekrutmen.notifications.whatsapp.engine_url'    => 'http://127.0.0.1:3318',
+            'rekrutmen.notifications.whatsapp.auto_start'    => false,
+            'rekrutmen.notifications.whatsapp.enabled'       => true,
         ]);
 
         $sessionPayload = array_merge([

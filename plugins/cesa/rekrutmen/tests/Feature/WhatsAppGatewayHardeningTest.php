@@ -13,9 +13,10 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
     public function test_ambiguous_send_failure_is_not_retried_or_marked_disconnected(): void
     {
         config([
-            'rekrutmen.notifications.whatsapp.engine_url' => 'http://127.0.0.1:3318',
-            'rekrutmen.notifications.whatsapp.auto_start' => false,
-            'rekrutmen.notifications.whatsapp.enabled'    => true,
+            'rekrutmen.notifications.whatsapp.engine_url'   => 'http://127.0.0.1:3318',
+            'rekrutmen.notifications.whatsapp.engine_token' => 'test-engine-token',
+            'rekrutmen.notifications.whatsapp.auto_start'   => false,
+            'rekrutmen.notifications.whatsapp.enabled'      => true,
         ]);
 
         $account = $this->makeConnectedWhatsAppAccount();
@@ -50,9 +51,10 @@ class WhatsAppGatewayHardeningTest extends RekrutmenTestCase
     public function test_unavailable_session_is_returned_to_queue_without_inline_retry(): void
     {
         config([
-            'rekrutmen.notifications.whatsapp.engine_url' => 'http://127.0.0.1:3318',
-            'rekrutmen.notifications.whatsapp.auto_start' => false,
-            'rekrutmen.notifications.whatsapp.enabled'    => true,
+            'rekrutmen.notifications.whatsapp.engine_url'   => 'http://127.0.0.1:3318',
+            'rekrutmen.notifications.whatsapp.engine_token' => 'test-engine-token',
+            'rekrutmen.notifications.whatsapp.auto_start'   => false,
+            'rekrutmen.notifications.whatsapp.enabled'      => true,
         ]);
 
         $account = $this->makeConnectedWhatsAppAccount();

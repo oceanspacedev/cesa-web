@@ -17,7 +17,12 @@ use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
 beforeEach(function (): void {
-    config(['rekrutmen.notifications.whatsapp.auto_start' => false, 'rekrutmen.notifications.whatsapp.enabled' => true]);
+    config([
+        'rekrutmen.notifications.whatsapp.auto_start'   => false,
+        'rekrutmen.notifications.whatsapp.enabled'      => true,
+        'rekrutmen.notifications.whatsapp.engine_url'   => 'https://hub.test/api/v1/engine',
+        'rekrutmen.notifications.whatsapp.engine_token' => 'test-engine-token',
+    ]);
     Http::preventStrayRequests();
 });
 
