@@ -10,7 +10,7 @@ const readySender = { ...sender, status: 'connected', delivery_ready: true };
 const session = (account = sender) => ({ ...account, status: 'qr', engine_ready: true, qr: 'data:image/png;base64,iVBORw0KGgo=', pairing_code: null });
 const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
 
-test.use({ launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {} });
+test.use({ video: 'off', launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } : {} });
 
 async function mockApplication(page: Page) {
   const manifest = JSON.parse(fs.readFileSync(path.join(buildRoot, 'manifest.json'), 'utf8'));
@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
 
 async function openGateway(page: Page) {
   await page.goto('http://whatsapp-ui.test/admin/configurations');
-  await page.getByRole('button', { name: 'Gateway WhatsApp', exact: true }).click();
+  await page.getByRole('button', { name: 'Akun WhatsApp', exact: true }).click();
 }
 
 test('closing QR aborts overlapping polling and ignores a late connected response', async ({ page }) => {
@@ -57,7 +57,7 @@ test('closing QR aborts overlapping polling and ignores a late connected respons
   await page.route('**/settings/whatsapp/accounts/1/session', (route) => { requests += 1; pendingRoute = route; });
   await openGateway(page);
   await page.clock.install();
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).toBeVisible();
   await page.clock.fastForward(2100);
   await expect.poll(() => requests).toBe(1);
@@ -78,14 +78,16 @@ test('reconnect uses the selected account phone and keeps QR mode explicit', asy
     return json(route, { success: true, data: session() });
   });
   await openGateway(page);
-  await page.getByPlaceholder('0812xxxxxxx').first().fill('089999999999');
   const row = page.getByRole('row').filter({ hasText: 'HR Satu' });
-  await row.getByRole('button', { name: 'Kode', exact: true }).click();
-  expect(payloads[0]).toMatchObject({ mode: 'pairing', phone_number: sender.phone_number });
+  await row.getByRole('button', { name: 'Hubungkan', exact: true }).click();
+  await page.getByRole('button', { name: 'Gunakan kode pairing', exact: true }).click();
+  await expect(page.locator('.swal2-input')).toHaveValue(sender.phone_number);
+  await page.getByRole('button', { name: 'Buat kode pairing', exact: true }).click();
+  expect(payloads[1]).toMatchObject({ mode: 'pairing', phone_number: sender.phone_number });
   await page.getByRole('button', { name: 'Tutup', exact: true }).click();
-  await row.getByRole('button', { name: 'Scan', exact: true }).click();
-  expect(payloads[1].mode).toBe('qr');
-  expect(payloads[1].phone_number).toBeUndefined();
+  await row.getByRole('button', { name: 'Hubungkan', exact: true }).click();
+  expect(payloads[2].mode).toBe('qr');
+  expect(payloads[2].phone_number).toBeUndefined();
 });
 
 test('a pending connect disables repeat clicks and switching tabs ignores its late response', async ({ page }) => {
@@ -97,16 +99,16 @@ test('a pending connect disables repeat clicks and switching tabs ignores its la
   });
   await openGateway(page);
   const row = page.getByRole('row').filter({ hasText: 'HR Satu' });
-  await row.getByRole('button', { name: 'Scan', exact: true }).click();
-  await expect(row.getByRole('button', { name: 'Scan', exact: true })).toBeDisabled();
-  await expect(row.getByRole('button', { name: 'Kode', exact: true })).toBeDisabled();
-  await row.getByRole('button', { name: 'Scan', exact: true }).dispatchEvent('click');
+  await row.getByRole('button', { name: 'Hubungkan', exact: true }).click();
+  await expect(row.getByRole('button', { name: 'Hubungkan', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Menyiapkan...', exact: true })).toBeDisabled();
+  await row.getByRole('button', { name: 'Hubungkan', exact: true }).dispatchEvent('click');
   expect(requests).toBe(1);
   await page.getByRole('button', { name: 'Integrasi AI', exact: true }).click();
   await pendingConnect?.fulfill({ contentType: 'application/json', body: JSON.stringify({ success: true, data: session() }) }).catch(() => {});
-  await page.getByRole('button', { name: 'Gateway WhatsApp', exact: true }).click();
+  await page.getByRole('button', { name: 'Akun WhatsApp', exact: true }).click();
   await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).not.toBeVisible();
-  await expect(row.getByRole('button', { name: 'Scan', exact: true })).toBeEnabled();
+  await expect(row.getByRole('button', { name: 'Hubungkan', exact: true })).toBeEnabled();
 });
 
 test('failed creation remains visible and retry reuses the saved account', async ({ page }) => {
@@ -122,15 +124,15 @@ test('failed creation remains visible and retry reuses the saved account', async
     return json(route, { success: true, data: session(failedAccount) });
   });
   await openGateway(page);
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: failedAccount.name })).toBeVisible();
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await expect.poll(() => reconnects).toBe(1);
   expect(creates).toBe(1);
 });
 
-test('lost new-account response keeps the same request key across QR and pairing retry', async ({ page }) => {
+test('lost new-account response keeps the same request key after page reload', async ({ page }) => {
   const payloads: any[] = [];
   await page.route('**/settings/whatsapp/accounts/connect', (route) => {
     payloads.push(route.request().postDataJSON());
@@ -138,15 +140,16 @@ test('lost new-account response keeps the same request key across QR and pairing
     return json(route, { success: true, data: session() }, 201);
   });
   await openGateway(page);
-  await page.getByPlaceholder('0812xxxxxxx').first().fill('081111111111');
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
-  await page.getByRole('button', { name: 'Dapatkan Kode Pairing', exact: true }).click();
-  await expect(page.getByText('Masukkan Kode Pairing', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Akun WhatsApp', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
+  await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).toBeVisible();
   expect(payloads[0].request_key).toMatch(/^[a-f0-9-]{36}$/);
   expect(payloads[1].request_key).toBe(payloads[0].request_key);
   expect(payloads[0].mode).toBe('qr');
-  expect(payloads[1].mode).toBe('pairing');
+  expect(payloads[1].mode).toBe('qr');
 });
 
 test('a deleted-account conflict lets the next explicit creation use a new request key', async ({ page }) => {
@@ -157,9 +160,9 @@ test('a deleted-account conflict lets the next explicit creation use a new reque
     return json(route, { success: true, data: session() }, 201);
   });
   await openGateway(page);
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).toBeVisible();
   expect(keys).toHaveLength(2);
   expect(keys[1]).toMatch(/^[a-f0-9-]{36}$/);
@@ -171,35 +174,35 @@ test('engine unavailable does not show connected success and denied settings sho
   await page.route('**/settings/whatsapp/accounts/1/session', (route) => json(route, { ...readySender, engine_ready: false, engine_error: 'Engine sedang offline' }));
   await openGateway(page);
   await page.clock.install();
-  await page.getByRole('button', { name: 'Scan QR', exact: true }).click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
   await page.clock.fastForward(2100);
   await expect(page.getByText('Engine sedang offline', { exact: true })).toBeVisible();
   await expect(page.getByText('WhatsApp Terhubung', { exact: true })).not.toBeVisible();
   await page.route('**/settings/whatsapp', (route) => json(route, { message: 'Forbidden' }, 403));
   await page.reload();
-  await page.getByRole('button', { name: 'Gateway WhatsApp', exact: true }).click();
+  await page.getByRole('button', { name: 'Akun WhatsApp', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('tidak memiliki izin');
-  await expect(page.getByRole('button', { name: 'Scan QR', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true })).not.toBeVisible();
 });
 
-test('failed logout keeps the account visible and shows its disabled state', async ({ page }) => {
+test('failed pause keeps the account visible and qualifies its stale status', async ({ page }) => {
   let disconnected = false;
-  await page.route('**/settings/whatsapp', (route) => json(route, { gateway: { enabled: true, engine_ready: true }, accounts: [disconnected ? { ...readySender, is_active: false, delivery_ready: false } : readySender] }));
+  await page.route('**/settings/whatsapp', (route) => json(route, { gateway: { enabled: true, engine_ready: true }, accounts: [disconnected ? { ...readySender, stale: true, status: 'unknown', delivery_ready: false } : readySender] }));
   await page.route('**/settings/whatsapp/accounts/1/disconnect', (route) => {
     disconnected = true;
     return json(route, { success: false, message: 'Pengiriman dinonaktifkan, logout belum terkonfirmasi', data: { ...sender, is_active: false } }, 503);
   });
   await openGateway(page);
-  await page.getByRole('row').filter({ hasText: 'HR Satu' }).getByRole('button', { name: 'Putuskan', exact: true }).click();
+  await page.getByRole('row').filter({ hasText: 'HR Satu' }).getByRole('button', { name: 'Jeda', exact: true }).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
-  await expect(page.getByRole('row').filter({ hasText: 'HR Satu' })).toContainText('Nonaktif');
+  await expect(page.getByRole('row').filter({ hasText: 'HR Satu' })).toContainText('Status terakhir belum terverifikasi');
   await expect(page.getByRole('row').filter({ hasText: 'HR Satu' }).getByRole('button', { name: 'Tes', exact: true })).not.toBeVisible();
 });
 
 test('a completed scheduled replay displays its terminal outcome instead of waiting', async ({ page }) => {
   await page.route('**/applications/bulk-send-notification', (route) => json(route, { success: true, queued: true, scheduled: true, batch_id: 28, status: 'sent', stats: { total: 2, email_success: 2, whatsapp_success: 2 }, details: [] }, 202));
   await page.goto('http://whatsapp-ui.test/admin/job-applications');
-  await page.getByTitle('Pilih Semua Pelamar').check();
+  await page.getByRole('checkbox', { name: 'Pilih Semua (2 kandidat)', exact: true }).check();
   await page.getByRole('button', { name: 'Kirim Notifikasi Massal', exact: true }).click();
   await expect(page.locator('select').filter({ has: page.locator('option', { hasText: 'HR Satu' }) })).toBeVisible();
   await page.getByRole('button', { name: 'Kirim ke 2 Pelamar', exact: true }).click();
@@ -214,7 +217,7 @@ test('a single uncertain delivery reports unknown instead of claiming failure', 
     stats: { total: 1, whatsapp_unknown: 1 }, details: [{ id: 1, name: 'Pelamar 1', email: null, whatsapp: { status: 'unknown' } }],
   }, 422));
   await page.goto('http://whatsapp-ui.test/admin/job-applications');
-  await page.getByRole('row').filter({ hasText: 'Pelamar 1' }).getByTitle('Kirim Notifikasi (Email / WhatsApp)').click();
+  await page.getByRole('group', { name: 'Pelamar Pelamar 1', exact: true }).getByTitle('Kirim Notifikasi (Email / WhatsApp)').click();
   await expect(page.locator('select').filter({ has: page.locator('option', { hasText: 'HR Satu' }) })).toBeVisible();
   await page.getByRole('button', { name: 'Kirim Notifikasi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hasil Pengiriman Belum Pasti', exact: true })).toBeVisible();
@@ -241,7 +244,7 @@ test('bulk transport retry preserves request key and queued progress reports unk
     ] });
   });
   await page.goto('http://whatsapp-ui.test/admin/job-applications');
-  await page.getByTitle('Pilih Semua Pelamar').check();
+  await page.getByRole('checkbox', { name: 'Pilih Semua (2 kandidat)', exact: true }).check();
   await page.getByRole('button', { name: 'Kirim Notifikasi Massal', exact: true }).click();
   await expect(page.locator('select').filter({ has: page.locator('option', { hasText: 'HR Satu' }) })).toBeVisible();
   await page.getByRole('button', { name: 'Kirim ke 2 Pelamar', exact: true }).click();
@@ -258,8 +261,78 @@ test('bulk transport retry preserves request key and queued progress reports unk
   await expect(progress.getByRole('row').filter({ hasText: 'Pelamar 2' })).toContainText('Belum pasti');
   await page.clock.fastForward(6000);
   expect(polls).toBe(1);
-  await progress.getByRole('button', { name: 'Perbarui status', exact: true }).click();
+  await progress.getByRole('button', { name: 'Perbarui Status', exact: true }).click();
   await page.clock.fastForward(2100);
   await expect.poll(() => polls).toBe(2);
   expect(submissions).toBe(2);
+});
+
+
+test('first connection asks for neither account name nor phone and closes automatically on working', async ({ page }) => {
+  await page.route('**/settings/whatsapp/accounts/connect', route => json(route, { success: true, data: session() }, 201));
+  await page.route('**/settings/whatsapp/accounts/1/session', route => json(route, { ...readySender, engine_ready: true, stale: false }));
+  await openGateway(page);
+  await expect(page.getByPlaceholder('HR Recruitment')).not.toBeVisible();
+  await expect(page.getByPlaceholder('0812xxxxxxx')).not.toBeVisible();
+  await page.clock.install();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
+  await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).toBeVisible();
+  await page.clock.fastForward(2100);
+  await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).not.toBeVisible();
+  await expect(page.getByText('WhatsApp Terhubung', { exact: true })).toBeVisible();
+});
+
+test('unlink requires confirmation while pause remains a single action', async ({ page }) => {
+  const actions: string[] = [];
+  await page.route('**/settings/whatsapp', route => json(route, { gateway: { enabled: true, engine_ready: true }, accounts: [readySender] }));
+  await page.route('**/settings/whatsapp/accounts/1/logout', route => { actions.push('logout'); return json(route, { success: true }, 202); });
+  await page.route('**/settings/whatsapp/accounts/1/disconnect', route => { actions.push('stop'); return json(route, { success: true }, 202); });
+  await openGateway(page);
+  const row = page.getByRole('row').filter({ hasText: 'HR Satu' });
+  await row.getByRole('button', { name: 'Lepas tautan', exact: true }).click();
+  await expect(page.getByText('Autentikasi akan dihapus.', { exact: false })).toBeVisible();
+  expect(actions).toHaveLength(0);
+  await page.getByRole('button', { name: 'Batal', exact: true }).click();
+  await row.getByRole('button', { name: 'Jeda', exact: true }).click();
+  await expect.poll(() => actions).toEqual(['stop']);
+});
+
+test('connects from the notification workflow and returns to its preserved draft', async ({ page }) => {
+  let connected = false;
+  await page.route('**/whatsapp/senders', route => json(route, { accounts: connected ? [readySender] : [], engine_ready: true, can_manage: true }));
+  await page.route('**/settings/whatsapp/accounts/connect', route => json(route, { success: true, data: session() }, 201));
+  await page.route('**/settings/whatsapp/accounts/1/session', route => { connected = true; return json(route, { ...readySender, engine_ready: true, stale: false }); });
+  await page.goto('http://whatsapp-ui.test/admin/job-applications');
+  await page.getByRole('group', { name: 'Pelamar Pelamar 1', exact: true }).getByTitle('Kirim Notifikasi (Email / WhatsApp)').click();
+  await page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true }).click();
+  await expect(page.getByText('Scan QR Code untuk Menautkan', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/job-applications/);
+  await expect(page.getByRole('button', { name: 'Kirim Notifikasi', exact: true })).toBeVisible();
+  await expect(page.locator('select').filter({ has: page.locator('option', { hasText: 'HR Satu' }) })).toBeVisible();
+});
+
+test('administrator configures the hub once and clears the credential from the form', async ({ page }) => {
+  let configured = false;
+  let saved: any;
+  await page.route('**/settings/whatsapp', route => json(route, { gateway: { enabled: true, engine_ready: configured }, accounts: [], integration_url: 'https://hub.example.test', integration: configured ? { scopes: ['capacity:manage'], capacity: { used: 0, configured_limit: 3, maximum_allowed: 5 } } : null }));
+  await page.route('**/settings/whatsapp/integration', route => { saved = route.request().postDataJSON(); configured = true; return json(route, { success: true }); });
+  await openGateway(page);
+  await page.getByPlaceholder('https://hub.example.com').fill('https://hub.example.test');
+  await page.getByPlaceholder('Biarkan kosong untuk mempertahankan token').fill('one-time-secret');
+  await page.getByRole('button', { name: 'Simpan dan hubungkan hub', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Hubungkan WhatsApp', exact: true })).toBeEnabled();
+  expect(saved).toEqual({ url: 'https://hub.example.test', token: 'one-time-secret' });
+  await expect(page.getByPlaceholder('Biarkan kosong untuk mempertahankan token')).toHaveValue('');
+});
+
+test('capacity changes use the granted bound and reflect the hub response', async ({ page }) => {
+  let configuredLimit = 3;
+  await page.route('**/settings/whatsapp', route => json(route, { gateway: { enabled: true, engine_ready: true }, accounts: [], integration: { scopes: ['capacity:manage'], capacity: { used: 2, configured_limit: configuredLimit, maximum_allowed: 5 } } }));
+  await page.route('**/settings/whatsapp/capacity', route => { configuredLimit = route.request().postDataJSON().configured_limit; return json(route, { success: true }); });
+  await openGateway(page);
+  await page.getByRole('button', { name: 'Ubah batas', exact: true }).click();
+  await expect(page.locator('.swal2-input')).toHaveAttribute('max', '5');
+  await page.locator('.swal2-input').fill('4');
+  await page.getByRole('button', { name: 'Simpan', exact: true }).click();
+  await expect(page.getByText('2 dari 4 akun digunakan', { exact: false })).toBeVisible();
 });

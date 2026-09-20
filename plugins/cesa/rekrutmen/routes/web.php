@@ -103,6 +103,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('settings/mail/test', [RekrutmenCommunicationSettingsController::class, 'testMailSettings'])->name('rekrutmen.api.settings.mail.test');
         Route::get('whatsapp/senders', [RekrutmenCommunicationSettingsController::class, 'whatsappSenders'])->name('rekrutmen.api.whatsapp.senders');
         Route::get('notifications/{notification}', [RekrutmenSpaController::class, 'notificationProgress'])->whereNumber('notification')->name('rekrutmen.api.notifications.progress');
+        Route::put('settings/whatsapp/integration', [RekrutmenCommunicationSettingsController::class, 'saveWagIntegration'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.integration');
+        Route::patch('settings/whatsapp/capacity', [RekrutmenCommunicationSettingsController::class, 'saveWagCapacity'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.capacity');
+        Route::post('settings/whatsapp/accounts/{account}/logout', [RekrutmenCommunicationSettingsController::class, 'logoutWhatsAppAccount'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.accounts.logout');
         Route::get('settings/whatsapp', [RekrutmenCommunicationSettingsController::class, 'getWhatsAppSettings'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp');
         Route::put('settings/whatsapp', [RekrutmenCommunicationSettingsController::class, 'saveWhatsAppSettings'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.save');
         Route::post('settings/whatsapp/accounts/connect', [RekrutmenCommunicationSettingsController::class, 'connectWhatsAppAccount'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.accounts.connect');

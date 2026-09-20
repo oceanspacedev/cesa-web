@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        php-versions: ["8.3"]
+        php-versions: ["8.4"]
         node-version: ["22.13.1"]
         shard-index: [1]
         shard-total: [1]

@@ -1402,13 +1402,14 @@
                   v-model="selectedWhatsappAccountId"
                   class="w-full h-8.5 bg-white border border-zinc-200 rounded-lg px-2.5 text-xs text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 appearance-none pr-8 cursor-pointer shadow-2xs"
                 >
-                  <option v-if="!connectedWhatsappAccounts.length" :value="null">Nomor belum siap; hubungi pengelola WhatsApp</option>
+                  <option :value="null">{{ connectedWhatsappAccounts.length ? 'Pilih pengirim WhatsApp' : 'Nomor belum siap; hubungi pengelola WhatsApp' }}</option>
                   <option v-for="account in connectedWhatsappAccounts" :key="account.id" :value="account.id">
                     {{ account.name }}{{ account.phone_number ? ` • ${account.phone_number}` : '' }}{{ account.is_default ? ' (default)' : '' }}
                   </option>
                 </select>
                 <ChevronDown class="w-3.5 h-3.5 text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
+              <Button v-if="canManageWhatsapp && !connectedWhatsappAccounts.length" variant="outline" size="sm" @click="connectWhatsappInContext">Hubungkan WhatsApp</Button>
             </div>
 
             <!-- Scheduled Sending Inputs -->
@@ -1810,6 +1811,11 @@ const selectedChannels = ref(['email', 'whatsapp']);
 const whatsappAccounts = ref([]);
 const selectedWhatsappAccountId = ref(null);
 const whatsappEngineReady = ref(false);
+const canManageWhatsapp = ref(false);
+const connectWhatsappInContext = () => {
+  sessionStorage.setItem('wag-return-to', route.fullPath);
+  router.push({ name: 'configurations', query: { tab: 'whatsapp_gateway', connect: '1' } });
+};
 const connectedWhatsappAccounts = computed(() => (whatsappAccounts.value || []).filter((account) => whatsappEngineReady.value && account.is_active && account.delivery_ready === true));
 const notificationProgress = ref(null);
 const notificationProgressError = ref('');
@@ -1932,6 +1938,7 @@ onMounted(() => {
 });
 
 onActivated(() => {
+  fetchWhatsappAccounts();
   isAiViewActive = true;
   resumeAiPolling();
   const targetId = activeJobId.value;
@@ -2587,8 +2594,9 @@ const fetchWhatsappAccounts = async () => {
     const res = await axios.get('/rekrutmen/api/whatsapp/senders');
     whatsappAccounts.value = res.data?.accounts || [];
     whatsappEngineReady.value = res.data?.engine_ready === true;
+    canManageWhatsapp.value = res.data?.can_manage === true;
     const current = connectedWhatsappAccounts.value.find((account) => account.id === selectedWhatsappAccountId.value);
-    const fallback = connectedWhatsappAccounts.value.find((account) => account.is_default) || connectedWhatsappAccounts.value[0];
+    const fallback = connectedWhatsappAccounts.value.find((account) => account.is_default);
     selectedWhatsappAccountId.value = current ? current.id : (fallback ? fallback.id : null);
   } catch (err) {
     whatsappAccounts.value = [];

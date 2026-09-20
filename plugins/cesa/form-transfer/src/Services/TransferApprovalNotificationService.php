@@ -2,6 +2,7 @@
 
 namespace Cesa\FormTransfer\Services;
 
+use App\Services\WhatsApp\WagHubClient;
 use Cesa\FormTransfer\Enums\TransferRequestApprovalStatus;
 use Cesa\FormTransfer\Enums\TransferRequestRealizationStatus;
 use Cesa\FormTransfer\Enums\TransferRequestSubmissionStatus;
@@ -1019,6 +1020,11 @@ HTML;
 
         $endpoint = Arr::get($config, 'endpoint');
         $apiKey = Arr::get($config, 'api_key');
+        $hub = app(WagHubClient::class);
+        if ($hub->engine()->isV2() && $hub->engine()->isConfigured()) {
+            $endpoint = $hub->engine()->baseUrl();
+            $apiKey = 'shared-integration';
+        }
 
         $missing = [];
 

@@ -2,7 +2,9 @@
 
 namespace App\Services\WhatsApp;
 
+use App\Models\WagIntegration;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -31,7 +33,7 @@ class WagHubClient
     ) {
         $this->url = rtrim($url ?? (string) config('wag.url'), '/');
         $this->token = trim($token ?? (string) config('wag.token'));
-        $this->engineUrl = rtrim($engineUrl ?? ($url !== null ? $this->url.'/api/v1/engine' : (string) config('wag.engine_url')), '/');
+        $this->engineUrl = rtrim($engineUrl ?? ($url !== null ? $this->url.'/api/v2' : (string) config('wag.engine_url')), '/');
         $this->engineToken = trim($engineToken ?? $token ?? (string) config('wag.engine_token'));
     }
 
@@ -75,6 +77,15 @@ class WagHubClient
      */
     public function sendMessage(string $phone, string $text, array $options = []): array
     {
+        $engine = $this->engine();
+        if ($engine->isV2()) {
+            if (empty($options['session_id'])) {
+                throw new RuntimeException('Pilih akun WhatsApp sebelum menjadwalkan pesan.');
+            }
+
+            return $engine->sendText($options['session_id'], $phone, $text, (string) ($options['idempotency_key'] ?? Str::uuid()));
+        }
+
         if (! $this->isConfigured()) {
             throw new RuntimeException('WAG Hub URL atau Token belum dikonfigurasi di file .env (WAG_URL, WAG_TOKEN).');
         }
@@ -145,6 +156,10 @@ class WagHubClient
      */
     public function engine(): WagHubEngineClient
     {
+        if (Schema::hasTable('wag_integrations') && ($stored = WagIntegration::query()->find(1)) && $stored->url) {
+            return new WagHubEngineClient($stored->url.'/api/v2', $stored->token);
+        }
+
         return new WagHubEngineClient($this->engineUrl, $this->engineToken);
     }
 }

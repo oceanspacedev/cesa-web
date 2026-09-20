@@ -8,12 +8,12 @@ class WhatsAppEngineClient extends WagHubEngineClient
 {
     public function baseUrl(): string
     {
-        return rtrim(trim((string) config('rekrutmen.notifications.whatsapp.engine_url')), '/');
+        return $this->storedIntegration()?->url ? rtrim($this->storedIntegration()->url, '/').'/api/v2' : rtrim(trim((string) config('rekrutmen.notifications.whatsapp.engine_url')), '/');
     }
 
     protected function token(): string
     {
-        return trim((string) config('rekrutmen.notifications.whatsapp.engine_token'));
+        return trim($this->storedIntegration()?->token ?? (string) config('rekrutmen.notifications.whatsapp.engine_token'));
     }
 
     protected function httpTimeout(): int

@@ -196,7 +196,7 @@ it('resolves shared engine settings while preserving explicit recruitment overri
     ], ['engine_url' => 'https://recruitment-hub.example.test/engine', 'engine_token' => 'recruitment-engine-token']],
     'explicit local driver'                            => [['REKRUTMEN_WHATSAPP_ENGINE_DRIVER' => 'local'], ['engine_driver' => 'local', 'engine_url' => 'http://127.0.0.1:3318', 'engine_token' => null, 'auto_start' => true]],
     'unconfigured service stays remote'                => [['WAG_ENGINE_URL' => null, 'WAG_ENGINE_TOKEN' => null], ['engine_driver' => 'wag_hub', 'engine_url' => null, 'engine_token' => null, 'auto_start' => false]],
-    'two value setup including blank legacy overrides' => [['WAG_URL' => 'https://hub.test/', 'WAG_TOKEN' => 'app-token', 'WAG_ENGINE_URL' => '', 'WAG_ENGINE_TOKEN' => '', 'REKRUTMEN_WHATSAPP_ENGINE_URL' => '', 'REKRUTMEN_WHATSAPP_ENGINE_TOKEN' => ''], ['engine_driver' => 'wag_hub', 'engine_url' => 'https://hub.test/api/v1/engine', 'engine_token' => 'app-token', 'auto_start' => false]],
+    'two value setup including blank legacy overrides' => [['WAG_URL' => 'https://hub.test/', 'WAG_TOKEN' => 'app-token', 'WAG_ENGINE_URL' => '', 'WAG_ENGINE_TOKEN' => '', 'REKRUTMEN_WHATSAPP_ENGINE_URL' => '', 'REKRUTMEN_WHATSAPP_ENGINE_TOKEN' => ''], ['engine_driver' => 'wag_hub', 'engine_url' => 'https://hub.test/api/v2', 'engine_token' => 'app-token', 'auto_start' => false]],
     'unconfigured remote driver'                       => [['WAG_ENGINE_URL' => null, 'REKRUTMEN_WHATSAPP_ENGINE_DRIVER' => 'wag_hub'], ['engine_driver' => 'wag_hub', 'engine_url' => null, 'auto_start' => false]],
 ]);
 

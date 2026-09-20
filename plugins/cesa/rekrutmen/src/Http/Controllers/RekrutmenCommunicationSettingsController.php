@@ -3,8 +3,12 @@
 namespace Cesa\Rekrutmen\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\WagIntegration;
+use App\Services\WhatsApp\WagHubIntegration;
 use Cesa\Rekrutmen\Http\Requests\ConnectWhatsAppAccountRequest;
 use Cesa\Rekrutmen\Http\Requests\SaveMailSettingsRequest;
+use Cesa\Rekrutmen\Http\Requests\SaveWagCapacityRequest;
+use Cesa\Rekrutmen\Http\Requests\SaveWagIntegrationRequest;
 use Cesa\Rekrutmen\Http\Requests\SaveWhatsAppSettingsRequest;
 use Cesa\Rekrutmen\Http\Requests\TestMailSettingsRequest;
 use Cesa\Rekrutmen\Http\Requests\TestWhatsAppAccountRequest;
@@ -13,7 +17,9 @@ use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\MailSetting;
 use Cesa\Rekrutmen\Models\WhatsAppAccount;
 use Cesa\Rekrutmen\Models\WhatsAppSetting;
+use Cesa\Rekrutmen\Services\HubWhatsAppGateway;
 use Cesa\Rekrutmen\Services\RekrutmenMailer;
+use Cesa\Rekrutmen\Services\WhatsAppEngineClient;
 use Cesa\Rekrutmen\Services\WhatsAppGateway;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -68,15 +74,32 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function getWhatsAppSettings(): JsonResponse
     {
+        $integration = null;
+        $client = app(WhatsAppEngineClient::class);
+        $integrationError = null;
+        if ($client->isV2()) {
+            try {
+                $stored = WagIntegration::current();
+                $integration = ! $stored->verified_at
+                    ? app(WagHubIntegration::class)->configure(preg_replace('#/api/v2$#', '', $client->baseUrl()), (string) config('wag.token'))
+                    : app(WagHubIntegration::class)->refresh($client);
+            } catch (Throwable $exception) {
+                $integrationError = $exception->getMessage();
+            }
+        }
         $ready = $this->whatsAppGateway->engineReady();
         $accounts = WhatsAppAccount::query()->orderByDesc('is_default')->orderBy('name')->get()
-            ->map(fn (WhatsAppAccount $account): array => $this->whatsAppGateway->session($account, $ready))->values();
+            ->map(fn (WhatsAppAccount $account): array => $client->isV2() ? app(HubWhatsAppGateway::class)->payload($account, $integration !== null) : $this->whatsAppGateway->session($account, $ready))->values();
         $gateway = WhatsAppSetting::current()->toApiArray();
         $gateway['engine_ready'] = $ready;
 
         return response()->json([
-            'gateway'  => $gateway,
-            'accounts' => $accounts,
+            'gateway'                    => $gateway,
+            'accounts'                   => $accounts->reject(fn (array $account): bool => (bool) ($account['deleted'] ?? false))->values(),
+            'integration'                => $integration,
+            'integration_error'          => $integrationError,
+            'integration_url'            => preg_replace('#/api/v[12].*$#', '', $client->baseUrl()),
+            'default_selection_required' => $client->isV2() ? WagIntegration::current()->default_selection_required : false,
         ]);
     }
 
@@ -96,7 +119,7 @@ class RekrutmenCommunicationSettingsController extends Controller
                 ]));
             });
 
-        return response()->json(['accounts' => $accounts->values(), 'engine_ready' => $ready]);
+        return response()->json(['accounts' => $accounts->values(), 'engine_ready' => $ready, 'can_manage' => Gate::allows('manage_rekrutmen_whatsapp')]);
     }
 
     public function saveWhatsAppSettings(SaveWhatsAppSettingsRequest $request): JsonResponse
@@ -126,9 +149,9 @@ class RekrutmenCommunicationSettingsController extends Controller
             'connection_request_key' => hash('sha256', $request->user()->id.':'.($request->validated('request_key') ?? Str::uuid())),
         ], [
             'name'         => $name,
-            'phone_number' => $phone,
+            'phone_number' => app(WhatsAppEngineClient::class)->isV2() ? null : $phone,
             'is_active'    => true,
-            'is_default'   => ! WhatsAppAccount::query()->exists(),
+            'is_default'   => false,
         ]);
 
         abort_if($account->trashed(), 409, 'Permintaan ini sudah digunakan untuk akun yang dihapus. Buat koneksi baru.');
@@ -139,7 +162,7 @@ class RekrutmenCommunicationSettingsController extends Controller
             'success' => $result['success'],
             'message' => $result['message'],
             'data'    => $result['data'] ?? $account->fresh()?->toApiArray(),
-        ], $result['success'] ? 201 : 422);
+        ], $result['success'] ? 201 : 422)->header('Cache-Control', 'no-store');
     }
 
     public function reconnectWhatsAppAccount(ConnectWhatsAppAccountRequest $request, WhatsAppAccount $account): JsonResponse
@@ -148,12 +171,12 @@ class RekrutmenCommunicationSettingsController extends Controller
         $phone = $this->whatsAppGateway->formatPhone($request->validated('phone_number')) ?: $account->phone_number;
         $result = $this->whatsAppGateway->connect($account, $mode, $mode === 'pairing' ? $phone : null);
 
-        return response()->json($result, $result['success'] ? 200 : 422);
+        return response()->json($result, $result['success'] ? 200 : 422)->header('Cache-Control', 'no-store');
     }
 
     public function sessionWhatsAppAccount(WhatsAppAccount $account): JsonResponse
     {
-        return response()->json($this->whatsAppGateway->session($account));
+        return response()->json($this->whatsAppGateway->session($account))->header('Cache-Control', 'no-store');
     }
 
     public function disconnectWhatsAppAccount(WhatsAppAccount $account): JsonResponse
@@ -167,6 +190,11 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function updateWhatsAppAccount(UpsertWhatsAppAccountRequest $request, WhatsAppAccount $account): JsonResponse
     {
+        if (app(WhatsAppEngineClient::class)->isV2()) {
+            app(HubWhatsAppGateway::class)->rename($account, $request->validated('name'));
+
+            return response()->json(['success' => true, 'data' => $account->fresh()->toApiArray()]);
+        }
         $data = $this->normalizeAccountPayload($request->validated(), $account);
         $account->fill($data);
         $account->save();
@@ -180,6 +208,12 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function destroyWhatsAppAccount(WhatsAppAccount $account): JsonResponse
     {
+        if (app(WhatsAppEngineClient::class)->isV2()) {
+            $result = app(HubWhatsAppGateway::class)->lifecycle($account, 'delete');
+
+            return response()->json($result, $result['success'] ? 202 : 503);
+        }
+
         $result = $this->whatsAppGateway->disconnect($account);
         if (! $result['success']) {
             return response()->json($result, 503);
@@ -195,6 +229,12 @@ class RekrutmenCommunicationSettingsController extends Controller
 
     public function makeDefaultWhatsAppAccount(WhatsAppAccount $account): JsonResponse
     {
+        if (app(WhatsAppEngineClient::class)->isV2()) {
+            $snapshot = $this->whatsAppGateway->session($account);
+            abort_unless($snapshot['delivery_ready'] ?? false, 409, 'Pilih akun yang sudah terhubung.');
+            WagIntegration::current()->update(['default_selection_required' => false]);
+        }
+
         $account->is_default = true;
         $account->is_active = true;
         $account->save();
@@ -213,7 +253,38 @@ class RekrutmenCommunicationSettingsController extends Controller
             $request->validated('recipient')
         );
 
-        return response()->json($result, $result['success'] ? 200 : 422);
+        return response()->json($result, $result['success'] ? 200 : 422)->header('Cache-Control', 'no-store');
+    }
+
+    public function saveWagIntegration(SaveWagIntegrationRequest $request): JsonResponse
+    {
+        try {
+            $snapshot = app(WagHubIntegration::class)->configure($request->validated('url'), $request->validated('token'));
+
+            return response()->json(['success' => true, 'data' => $snapshot]);
+        } catch (Throwable $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function saveWagCapacity(SaveWagCapacityRequest $request): JsonResponse
+    {
+        try {
+            $snapshot = app(WhatsAppEngineClient::class)->capacity((int) $request->validated('configured_limit'));
+
+            return response()->json(['success' => true, 'data' => $snapshot]);
+        } catch (Throwable $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function logoutWhatsAppAccount(WhatsAppAccount $account): JsonResponse
+    {
+        $result = app(WhatsAppEngineClient::class)->isV2()
+            ? app(HubWhatsAppGateway::class)->lifecycle($account, 'logout')
+            : $this->whatsAppGateway->disconnect($account);
+
+        return response()->json($result, $result['success'] ? 202 : 503);
     }
 
     /**

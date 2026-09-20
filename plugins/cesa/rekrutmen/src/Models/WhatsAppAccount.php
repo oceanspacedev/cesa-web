@@ -38,14 +38,18 @@ class WhatsAppAccount extends Model
     protected function casts(): array
     {
         return [
-            'is_default'      => 'boolean',
-            'is_active'       => 'boolean',
-            'status'          => WhatsAppAccountStatus::class,
-            'api_key'         => 'encrypted',
-            'last_checked_at' => 'datetime',
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'deleted_at'      => 'datetime',
+            'is_default'       => 'boolean',
+            'is_active'        => 'boolean',
+            'status'           => WhatsAppAccountStatus::class,
+            'api_key'          => 'encrypted',
+            'last_checked_at'  => 'datetime',
+            'created_at'       => 'datetime',
+            'updated_at'       => 'datetime',
+            'deleted_at'       => 'datetime',
+            'hub_snapshot'     => 'array',
+            'hub_stale'        => 'boolean',
+            'engine_available' => 'boolean',
+            'hub_observed_at'  => 'datetime',
         ];
     }
 
@@ -72,25 +76,11 @@ class WhatsAppAccount extends Model
                 ->update(['is_default' => false]);
         });
 
-        static::deleted(function (self $account): void {
-            if (! $account->is_default) {
-                return;
-            }
-
-            $replacement = static::query()
-                ->where('is_active', true)
-                ->orderBy('id')
-                ->first();
-
-            if ($replacement) {
-                $replacement->forceFill(['is_default' => true])->save();
-            }
-        });
     }
 
     public function sessionId(): string
     {
-        return 'rekrutmen-'.(string) $this->getKey();
+        return $this->hub_session_id ?: 'rekrutmen-'.(string) $this->getKey();
     }
 
     /**
@@ -118,10 +108,7 @@ class WhatsAppAccount extends Model
             return static::query()->active()->whereKey($id)->first();
         }
 
-        return static::query()->connected()->where('is_default', true)->first()
-            ?? static::query()->connected()->orderBy('id')->first()
-            ?? static::query()->active()->where('is_default', true)->first()
-            ?? static::query()->active()->orderBy('id')->first();
+        return static::query()->active()->where('is_default', true)->first();
     }
 
     public function markConnected(?string $phone = null): void
@@ -157,13 +144,18 @@ class WhatsAppAccount extends Model
     public function toApiArray(): array
     {
         return [
-            'id'              => $this->id,
-            'name'            => $this->name,
-            'phone_number'    => $this->phone_number,
-            'session_id'      => $this->exists ? $this->sessionId() : null,
-            'is_default'      => (bool) $this->is_default,
-            'is_active'       => (bool) $this->is_active,
-            'status'          => $this->status instanceof WhatsAppAccountStatus
+            'id'                => $this->id,
+            'name'              => $this->name,
+            'phone_number'      => $this->phone_number,
+            'session_id'        => $this->exists ? $this->sessionId() : null,
+            'hub_status'        => $this->hub_status,
+            'stale'             => $this->hub_stale || ! $this->last_checked_at || $this->last_checked_at->lt(now()->subSeconds(90)),
+            'desired_state'     => $this->desired_state,
+            'pending_operation' => $this->hub_snapshot['pending_operation'] ?? null,
+            'requires_linking'  => ! $this->hub_session_id,
+            'is_default'        => (bool) $this->is_default,
+            'is_active'         => (bool) $this->is_active,
+            'status'            => $this->status instanceof WhatsAppAccountStatus
                 ? $this->status->value
                 : (string) $this->status,
             'last_checked_at' => $this->last_checked_at?->toDateTimeString(),

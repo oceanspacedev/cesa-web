@@ -244,7 +244,7 @@ class NotificationDefaultsTest extends FormTransferTestCase
         $job->handle();
 
         Http::assertSent(function (HttpRequest $request): bool {
-            $body = $request->json();
+            $body = $request->data();
 
             return $request->url() === 'https://waghub.mekayastudio.com/api/v1/messages'
                 && $request->hasHeader('Authorization', 'Bearer test-token')

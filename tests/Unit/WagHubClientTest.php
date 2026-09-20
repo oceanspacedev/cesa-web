@@ -43,7 +43,7 @@ it('honors explicitly constructed credentials for session operations', function 
     $hub = new WagHubClient('https://another.test/', 'another-token');
 
     expect($hub->engine()->isReady())->toBeTrue();
-    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://another.test/api/v1/engine/health'
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://another.test/health/ready'
         && $request->hasHeader('Authorization', 'Bearer another-token'));
 });
 

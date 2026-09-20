@@ -14,3 +14,5 @@ Artisan::command('inspire', function () {
 Schedule::command('rekrutmen:process-scheduled-notifications')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('wag:reconcile')->everyMinute()->withoutOverlapping();

@@ -2,6 +2,7 @@
 
 namespace Cesa\ExitClearance\Services;
 
+use App\Services\WhatsApp\WagHubClient;
 use Cesa\ExitClearance\Jobs\SendWhatsAppNotification;
 use Cesa\ExitClearance\Models\Approver;
 use Cesa\ExitClearance\Models\Request;
@@ -209,6 +210,11 @@ class ExitClearanceNotificationService
 
         $endpoint = Arr::get($config, 'endpoint');
         $apiKey = Arr::get($config, 'api_key');
+        $hub = app(WagHubClient::class);
+        if ($hub->engine()->isV2() && $hub->engine()->isConfigured()) {
+            $endpoint = $hub->engine()->baseUrl();
+            $apiKey = 'shared-integration';
+        }
         if (! $endpoint || ! $apiKey) {
             Log::warning('Exit clearance WhatsApp notification skipped due to missing configuration.', [
                 'endpoint' => $endpoint,

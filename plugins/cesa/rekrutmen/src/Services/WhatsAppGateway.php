@@ -2,6 +2,9 @@
 
 namespace Cesa\Rekrutmen\Services;
 
+use App\Models\WagIntegration;
+use App\Models\WagMessageRequest;
+use App\Services\WhatsApp\WagHubEngineClient;
 use Cesa\Rekrutmen\Enums\WhatsAppAccountStatus;
 use Cesa\Rekrutmen\Models\WhatsAppAccount;
 use Cesa\Rekrutmen\Models\WhatsAppSetting;
@@ -40,6 +43,10 @@ class WhatsAppGateway
             return $this->failedSend('Engine WhatsApp belum tersedia. Pengiriman menunggu akun yang dipilih.', true);
         }
 
+        if ($this->engine->isV2() && (! $account->hub_session_id || $account->desired_state !== 'RUNNING')) {
+            return $this->failedSend('Tautkan atau lanjutkan akun WhatsApp yang dipilih terlebih dahulu.');
+        }
+
         $key = (string) ($options['idempotency_key'] ?? Str::uuid());
         try {
             $payload = $this->engine->sendText($account->sessionId(), $phone, $message, $key);
@@ -59,9 +66,7 @@ class WhatsAppGateway
 
         $status = (string) ($payload['status'] ?? 'unknown');
         $success = $status === 'sent';
-        if ($success) {
-            $account->markConnected($account->phone_number);
-        } else {
+        if (! $success && ! $this->engine->isV2()) {
             $account->forceFill([
                 'last_error'      => $payload['message'] ?? 'Hasil pengiriman belum pasti.',
                 'last_checked_at' => now(),
@@ -85,6 +90,14 @@ class WhatsAppGateway
     public function messageResult(WhatsAppAccount $account, string $key): ?array
     {
         try {
+            if ($this->engine->isV2() && ! WagMessageRequest::query()->where('session_id', $account->sessionId())->where('request_key', $key)->exists()) {
+                $base = preg_replace('#/api/v2$#', '', $this->engine->baseUrl());
+                $token = WagIntegration::current()->token ?: config('rekrutmen.notifications.whatsapp.engine_token');
+                $legacy = new WagHubEngineClient($base.'/api/v1/engine', $token);
+
+                return $legacy->message('rekrutmen-'.$account->id, $key);
+            }
+
             return $this->engine->message($account->sessionId(), $key);
         } catch (Throwable) {
             return null;
@@ -102,6 +115,10 @@ class WhatsAppGateway
      */
     public function connect(WhatsAppAccount $account, string $mode = 'qr', ?string $phone = null): array
     {
+        if ($this->engine->isV2()) {
+            return app(HubWhatsAppGateway::class)->connect($account, $mode, $phone);
+        }
+
         if (! $this->ensureEngine()) {
             return [
                 'success' => false,
@@ -135,6 +152,10 @@ class WhatsAppGateway
      */
     public function session(WhatsAppAccount $account, ?bool $engineReady = null): array
     {
+        if ($this->engine->isV2()) {
+            return app(HubWhatsAppGateway::class)->session($account);
+        }
+
         $engineReady ??= $this->engine->isReady();
         if (! $engineReady) {
             return $this->sessionPayload($account, [
@@ -159,6 +180,10 @@ class WhatsAppGateway
     /** @return array<string, mixed> */
     public function disconnect(WhatsAppAccount $account): array
     {
+        if ($this->engine->isV2()) {
+            return app(HubWhatsAppGateway::class)->lifecycle($account, 'stop');
+        }
+
         $account->forceFill(['is_active' => false])->save();
         $account->markDisconnected('Nomor diputuskan dari CESA.');
 
@@ -259,7 +284,7 @@ class WhatsAppGateway
     protected function ensureEngine(): bool
     {
         try {
-            return $this->process->ensureRunning();
+            return $this->engine->isV2() ? $this->engine->isReady() : $this->process->ensureRunning();
         } catch (Throwable $e) {
             Log::warning('Failed to auto-start rekrutmen WhatsApp engine.', [
                 'error' => $e->getMessage(),
