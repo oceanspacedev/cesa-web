@@ -144,7 +144,7 @@ class RekrutmenSpaController extends Controller
             'jobPosting.applications:id,job_posting_id,status',
             'jobPosting.requestManPowers',
             'jobPosting.rekrutmenPipeline',
-        ])->latest('created_at');
+        ])->latest('created_at')->latest('id');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -155,7 +155,7 @@ class RekrutmenSpaController extends Controller
             });
         }
 
-        $records = $query->paginate($request->input('per_page', 50));
+        $records = $query->paginate(max(1, min(100, $request->integer('per_page', 50))));
 
         $records->getCollection()->transform(function (RequestManPower $record) {
             $fulfillmentStatus = $record->fulfillmentStatus();
@@ -296,7 +296,8 @@ class RekrutmenSpaController extends Controller
             'rekrutmenPipeline',
         ])
             ->withCount(['applications', 'requestManPowers'])
-            ->latest('created_at');
+            ->latest('created_at')
+            ->latest('id');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -569,10 +570,11 @@ class RekrutmenSpaController extends Controller
         $this->checkAndProcessDueNotifications();
 
         $query = JobApplication::with([
+            'jobPosting.company',
             'jobPosting.requestManPower.company',
             'jobPosting.requestManPowers.company',
             'currentStage',
-        ])->latest('created_at');
+        ])->latest('created_at')->latest('id');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -585,12 +587,10 @@ class RekrutmenSpaController extends Controller
         }
 
         $activeJob = null;
-        $isJobFiltered = false;
         if ($request->filled('job_id')) {
             $jobId = (int) $request->input('job_id');
             $query->where('job_posting_id', $jobId);
             $activeJob = JobPosting::find($jobId);
-            $isJobFiltered = true;
         }
 
         $colors = [
@@ -625,9 +625,9 @@ class RekrutmenSpaController extends Controller
                 'color'                 => $colors[$s->name] ?? '#3b82f6',
             ]);
 
-        $rawApps = $isJobFiltered ? $query->get() : $query->take(150)->get();
+        $paginatedApplications = $query->paginate(max(1, min(100, $request->integer('per_page', 100))));
 
-        $applications = $rawApps->map(function (JobApplication $app) use ($colors) {
+        $applications = $paginatedApplications->getCollection()->map(function (JobApplication $app) use ($colors) {
             $stage = $app->currentStage;
             $stageData = null;
             if ($stage) {
@@ -687,7 +687,10 @@ class RekrutmenSpaController extends Controller
             'stages'       => $stages,
             'applications' => $applications,
             'active_job'   => $activeJob ? ['id' => $activeJob->id, 'title' => $activeJob->title, 'location' => $activeJob->location, 'company_name' => $activeJob->resolveCompanyName()] : null,
-            'total'        => $applications->count(),
+            'total'        => $paginatedApplications->total(),
+            'current_page' => $paginatedApplications->currentPage(),
+            'last_page'    => $paginatedApplications->lastPage(),
+            'per_page'     => $paginatedApplications->perPage(),
         ]);
     }
 

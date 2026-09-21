@@ -1,12 +1,20 @@
 import { defineStore } from 'pinia';
 import axios from 'axios';
+import { fetchPaginatedCollection } from '../lib/paginatedCollection.js';
+
+const postingsRequests = new WeakMap();
 
 export const useRekrutmenStore = defineStore('rekrutmen', {
   state: () => ({
     requests: [],
     postings: [],
+    postingsSearch: null,
     companies: [],
     applications: [],
+    applicationsParams: { search: '', job_id: '', pipeline_id: '' },
+    collectionQueries: { requests: null, applications: null },
+    loadedCollections: { requests: null, applications: null },
+    errors: { requests: '', applications: '' },
     aiScreeningProgress: null,
     stages: [],
     pipelines: [],
@@ -26,26 +34,32 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
 
   actions: {
     async fetchRequests(search = '', force = false) {
-      if (this.requests.length && !search && !force) return this.requests;
-      this.loading.requests = true;
+      return fetchPaginatedCollection(this, {
+        collection: 'requests',
+        url: '/rekrutmen/api/requests',
+        params: { search: String(search ?? '').trim() },
+        recordsKey: 'data',
+        force,
+        errorMessage: 'Daftar FPTK belum berhasil dimuat seluruhnya. Silakan coba lagi.',
+      });
+    },
+
+    async refreshRequestsAfterMutation(result) {
       try {
-        const res = await axios.get('/rekrutmen/api/requests', { params: { search } });
-        if (res.data) {
-          this.requests = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
-        }
-      } catch (err) {
-        console.error('Failed fetching requests', err);
-      } finally {
-        this.loading.requests = false;
+        await this.fetchRequests('', true);
+        return result;
+      } catch {
+        return {
+          ...result,
+          refresh_warning: 'Perubahan sudah tersimpan, tetapi daftar FPTK gagal dimuat ulang. Klik Segarkan untuk mencoba lagi.',
+        };
       }
-      return this.requests;
     },
 
     async approveRequest(id) {
       try {
         const res = await axios.post(`/rekrutmen/api/requests/${id}/approve`);
-        await this.fetchRequests('', true);
-        return res.data;
+        return await this.refreshRequestsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to approve request', err);
         throw err;
@@ -55,8 +69,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     async rejectRequest(id) {
       try {
         const res = await axios.post(`/rekrutmen/api/requests/${id}/reject`);
-        await this.fetchRequests('', true);
-        return res.data;
+        return await this.refreshRequestsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to reject request', err);
         throw err;
@@ -66,8 +79,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     async holdRequest(id, reason) {
       try {
         const res = await axios.post(`/rekrutmen/api/requests/${id}/hold`, { reason });
-        await this.fetchRequests('', true);
-        return res.data;
+        return await this.refreshRequestsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to hold request', err);
         throw err;
@@ -75,29 +87,69 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     },
 
     async fetchPostings(search = '', force = false) {
-      if (this.postings.length && !search && !force) return this.postings;
+      const normalizedSearch = String(search ?? '').trim();
+      const pendingRequest = postingsRequests.get(this);
+
+      if (!force && pendingRequest?.search === normalizedSearch) return pendingRequest.promise;
+      if (!force && !pendingRequest && this.postingsSearch === normalizedSearch) return this.postings;
+
+      const request = { search: normalizedSearch, promise: null };
+      postingsRequests.set(this, request);
       this.loading.postings = true;
-      try {
-        const res = await axios.get('/rekrutmen/api/job-postings', { params: { search } });
-        if (res.data) {
-          this.postings = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
-          if (res.data.companies && Array.isArray(res.data.companies)) {
-            this.companies = res.data.companies;
+
+      request.promise = (async () => {
+        try {
+          const postings = [];
+          let companies;
+          let pipelines;
+          let page = 1;
+          let lastPage = 1;
+
+          do {
+            const { data } = await axios.get('/rekrutmen/api/job-postings', {
+              params: { search: normalizedSearch, page, per_page: 100 },
+            });
+
+            postings.push(...(Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])));
+
+            if (page === 1) {
+              companies = data?.companies;
+              pipelines = data?.pipelines;
+            }
+
+            lastPage = Number(data?.last_page) || 1;
+            page++;
+          } while (page <= lastPage);
+
+          if (postingsRequests.get(this) === request) {
+            this.postings = postings;
+            this.postingsSearch = normalizedSearch;
+
+            if (Array.isArray(companies)) {
+              this.companies = companies;
+            }
+            if (Array.isArray(pipelines)) {
+              const currentPipelines = new Map(this.pipelines.map(pipeline => [String(pipeline.id), pipeline]));
+              this.pipelines = pipelines.map(pipeline => ({
+                ...currentPipelines.get(String(pipeline.id)),
+                ...pipeline,
+              }));
+            }
           }
-          if (res.data.pipelines && Array.isArray(res.data.pipelines)) {
-            const currentPipelines = new Map(this.pipelines.map(pipeline => [String(pipeline.id), pipeline]));
-            this.pipelines = res.data.pipelines.map(pipeline => ({
-              ...currentPipelines.get(String(pipeline.id)),
-              ...pipeline,
-            }));
+
+          return postings;
+        } catch (err) {
+          console.error('Failed fetching postings', err);
+          throw err;
+        } finally {
+          if (postingsRequests.get(this) === request) {
+            postingsRequests.delete(this);
+            this.loading.postings = false;
           }
         }
-      } catch (err) {
-        console.error('Failed fetching postings', err);
-      } finally {
-        this.loading.postings = false;
-      }
-      return this.postings;
+      })();
+
+      return request.promise;
     },
 
     async fetchCompanies() {
@@ -113,6 +165,19 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       return this.companies;
     },
 
+    async refreshPostingsAfterMutation(result) {
+      this.postingsSearch = null;
+      try {
+        await this.fetchPostings('', true);
+        return result;
+      } catch {
+        return {
+          ...result,
+          refresh_warning: 'Perubahan sudah tersimpan, tetapi daftar lowongan gagal dimuat ulang. Klik Segarkan untuk mencoba lagi.',
+        };
+      }
+    },
+
     async togglePublishPosting(id) {
       const posting = this.postings.find(p => p.id === id);
       if (posting) {
@@ -120,8 +185,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
       }
       try {
         const res = await axios.patch(`/rekrutmen/api/job-postings/${id}/publish`);
-        await this.fetchPostings('', true);
-        return res.data;
+        return await this.refreshPostingsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to toggle publish status', err);
         throw err;
@@ -138,8 +202,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         } else {
           res = await axios.post('/rekrutmen/api/job-postings', payload);
         }
-        await this.fetchPostings('', true);
-        return res.data;
+        return await this.refreshPostingsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to create job posting', err);
         throw err;
@@ -156,8 +219,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
         } else {
           res = await axios.put(`/rekrutmen/api/job-postings/${id}`, payload);
         }
-        await this.fetchPostings('', true);
-        return res.data;
+        return await this.refreshPostingsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to update job posting', err);
         throw err;
@@ -167,8 +229,7 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     async deleteJobPosting(id) {
       try {
         const res = await axios.delete(`/rekrutmen/api/job-postings/${id}`);
-        await this.fetchPostings('', true);
-        return res.data;
+        return await this.refreshPostingsAfterMutation(res.data);
       } catch (err) {
         console.error('Failed to delete job posting', err);
         throw err;
@@ -176,29 +237,29 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     },
 
     async fetchApplications(params = {}, force = false) {
-      const search = typeof params === 'string' ? params : (params.search || '');
-      const jobId = typeof params === 'object' ? (params.job_id || '') : '';
+      const query = typeof params === 'string' ? { search: params } : (params ?? {});
+      this.applicationsParams = {
+        search: String(query.search ?? '').trim(),
+        job_id: String(query.job_id ?? '').trim(),
+        pipeline_id: String(query.pipeline_id ?? '').trim(),
+      };
 
-      if (this.applications.length && !search && !jobId && !force) {
-        return this.applications;
-      }
-
-      this.loading.applications = true;
-      try {
-        const res = await axios.get('/rekrutmen/api/applications', {
-          params: { search, job_id: jobId }
-        });
-        if (res.data) {
-          this.applications = res.data.applications || [];
-          this.stages = res.data.stages || [];
-          this.activeJob = res.data.active_job || null;
-        }
-      } catch (err) {
-        console.error('Failed fetching applications', err);
-      } finally {
-        this.loading.applications = false;
-      }
-      return this.applications;
+      return fetchPaginatedCollection(this, {
+        collection: 'applications',
+        url: '/rekrutmen/api/applications',
+        params: { ...this.applicationsParams },
+        recordsKey: 'applications',
+        force,
+        errorMessage: 'Daftar pelamar belum berhasil dimuat seluruhnya. Silakan coba lagi.',
+        onClear: () => {
+          this.stages = [];
+          this.activeJob = null;
+        },
+        onLoaded: data => {
+          this.stages = data.stages || [];
+          this.activeJob = data.active_job || null;
+        },
+      });
     },
 
     async moveStage(appId, newStageId) {
@@ -317,8 +378,15 @@ export const useRekrutmenStore = defineStore('rekrutmen', {
     async syncCandidateCvs() {
       try {
         const res = await axios.post('/rekrutmen/api/applications/sync-cvs');
-        await this.fetchApplications('', true);
-        return res.data;
+        try {
+          await this.fetchApplications(this.applicationsParams, true);
+          return res.data;
+        } catch {
+          return {
+            ...res.data,
+            refresh_warning: 'Sinkronisasi selesai, tetapi daftar pelamar gagal dimuat ulang. Silakan coba lagi.',
+          };
+        }
       } catch (err) {
         console.error('Failed syncing candidate CVs', err);
         throw err;

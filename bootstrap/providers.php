@@ -7,6 +7,7 @@ use Cesa\Document\DocumentServiceProvider;
 use Cesa\ExitClearance\ExitClearanceServiceProvider;
 use Cesa\FormTransfer\FormTransferServiceProvider;
 use Cesa\Helpdesk\HelpdeskServiceProvider;
+use Cesa\IdCard\IdCardServiceProvider;
 use Cesa\Kepegawaian\KepegawaianServiceProvider;
 use Cesa\Lead\LeadServiceProvider;
 use Cesa\LegacySync\LegacySyncServiceProvider;
@@ -81,6 +82,7 @@ return [
     ExitClearanceServiceProvider::class,
     FormTransferServiceProvider::class,
     HelpdeskServiceProvider::class,
+    IdCardServiceProvider::class,
     KepegawaianServiceProvider::class,
     LeadServiceProvider::class,
     PadelnisServiceProvider::class,

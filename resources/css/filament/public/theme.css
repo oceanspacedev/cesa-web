@@ -12,6 +12,8 @@
 /* Required by schemas (form layout components) */
 @import '../../../../vendor/filament/schemas/resources/css/index.css';
 
+@source '../../../../plugins/cesa/id-card/resources/views/**/*.blade.php';
+
 body.cesa-public {
     --primary-50: #eff6ff;
     --primary-100: #dbeafe;

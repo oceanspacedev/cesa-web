@@ -353,6 +353,19 @@
       </div>
     </div>
 
+    <div v-if="applicationsLoading" role="status" class="rounded-lg border border-outline-gray-2 bg-surface-white p-4 text-xs text-ink-gray-6">
+      Memuat seluruh data pelamar. Hasil pencarian lengkap tersedia setelah pemuatan selesai.
+    </div>
+    <div v-if="applicationLoadError" role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 flex items-center justify-between gap-3">
+      <p>
+        {{ applicationLoadError }}
+        <span v-if="applications.length">Data yang ditampilkan adalah hasil pemuatan sebelumnya.</span>
+      </p>
+      <FButton theme="gray" variant="outline" size="sm" :loading="applicationsLoading" @click="loadApplications(true)">
+        Coba Lagi
+      </FButton>
+    </div>
+
     <!-- CANDIDATE CARD FEED VIEW (No Table Layout) -->
     <div v-if="viewMode === 'table'" class="space-y-3">
       <!-- Unified Selection & Bulk Action Toolbar (Single Clean Strip) -->
@@ -393,7 +406,9 @@
 
         <!-- Right: Default Summary or Bulk Action Buttons -->
         <div v-if="!selectedAppIds.length" class="text-[11px] text-ink-gray-4">
-          Menampilkan {{ filteredApplications.length }} dari {{ applications.length }} pelamar
+          <span v-if="applicationsLoading">Memuat seluruh pelamar...</span>
+          <span v-else-if="applicationLoadError">Pemuatan data belum berhasil</span>
+          <span v-else>Menampilkan {{ filteredApplications.length }} dari {{ applications.length }} pelamar</span>
         </div>
 
         <div v-else class="flex items-center gap-2 flex-wrap">
@@ -600,7 +615,7 @@
 
       <!-- Empty State -->
       <div
-        v-else
+        v-else-if="!applicationsLoading && !applicationLoadError"
         class="py-16 text-center bg-surface-white rounded-lg border border-outline-gray-2 p-8 shadow-2xs flex flex-col items-center justify-center gap-2"
       >
         <div class="w-12 h-12 rounded-full bg-surface-gray-2 text-ink-gray-4 flex items-center justify-center">
@@ -710,7 +725,7 @@
 
           <!-- Empty State in Column -->
           <div
-            v-if="!getStageApplications(stage.id).length"
+            v-if="!applicationsLoading && !applicationLoadError && !getStageApplications(stage.id).length"
             class="py-8 text-center text-xs text-ink-gray-4 border border-dashed border-outline-gray-2 rounded-lg flex flex-col items-center justify-center gap-1"
           >
             <span class="text-ink-gray-3 text-sm">&empty;</span>
@@ -788,7 +803,7 @@
 
           <!-- Empty State in Column -->
           <div
-            v-if="!rejectedApplications.length"
+            v-if="!applicationsLoading && !applicationLoadError && !rejectedApplications.length"
             class="py-8 text-center text-xs text-ink-gray-4 border border-dashed border-surface-red-2 rounded-lg flex flex-col items-center justify-center gap-1"
           >
             <span class="text-rose-300 text-sm">&empty;</span>
@@ -1707,6 +1722,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
 import { createRequestKey, escapeHtml } from '../lib/utils';
+import { filterJobApplications } from '../lib/collectionFilters';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -1733,6 +1749,13 @@ import {
 const store = useRekrutmenStore();
 const route = useRoute();
 const router = useRouter();
+const activeJobId = computed(() => route.query.id || route.query.job_id || null);
+const applicationsLoading = computed(() => store.loading.applications);
+const applicationLoadError = computed(() => store.errors?.applications || '');
+const loadApplications = (force = true) => store.fetchApplications(
+  activeJobId.value ? { job_id: activeJobId.value } : {},
+  force,
+).catch(() => null);
 
 const logoUrl = '/images/logo.png';
 const oceanSpaceLogoUrl = '/images/oceanspace-logo.png';
@@ -1786,10 +1809,12 @@ const aiPoller = createPoller({
   onData: (data) => {
     if (!data) return;
     aiProgressError.value = '';
-    if ((aiLastTotal !== null && aiLastTotal !== data.total) || (aiLastTotal === null && data.total > applications.value.length)) {
-      store.fetchApplications(activeJobId.value ? { job_id: activeJobId.value } : '', true).catch(() => {});
+    if (!applicationsLoading.value) {
+      if ((aiLastTotal !== null && aiLastTotal !== data.total) || (aiLastTotal === null && data.total > applications.value.length)) {
+        loadApplications(true);
+      }
+      aiLastTotal = data.total;
     }
-    aiLastTotal = data.total;
     for (const app of data.applications || []) {
       if (String(selectedApp.value?.id) === String(app.id)) Object.assign(selectedApp.value, app);
       if (String(analysisModalApp.value?.id) === String(app.id)) Object.assign(analysisModalApp.value, app);
@@ -1839,7 +1864,7 @@ const notificationPoller = createPoller({
     notificationProgress.value = data;
     notificationProgressError.value = '';
     if (notificationTerminalStatuses.includes(data.status)) {
-      store.fetchApplications('', true).catch(() => {});
+      loadApplications(true);
       return false;
     }
   },
@@ -1905,10 +1930,11 @@ const defaultStages = [
 let heartbeatTimer = null;
 
 const checkHeartbeat = async () => {
+  if (!isAiViewActive) return;
   try {
     const res = await axios.post('/rekrutmen/api/notifications/heartbeat');
     if (res.data?.processed > 0) {
-      await store.fetchApplications('', false).catch(() => {});
+      await loadApplications(true);
       Swal.fire({
         toast: true,
         position: 'top-end',
@@ -1922,27 +1948,25 @@ const checkHeartbeat = async () => {
   } catch (_) {}
 };
 
-const activeJobId = computed(() => route.query.id || route.query.job_id || null);
-
 onMounted(() => {
-  const targetId = activeJobId.value;
-  store.fetchApplications(targetId ? { job_id: targetId } : '', false).catch(() => {});
+  isAiViewActive = true;
+  loadApplications(false);
   if (!store.postings?.length) {
     store.fetchPostings('', false).catch(() => {});
   }
   checkHeartbeat();
   heartbeatTimer = setInterval(checkHeartbeat, 25000);
-  isAiViewActive = true;
   document.addEventListener('visibilitychange', resumeAiPolling);
   resumeAiPolling();
 });
 
+let hasActivatedApplications = false;
 onActivated(() => {
   fetchWhatsappAccounts();
   isAiViewActive = true;
   resumeAiPolling();
-  const targetId = activeJobId.value;
-  store.fetchApplications(targetId ? { job_id: targetId } : '', true).catch(() => {});
+  if (hasActivatedApplications) loadApplications(true);
+  hasActivatedApplications = true;
   if (!store.postings?.length) {
     store.fetchPostings('', false).catch(() => {});
   }
@@ -1963,24 +1987,20 @@ onDeactivated(() => {
 
 watch(
   () => activeJobId.value,
-  (newId) => {
+  () => {
+    selectedAppIds.value = [];
+    selectedApp.value = null;
+    analysisModalApp.value = null;
+    if (!isAiViewActive) return;
     store.aiScreeningProgress = null;
     aiLastTotal = null;
     aiStatusOffset = 0;
     resumeAiPolling();
-    store.fetchApplications(newId ? { job_id: newId } : '', true).catch(() => {});
+    loadApplications(true);
   }
 );
 
-const applications = computed(() => {
-  if (activeJobId.value) {
-    return (store.applications || []).filter(a =>
-      String(a.job_posting_id) === String(activeJobId.value) ||
-      String(a.job_posting?.id) === String(activeJobId.value)
-    );
-  }
-  return store.applications || [];
-});
+const applications = computed(() => filterJobApplications(store.applications, { jobId: activeJobId.value }));
 
 const stages = computed(() => {
   if (store.stages && store.stages.length) return store.stages;
@@ -2016,7 +2036,7 @@ const activeJobTitle = computed(() => {
   if (store.activeJob?.title && String(store.activeJob.id) === String(activeJobId.value)) {
     return store.activeJob.title;
   }
-  const app = store.applications?.find(a =>
+  const app = applications.value.find(a =>
     String(a.job_posting_id) === String(activeJobId.value) ||
     String(a.job_posting?.id) === String(activeJobId.value)
   );
@@ -2042,40 +2062,11 @@ const recommendedCount = computed(() => applications.value.filter(a => hasAiResu
 const consideredCount = computed(() => applications.value.filter(a => hasAiResult(a) && a.ai_match_score >= 50 && a.ai_match_score < 75).length);
 const notSuitableCount = computed(() => applications.value.filter(a => hasAiResult(a) && a.ai_match_score < 50).length);
 
-const filteredApplications = computed(() => {
-  let list = applications.value;
-
-  // Filter by Stage
-  if (stageFilter.value === 'rejected') {
-    list = list.filter(a => a.status === 'rejected');
-  } else if (stageFilter.value !== 'all') {
-    list = list.filter(a => {
-      if (a.status === 'rejected') return false;
-      const currentStage = a.current_stage_id || a.stage?.id || 1;
-      return String(currentStage) === String(stageFilter.value);
-    });
-  }
-
-  // Filter by Match Score
-  if (matchFilter.value === 'recommended') {
-    list = list.filter(a => hasAiResult(a) && a.ai_match_score >= 75);
-  } else if (matchFilter.value === 'considered') {
-    list = list.filter(a => hasAiResult(a) && a.ai_match_score >= 50 && a.ai_match_score < 75);
-  } else if (matchFilter.value === 'not_suitable') {
-    list = list.filter(a => hasAiResult(a) && a.ai_match_score < 50);
-  }
-
-  if (!searchQuery.value) return list;
-  const q = searchQuery.value.toLowerCase();
-  return list.filter(a =>
-    (a.full_name && a.full_name.toLowerCase().includes(q)) ||
-    (a.email && a.email.toLowerCase().includes(q)) ||
-    (a.phone && a.phone.includes(q)) ||
-    (a.whatsapp_number && a.whatsapp_number.includes(q)) ||
-    (a.job_posting && a.job_posting.title && a.job_posting.title.toLowerCase().includes(q)) ||
-    (a.job_posting && a.job_posting.company_name && a.job_posting.company_name.toLowerCase().includes(q))
-  );
-});
+const filteredApplications = computed(() => filterJobApplications(applications.value, {
+  search: searchQuery.value,
+  stage: stageFilter.value,
+  match: matchFilter.value,
+}));
 
 const getStageApplications = (stageId) => {
   return filteredApplications.value.filter(a => {
@@ -2249,16 +2240,16 @@ const startSyncCvs = async () => {
     const res = await store.syncCandidateCvs();
     isSyncingCvs.value = false;
     Swal.fire({
-      icon: 'success',
-      title: 'Pencocokan CV Selesai',
-      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.message || 'Berkas CV berhasil dicocokkan ke kandidat.')}</div>`,
-      confirmButtonText: 'Evaluasi Sekarang',
-      showCancelButton: true,
+      icon: res.refresh_warning ? 'warning' : 'success',
+      title: res.refresh_warning ? 'CV Dicocokkan, Daftar Belum Diperbarui' : 'Pencocokan CV Selesai',
+      html: `<div class="text-xs text-slate-600 mt-1">${escapeHtml(res.refresh_warning || res.message || 'Berkas CV berhasil dicocokkan ke kandidat.')}</div>`,
+      confirmButtonText: res.refresh_warning ? 'Tutup' : 'Evaluasi Sekarang',
+      showCancelButton: !res.refresh_warning,
       cancelButtonText: 'Tutup',
       confirmButtonColor: '#0c2340',
       cancelButtonColor: '#64748b',
     }).then((result) => {
-      if (result.isConfirmed) {
+      if (result.isConfirmed && !res.refresh_warning) {
         startRescreening();
       }
     });
@@ -2446,7 +2437,7 @@ const bulkRejectSelected = async () => {
     selectedAppIds.value = [];
 
     // Immediately refresh data
-    await store.fetchApplications('', false).catch(() => {});
+    await loadApplications(true);
 
     toastType.value = 'success';
     toastMessage.value = `${rejectedCount} pelamar berhasil ditolak.`;
@@ -2973,7 +2964,7 @@ const executeSendNotification = async () => {
       const targetStage = stages.value.find((stage) => String(stage.id) === String(res.data.new_stage.id));
       if (targetStage) app.stage = { id: targetStage.id, name: targetStage.name, color: targetStage.color };
     }
-    await store.fetchApplications('', true).catch(() => {});
+    await loadApplications(true);
     const resultEntries = Object.values(res.data.results || {}).filter((result) => result && typeof result === 'object');
     const incomplete = res.data.success === false || resultEntries.some((result) => result.success === false || ['failed', 'unknown', 'pending', 'skipped'].includes(result.status));
     Swal.fire({

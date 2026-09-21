@@ -5,6 +5,9 @@
          colors="true"
 >
     <testsuites>
+        <testsuite name="IdCardFeature">
+            <directory>plugins/cesa/id-card/tests/Feature</directory>
+        </testsuite>
         <testsuite name="AccountFeature">
             <directory>plugins/webkul/accounts/tests/Feature</directory>
         </testsuite>

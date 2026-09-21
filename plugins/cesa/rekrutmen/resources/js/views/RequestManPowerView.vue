@@ -201,6 +201,15 @@
       </FTextInput>
     </div>
 
+    <div v-if="store.loading.requests" role="status" class="rounded-lg border border-outline-gray-2 bg-surface-white p-4 text-xs text-ink-gray-6">
+      Memuat seluruh data FPTK. Hasil pencarian lengkap tersedia setelah pemuatan selesai.
+    </div>
+    <div v-if="requestLoadError" role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+      {{ requestLoadError }}
+      <span v-if="requests.length">Data yang ditampilkan adalah hasil pemuatan sebelumnya.</span>
+      Gunakan tombol Segarkan untuk mencoba kembali.
+    </div>
+
     <!-- SKELETON LOADING STATE -->
     <div v-if="isLoading" class="bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs p-4 space-y-3">
       <div v-for="i in 4" :key="i" class="flex items-center justify-between gap-4 py-3 border-b border-outline-gray-1 last:border-0">
@@ -215,11 +224,13 @@
     </div>
 
     <!-- FPTK REQUEST CARDS FEED (No Table Layout) -->
-    <div v-else class="space-y-3">
+    <div v-else-if="requests.length || !requestLoadError" class="space-y-3">
       <!-- Summary Strip -->
       <div class="px-3.5 py-2.5 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex items-center justify-between text-xs text-ink-gray-5">
         <span class="font-medium text-ink-gray-7">Daftar Pengajuan FPTK</span>
-        <span class="text-[11px] text-ink-gray-4">Menampilkan {{ filteredRequests.length }} dari {{ requests.length }} permohonan</span>
+        <span v-if="store.loading.requests" class="text-[11px] text-ink-gray-4">Memuat seluruh FPTK...</span>
+        <span v-else-if="requestLoadError" class="text-[11px] text-ink-gray-4">Pemuatan data belum berhasil</span>
+        <span v-else class="text-[11px] text-ink-gray-4">Menampilkan {{ filteredRequests.length }} dari {{ requests.length }} permohonan</span>
       </div>
 
       <!-- Cards Feed -->
@@ -322,7 +333,7 @@
 
       <!-- Empty State -->
       <div
-        v-else
+        v-else-if="!store.loading.requests && !requestLoadError"
         class="py-16 text-center bg-surface-white rounded-lg border border-outline-gray-2 p-8 shadow-2xs flex flex-col items-center justify-center gap-2"
       >
         <div class="w-12 h-12 rounded-full bg-surface-gray-2 text-ink-gray-4 flex items-center justify-center">
@@ -469,6 +480,7 @@ import FTextInput from '../components/frappe/TextInput.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
 import { Skeleton } from '../components/ui/skeleton';
 import { isApprovedManPowerRequest, isPendingManPowerRequest } from '../lib/requestManPowerStatus';
+import { filterManPowerRequests } from '../lib/collectionFilters';
 
 // Icons
 import {
@@ -502,6 +514,9 @@ onMounted(async () => {
   isLoading.value = true;
   try {
     await store.fetchRequests('', false);
+  } catch (_) {
+    toastType.value = 'error';
+    toastMessage.value = 'Data FPTK belum berhasil dimuat. Gunakan tombol Segarkan untuk mencoba kembali.';
   } finally {
     isLoading.value = false;
   }
@@ -522,7 +537,8 @@ const refreshData = async () => {
   }
 };
 
-const requests = computed(() => store.requests || []);
+const requests = computed(() => filterManPowerRequests(store.requests));
+const requestLoadError = computed(() => store.errors?.requests || '');
 
 const approvedCount = computed(() => requests.value.filter(isApprovedManPowerRequest).length);
 
@@ -532,27 +548,10 @@ const totalNeededPersonnel = computed(() => {
   return requests.value.reduce((acc, r) => acc + (Number(r.jumlah_karyawan_dibutuhkan || r.quantity || 1) || 1), 0);
 });
 
-const filteredRequests = computed(() => {
-  let list = requests.value;
-
-  if (statusFilter.value === 'approved') {
-    list = list.filter(isApprovedManPowerRequest);
-  } else if (statusFilter.value === 'pending') {
-    list = list.filter(isPendingManPowerRequest);
-  }
-
-  if (!searchQuery.value) return list;
-  const q = searchQuery.value.toLowerCase();
-  return list.filter(r => {
-    const pos = String(r.posisi_dibutuhkan || r.position_name || r.position_title || '').toLowerCase();
-    const num = String(r.id || r.request_number || '').toLowerCase();
-    const div = String(r.division_name || r.department || '').toLowerCase();
-    const company = String(r.business_entity_name || r.company_name || '').toLowerCase();
-    const loc = String(r.lokasi_penempatan || r.branch || r.location || '').toLowerCase();
-    const name = String(r.nama_pengaju || '').toLowerCase();
-    return pos.includes(q) || num.includes(q) || div.includes(q) || company.includes(q) || loc.includes(q) || name.includes(q);
-  });
-});
+const filteredRequests = computed(() => filterManPowerRequests(requests.value, {
+  search: searchQuery.value,
+  status: statusFilter.value,
+}));
 
 const getBadgeVariant = (status) => {
   const s = String(status || '').toLowerCase();
@@ -608,10 +607,12 @@ const handleApprove = async (req) => {
   isActionLoading.value = true;
   try {
     const res = await store.approveRequest(req.id);
-    await store.fetchRequests('', true);
 
     const updated = (store.requests || []).find(r => String(r.id) === String(req.id));
-    if (updated) {
+    if (res?.refresh_warning) {
+      req.can_approve_reject = false;
+      selectedRequest.value = null;
+    } else if (updated) {
       selectedRequest.value = updated;
     } else {
       req.status = 'Approved';
@@ -620,9 +621,9 @@ const handleApprove = async (req) => {
     }
 
     Swal.fire({
-      icon: 'success',
-      title: 'Berhasil Disetujui',
-      text: res?.message || 'Permintaan FPTK telah berhasil disetujui dan lowongan telah dibuat.',
+      icon: res?.refresh_warning ? 'warning' : 'success',
+      title: res?.refresh_warning ? 'Disetujui, Daftar Belum Diperbarui' : 'Berhasil Disetujui',
+      text: res?.refresh_warning || res?.message || 'Permintaan FPTK telah berhasil disetujui dan lowongan telah dibuat.',
       confirmButtonColor: '#18181b',
       customClass: {
         popup: 'rounded-xl border border-zinc-200 shadow-lg text-xs',
@@ -677,10 +678,12 @@ const handleReject = async (req) => {
   isActionLoading.value = true;
   try {
     const res = await store.rejectRequest(req.id);
-    await store.fetchRequests('', true);
 
     const updated = (store.requests || []).find(r => String(r.id) === String(req.id));
-    if (updated) {
+    if (res?.refresh_warning) {
+      req.can_approve_reject = false;
+      selectedRequest.value = null;
+    } else if (updated) {
       selectedRequest.value = updated;
     } else {
       req.status = 'Rejected';
@@ -689,9 +692,9 @@ const handleReject = async (req) => {
     }
 
     Swal.fire({
-      icon: 'success',
-      title: 'Permintaan Ditolak',
-      text: res?.message || 'Permintaan FPTK telah ditolak.',
+      icon: res?.refresh_warning ? 'warning' : 'success',
+      title: res?.refresh_warning ? 'Ditolak, Daftar Belum Diperbarui' : 'Permintaan Ditolak',
+      text: res?.refresh_warning || res?.message || 'Permintaan FPTK telah ditolak.',
       confirmButtonColor: '#18181b',
       customClass: {
         popup: 'rounded-xl border border-zinc-200 shadow-lg text-xs',

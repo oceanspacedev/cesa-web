@@ -120,6 +120,18 @@ class CesaHomeController extends Controller
             ->values()
             ->toArray();
 
+        if (Package::isPluginInstalled('id-card')) {
+            $visibleApps[] = [
+                'key'         => 'id-card',
+                'name'        => 'ID Card',
+                'description' => 'Pembuatan ID card Sales dan Kurir',
+                'url'         => route('id-card.public.form'),
+                'color'       => 'blue',
+                'icon'        => 'employee',
+                'always_show' => false,
+            ];
+        }
+
         return view('cesa-home', [
             'apps' => $visibleApps,
         ]);

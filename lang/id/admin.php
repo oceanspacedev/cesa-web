@@ -17,6 +17,7 @@ return [
         'exit-clearance' => 'Exit Clearance',
         'form-transfer'  => 'Form Transfer',
         'helpdesk'       => 'Helpdesk',
+        'id-card'        => 'ID Card',
         'kepegawaian'    => 'Kepegawaian',
         'payroll'        => 'Payroll',
         'presensi'       => 'Presensi',

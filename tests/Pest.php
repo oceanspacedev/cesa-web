@@ -1,5 +1,6 @@
 <?php
 
+use Cesa\IdCard\Tests\IdCardTestCase;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -17,7 +18,8 @@ use Tests\TestCase;
 
 $pluginFeatureDirectories = array_values(array_filter(
     glob(dirname(__DIR__).'/plugins/*/*/tests/Feature', GLOB_ONLYDIR) ?: [],
-    fn (string $directory): bool => ! str_contains($directory, '/cesa/rekrutmen/'),
+    fn (string $directory): bool => ! str_contains($directory, '/cesa/rekrutmen/')
+        && ! str_contains($directory, '/cesa/id-card/'),
 ));
 
 pest()
@@ -27,6 +29,9 @@ pest()
 
 pest()->extend(RekrutmenTestCase::class)
     ->in('../plugins/cesa/rekrutmen/tests/Feature');
+
+pest()->extend(IdCardTestCase::class)
+    ->in('../plugins/cesa/id-card/tests/Feature');
 
 /*
 |--------------------------------------------------------------------------

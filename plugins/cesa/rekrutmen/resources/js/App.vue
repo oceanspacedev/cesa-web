@@ -35,7 +35,6 @@ onMounted(() => {
   // Preload all module data once into Pinia store
   store.fetchRequests().catch(() => {});
   store.fetchPostings().catch(() => {});
-  store.fetchApplications().catch(() => {});
   store.fetchProgressReport().catch(() => {});
   store.fetchConfigurations().catch(() => {});
 });

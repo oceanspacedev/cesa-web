@@ -758,6 +758,7 @@
 import { ref, computed, onMounted, onUnmounted, onDeactivated, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
+import { filterJobPostings } from '../lib/jobPostings';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
@@ -931,7 +932,7 @@ const refreshData = async () => {
   isRefreshing.value = true;
   try {
     await Promise.all([
-      store.fetchPostings('', false),
+      store.fetchPostings('', true),
       store.fetchCompanies(),
     ]);
     if (activeJob.value) {
@@ -951,7 +952,7 @@ const refreshData = async () => {
   }
 };
 
-const postings = computed(() => store.postings || []);
+const postings = computed(() => filterJobPostings(store.postings));
 const companies = computed(() => store.companies || []);
 
 const publishedCount = computed(() => postings.value.filter(p => p.is_published).length);
@@ -961,29 +962,11 @@ const totalApplicationsCount = computed(() => {
   return postings.value.reduce((acc, job) => acc + (Number(job.applications_count) || 0), 0);
 });
 
-const filteredPostings = computed(() => {
-  let list = postings.value;
-
-  if (statusFilter.value === 'published') {
-    list = list.filter(p => p.is_published);
-  } else if (statusFilter.value === 'draft') {
-    list = list.filter(p => !p.is_published);
-  }
-
-  if (companyFilter.value !== 'all') {
-    list = list.filter(p => String(p.company_id) === String(companyFilter.value));
-  }
-
-  if (!searchQuery.value) return list;
-  const q = searchQuery.value.toLowerCase();
-  return list.filter(p =>
-    (p.title && p.title.toLowerCase().includes(q)) ||
-    (p.company_name && p.company_name.toLowerCase().includes(q)) ||
-    (p.location && p.location.toLowerCase().includes(q)) ||
-    (p.description && p.description.toLowerCase().includes(q)) ||
-    (p.requirements && p.requirements.toLowerCase().includes(q))
-  );
-});
+const filteredPostings = computed(() => filterJobPostings(postings.value, {
+  search: searchQuery.value,
+  status: statusFilter.value,
+  company: companyFilter.value,
+}));
 
 const resetFilters = () => {
   statusFilter.value = 'all';
@@ -1002,8 +985,8 @@ const togglePublish = async (job) => {
         };
       }
       toastType.value = 'success';
-      toastMessage.value = res.message || 'Status publikasi lowongan berhasil diubah.';
-      setTimeout(() => { toastMessage.value = null; }, 3000);
+      toastMessage.value = [res.message || 'Status publikasi lowongan berhasil diubah.', res.refresh_warning].filter(Boolean).join(' ');
+      setTimeout(() => { toastMessage.value = null; }, res.refresh_warning ? 8000 : 3000);
     }
   } catch (err) {
     toastType.value = 'error';
@@ -1134,16 +1117,17 @@ const saveEditJob = async () => {
     }
 
     if (res.success) {
-      await store.fetchPostings('', false);
       const savedPostingId = res.posting?.id || editingJob.value?.id;
       const updatedOrCreated = postings.value.find(job => String(job.id) === String(savedPostingId));
-      if (updatedOrCreated) {
+      if (updatedOrCreated && !res.refresh_warning) {
         activeJob.value = updatedOrCreated;
+        sheetMode.value = 'view';
+      } else {
+        closeSheet();
       }
-      sheetMode.value = 'view';
       toastType.value = 'success';
-      toastMessage.value = res.message || (isEditMode.value ? 'Lowongan pekerjaan berhasil diperbarui.' : 'Lowongan pekerjaan berhasil ditambahkan.');
-      setTimeout(() => { toastMessage.value = null; }, 3000);
+      toastMessage.value = [res.message || (isEditMode.value ? 'Lowongan pekerjaan berhasil diperbarui.' : 'Lowongan pekerjaan berhasil ditambahkan.'), res.refresh_warning].filter(Boolean).join(' ');
+      setTimeout(() => { toastMessage.value = null; }, res.refresh_warning ? 8000 : 3000);
     }
   } catch (err) {
     Swal.fire({
@@ -1190,8 +1174,8 @@ const handleDeleteJob = async (job) => {
       closeSheet();
     }
     toastType.value = 'success';
-    toastMessage.value = res.message || `Lowongan "${job.title}" berhasil dihapus.`;
-    setTimeout(() => { toastMessage.value = null; }, 3000);
+    toastMessage.value = [res.message || `Lowongan "${job.title}" berhasil dihapus.`, res.refresh_warning].filter(Boolean).join(' ');
+    setTimeout(() => { toastMessage.value = null; }, res.refresh_warning ? 8000 : 3000);
   } catch (err) {
     Swal.fire({
       target: document.querySelector('[data-job-posting-sheet]') || document.body,
@@ -1219,6 +1203,8 @@ onMounted(async () => {
     checkRouteForJob();
   } catch (e) {
     console.error('Error fetching job postings data:', e);
+    toastType.value = 'error';
+    toastMessage.value = 'Gagal memuat seluruh lowongan. Silakan coba segarkan kembali.';
   } finally {
     isLoading.value = false;
   }
