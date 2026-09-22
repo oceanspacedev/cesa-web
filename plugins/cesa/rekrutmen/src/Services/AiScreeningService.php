@@ -120,7 +120,7 @@ class AiScreeningService
         if (($text === '' && $images === []) || ! $application->jobPosting) {
             $this->updateCurrent((int) $application->id, $token, [
                 'ai_screening_status' => 'needs_review',
-                'ai_screening_error'  => 'CV tidak tersedia atau teksnya tidak dapat dibaca. Unggah PDF berbasis teks atau lakukan pemeriksaan manual.',
+                'ai_screening_error'  => 'CV tidak tersedia atau tidak dapat dibaca. Unggah PDF, DOC, atau DOCX, atau lakukan pemeriksaan manual.',
             ]);
 
             return;

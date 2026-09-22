@@ -1125,13 +1125,25 @@
               </div>
             </div>
 
-            <!-- Embedded PDF Document Container -->
+            <!-- Embedded CV Document Container -->
             <div class="flex-1 rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-2xs flex flex-col relative">
               <iframe
-                v-if="selectedApp.resume_url"
+                v-if="selectedApp.resume_url && resumePreviewKind(selectedApp) === 'pdf'"
                 :src="selectedApp.resume_url"
                 class="w-full h-full border-0"
               ></iframe>
+              <div
+                v-else-if="selectedApp.resume_url"
+                class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zinc-50/40"
+              >
+                <div class="w-12 h-12 rounded-xl bg-white border border-zinc-200 flex items-center justify-center shadow-2xs mb-3 text-zinc-400">
+                  <FileText class="w-6 h-6 text-zinc-400" />
+                </div>
+                <p class="text-xs font-semibold text-zinc-900">Pratinjau tidak tersedia untuk berkas ini</p>
+                <p class="text-[11px] text-zinc-400 mt-1 max-w-sm">
+                  Gunakan Unduh Berkas untuk membuka CV Word. Screening AI tetap membaca teks dan gambar di dalamnya.
+                </p>
+              </div>
               <div v-else class="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zinc-50/40">
                 <div class="w-12 h-12 rounded-xl bg-white border border-zinc-200 flex items-center justify-center shadow-2xs mb-3 text-zinc-400">
                   <FileText class="w-6 h-6 text-zinc-400" />
@@ -2079,6 +2091,15 @@ const getStageApplications = (stageId) => {
 const rejectedApplications = computed(() => {
   return filteredApplications.value.filter(a => a.status === 'rejected');
 });
+
+const resumePreviewKind = (app) => {
+  const name = String(app?.resume_filename || app?.resume_path || app?.resume_url || '').toLowerCase();
+  if (/\.pdf(\?|$)/.test(name)) {
+    return 'pdf';
+  }
+
+  return 'file';
+};
 
 const getInitials = (name) => {
   if (!name) return 'PL';

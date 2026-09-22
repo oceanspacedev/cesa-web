@@ -38,7 +38,7 @@ class CvTextExtractor
     }
 
     /**
-     * Extract clean textual content from candidate CV file (supports PDF & uncompressed text).
+     * Extract clean textual content from candidate CV file (PDF, DOC, DOCX, or uncompressed text).
      */
     public function extract(string $content): string
     {
@@ -47,6 +47,18 @@ class CvTextExtractor
         }
 
         if (strlen($content) > 15 * 1024 * 1024) {
+            return '';
+        }
+
+        if ($this->isDocx($content)) {
+            return $this->extractDocx($content);
+        }
+
+        if ($this->isOleDoc($content)) {
+            return $this->extractOleDoc($content);
+        }
+
+        if ($this->isRasterImage($content)) {
             return '';
         }
 
@@ -376,5 +388,125 @@ class CvTextExtractor
         }
 
         return ($nulls / $pairs) >= 0.4;
+    }
+
+    private function isDocx(string $content): bool
+    {
+        return str_starts_with($content, 'PK') && str_contains($content, 'word/document.xml');
+    }
+
+    private function isOleDoc(string $content): bool
+    {
+        return str_starts_with($content, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1");
+    }
+
+    private function extractOleDoc(string $content): string
+    {
+        $limit = min(strlen($content), 4 * 1024 * 1024);
+        $runs = [];
+        $current = '';
+
+        for ($offset = 0; $offset + 1 < $limit; $offset += 2) {
+            $code = ord($content[$offset]) | (ord($content[$offset + 1]) << 8);
+            if ($this->isOleDocChar($code)) {
+                $current .= mb_chr($code, 'UTF-8');
+
+                continue;
+            }
+
+            if (mb_strlen($current) >= 4) {
+                $runs[] = $current;
+            }
+            $current = '';
+        }
+
+        if (mb_strlen($current) >= 4) {
+            $runs[] = $current;
+        }
+
+        $text = trim(preg_replace('/\s+/u', ' ', implode(' ', $runs)) ?? '');
+        $text = trim(preg_replace(
+            '/\b(Root Entry|WordDocument|0Table|1Table|Data|SummaryInformation|DocumentSummaryInformation)\b/u',
+            ' ',
+            $text
+        ) ?? '');
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+
+        return $this->isSensibleText($text) ? $text : '';
+    }
+
+    private function isOleDocChar(int $code): bool
+    {
+        if (in_array($code, [9, 10, 13, 32], true)) {
+            return true;
+        }
+
+        if ($code >= 33 && $code <= 126) {
+            return true;
+        }
+
+        if ($code >= 0x00A0 && $code <= 0x024F) {
+            return true;
+        }
+
+        return $code >= 0x2010 && $code <= 0x2027;
+    }
+
+    private function isRasterImage(string $content): bool
+    {
+        return str_starts_with($content, "\xFF\xD8\xFF")
+            || str_starts_with($content, "\x89PNG\r\n\x1a\n")
+            || str_starts_with($content, 'GIF87a')
+            || str_starts_with($content, 'GIF89a')
+            || (str_starts_with($content, 'RIFF') && substr($content, 8, 4) === 'WEBP');
+    }
+
+    private function extractDocx(string $content): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'cvdocx');
+        if ($path === false || file_put_contents($path, $content) === false) {
+            return '';
+        }
+
+        $zip = new \ZipArchive;
+        if ($zip->open($path) !== true) {
+            @unlink($path);
+
+            return '';
+        }
+
+        try {
+            $chunks = [];
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $name = (string) $zip->getNameIndex($index);
+                if (preg_match('#^word/(document|header\d*|footer\d*)\.xml$#', $name) !== 1) {
+                    continue;
+                }
+
+                $xml = $zip->getFromIndex($index);
+                if (! is_string($xml) || $xml === '') {
+                    continue;
+                }
+
+                if (preg_match_all('/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/u', $xml, $matches) === false) {
+                    continue;
+                }
+
+                if ($matches[1] !== []) {
+                    $chunks[] = implode(' ', $matches[1]);
+                }
+            }
+
+            $text = html_entity_decode(
+                trim(preg_replace('/\s+/u', ' ', implode(' ', $chunks)) ?? ''),
+                ENT_QUOTES | ENT_XML1,
+                'UTF-8'
+            );
+
+            return $this->isSensibleText($text) ? $text : '';
+        } finally {
+            $zip->close();
+            @unlink($path);
+        }
     }
 }
