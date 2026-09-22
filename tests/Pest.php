@@ -30,8 +30,10 @@ pest()
 pest()->extend(RekrutmenTestCase::class)
     ->in('../plugins/cesa/rekrutmen/tests/Feature');
 
-pest()->extend(IdCardTestCase::class)
-    ->in('../plugins/cesa/id-card/tests/Feature');
+if (class_exists(IdCardTestCase::class)) {
+    pest()->extend(IdCardTestCase::class)
+        ->in('../plugins/cesa/id-card/tests/Feature');
+}
 
 /*
 |--------------------------------------------------------------------------

@@ -68,6 +68,17 @@ abstract class RekrutmenTestCase extends TestCase
                 $table->timestamp('ai_analyzed_at')->nullable()->after('ai_summary');
             });
         }
+
+        if (Schema::hasTable('rekrutmen_job_applications') && ! Schema::hasColumn('rekrutmen_job_applications', 'ai_screening_status')) {
+            Schema::table('rekrutmen_job_applications', function (Blueprint $table): void {
+                $table->string('ai_screening_status', 24)->default('pending');
+                $table->text('ai_screening_error')->nullable();
+                $table->uuid('ai_screening_token')->nullable();
+                $table->char('ai_screening_fingerprint', 64)->nullable();
+                $table->timestamp('ai_screening_requested_at')->nullable();
+                $table->timestamp('ai_screening_started_at')->nullable();
+            });
+        }
     }
 
     /**

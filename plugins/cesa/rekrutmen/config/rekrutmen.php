@@ -12,6 +12,10 @@ return [
 
     'default_pipeline_name' => env('REKRUTMEN_DEFAULT_PIPELINE_NAME', 'Default Recruitment Pipeline'),
 
+    'ai' => [
+        'queue' => env('REKRUTMEN_AI_QUEUE', 'rekrutmen-ai'),
+    ],
+
     'notifications' => [
         'queue'    => env('REKRUTMEN_NOTIFICATION_QUEUE', 'notifications'),
         'delivery' => [

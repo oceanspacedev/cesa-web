@@ -7,9 +7,13 @@ use Cesa\Rekrutmen\Models\JobApplication;
 use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
+use Cesa\Rekrutmen\Services\AiSettingsService;
 use Cesa\Rekrutmen\Services\RecruitmentProgressReportExport;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
+use Illuminate\Support\Facades\Queue;
 use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
 class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
@@ -94,6 +98,75 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
         $this->assertEquals('Web App Developer Cirebon', $response->json('active_job.title'));
         $this->assertNull($response->json('applications.0.ai_match_score'));
         $this->assertSame('pending', $response->json('applications.0.ai_screening_status'));
+    }
+
+    public function test_can_queue_candidate_ai_analysis_via_spa_api(): void
+    {
+        Queue::fake();
+
+        $this->mock(AiSettingsService::class, function ($mock): void {
+            $mock->shouldReceive('configured')->andReturn(true);
+            $mock->shouldReceive('current')->andReturn([
+                'provider'    => 'openai_compatible',
+                'automatic'   => false,
+                'base_url'    => 'https://ai.example.test/v1',
+                'model'       => 'test-model',
+                'api_key'     => 'sk-test',
+                'is_database' => true,
+                'has_env'     => false,
+                'updated_at'  => null,
+            ]);
+        });
+
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::GLOBAL,
+        ]);
+        $user->givePermissionTo([
+            Permission::findOrCreate('view_any_rekrutmen_job::application', 'web'),
+            Permission::findOrCreate('update_rekrutmen_job::application', 'web'),
+        ]);
+        $this->actingAs($user);
+
+        $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
+        $stage = RekrutmenStage::firstOrCreate([
+            'id'                    => 1,
+            'rekrutmen_pipeline_id' => $pipeline->id,
+        ], [
+            'name'         => 'Screening CV',
+            'order_column' => 1,
+        ]);
+
+        $posting = JobPosting::create([
+            'title'                 => 'Telemarketing Cirebon',
+            'slug'                  => 'telemarketing-cirebon-'.uniqid(),
+            'rekrutmen_pipeline_id' => $pipeline->id,
+            'is_published'          => true,
+        ]);
+
+        $application = JobApplication::create([
+            'job_posting_id'   => $posting->id,
+            'creator_id'       => $user->id,
+            'full_name'        => 'Kandidat AI',
+            'email'            => 'kandidat-ai@example.com',
+            'current_stage_id' => $stage->id,
+            'status'           => 'in_progress',
+        ]);
+
+        $response = $this->postJson("/rekrutmen/api/applications/{$application->id}/analyze-ai", [
+            'force' => false,
+        ]);
+
+        $response->assertStatus(202);
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('queued', true);
+        $response->assertJsonPath('application.id', $application->id);
+        $response->assertJsonPath('application.ai_screening_status', 'queued');
+        $this->assertSame('queued', $application->fresh()->ai_screening_status);
+
+        $status = $this->getJson("/rekrutmen/api/applications/ai-status?job_id={$posting->id}");
+        $status->assertOk();
+        $status->assertJsonPath('counts.queued', 1);
     }
 
     public function test_can_fetch_progress_report_via_spa_api(): void

@@ -17,7 +17,7 @@ class ScreenCandidateCvJob implements ShouldQueue
 
     public int $maxExceptions = 3;
 
-    public int $timeout = 75;
+    public int $timeout = 90;
 
     public bool $failOnTimeout = true;
 

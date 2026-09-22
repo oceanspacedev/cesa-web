@@ -787,7 +787,9 @@ class RekrutmenSpaController extends Controller
         $requestedAt = now()->startOfSecond()->toIso8601String();
         foreach ($applicationIds->chunk(100) as $chunk) {
             QueueCandidateCvScreeningBatchJob::dispatch($chunk->values()->all(), (int) $request->user()->id, $request->boolean('force'), $requestedAt)
-                ->onConnection($connection)->afterCommit();
+                ->onConnection($connection)
+                ->onQueue(app(AiScreeningService::class)->queueName())
+                ->afterCommit();
         }
 
         return response()->json([

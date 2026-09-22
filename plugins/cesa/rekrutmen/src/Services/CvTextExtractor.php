@@ -86,47 +86,7 @@ class CvTextExtractor
                     }
 
                     $uncompressedStreams[] = $uncompressed;
-
-                    if (str_contains($uncompressed, 'beginbfchar')) {
-                        if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bf)) {
-                            foreach ($bf[1] as $bIdx => $src) {
-                                if (count($cmaps) >= 1000) {
-                                    break;
-                                }
-                                $decodedChar = @hex2bin($bf[2][$bIdx]);
-                                if ($decodedChar !== false) {
-                                    $cmaps[strtolower($src)] = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
-                                }
-                            }
-                        }
-                    }
-
-                    if (str_contains($uncompressed, 'beginbfrange')) {
-                        if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $uncompressed, $bfr)) {
-                            foreach ($bfr[1] as $bIdx => $start) {
-                                if (count($cmaps) >= 1000) {
-                                    break;
-                                }
-                                $startCode = hexdec($start);
-                                $endCode = hexdec($bfr[2][$bIdx]);
-                                $targetStart = hexdec($bfr[3][$bIdx]);
-                                if ($endCode < $startCode || ($endCode - $startCode) > 256) {
-                                    continue;
-                                }
-                                for ($c = $startCode; $c <= $endCode; $c++) {
-                                    if (count($cmaps) >= 1000) {
-                                        break;
-                                    }
-                                    $src = sprintf('%0'.strlen($start).'x', $c);
-                                    $tgt = sprintf('%04x', $targetStart + ($c - $startCode));
-                                    $decodedChar = @hex2bin($tgt);
-                                    if ($decodedChar !== false) {
-                                        $cmaps[strtolower($src)] = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    $this->collectToUnicodeMaps($uncompressed, $cmaps);
                 }
             }
 
@@ -134,50 +94,287 @@ class CvTextExtractor
 
             foreach ($uncompressedStreams as $uncompressed) {
                 if (preg_match_all('/\((.*?)\)\s*Tj/s', $uncompressed, $textMatches)) {
-                    $extractedText .= ' '.implode('', $textMatches[1]);
+                    $parts = [];
+                    foreach ($textMatches[1] as $literal) {
+                        $parts[] = $this->decodeCodedText($this->unescapePdfLiteral($literal), $cmaps);
+                    }
+                    $extractedText .= ' '.$this->joinTextRuns($parts);
                 }
                 if (preg_match_all('/\[(.*?)\]\s*TJ/s', $uncompressed, $arrayMatches)) {
                     foreach ($arrayMatches[1] as $arr) {
-                        if (preg_match_all('/\((.*?)\)/s', $arr, $subMatches)) {
-                            $extractedText .= ' '.implode('', $subMatches[1]);
-                        }
-                    }
-                }
-                if (preg_match_all('/<([0-9a-fA-F]{2,})>\s*Tj/s', $uncompressed, $hexMatches)) {
-                    foreach ($hexMatches[1] as $hex) {
-                        $chunk = '';
-                        $len = strlen($hex);
-                        for ($k = 0; $k < $len; $k += 2) {
-                            $c4 = $k + 4 <= $len ? strtolower(substr($hex, $k, 4)) : '';
-                            $c2 = strtolower(substr($hex, $k, 2));
-                            if ($c4 && isset($cmaps[$c4])) {
-                                $chunk .= $cmaps[$c4];
-                                $k += 2;
-                            } elseif (isset($cmaps[$c2])) {
-                                $chunk .= $cmaps[$c2];
-                            } else {
-                                $bin = @hex2bin($c2);
-                                if ($bin !== false && ctype_print($bin)) {
-                                    $chunk .= $bin;
+                        $parts = [];
+                        if (preg_match_all('/\((.*?)\)|<([0-9a-fA-F]{2,})>/s', $arr, $pieces, PREG_SET_ORDER)) {
+                            foreach ($pieces as $piece) {
+                                if (($piece[1] ?? '') !== '') {
+                                    $parts[] = $this->decodeCodedText($this->unescapePdfLiteral($piece[1]), $cmaps);
+                                } elseif (($piece[2] ?? '') !== '') {
+                                    $parts[] = $this->decodeHexText($piece[2], $cmaps);
                                 }
                             }
                         }
-                        $extractedText .= ' '.$chunk;
+                        $extractedText .= ' '.implode('', $parts);
                     }
+                }
+                if (preg_match_all('/<([0-9a-fA-F]{2,})>\s*Tj/s', $uncompressed, $hexMatches)) {
+                    $parts = [];
+                    foreach ($hexMatches[1] as $hex) {
+                        $parts[] = $this->decodeHexText($hex, $cmaps);
+                    }
+                    $extractedText .= ' '.$this->joinTextRuns($parts);
                 }
             }
 
             unset($uncompressedStreams, $cmaps);
         }
 
+        $extractedText = mb_convert_encoding($extractedText, 'UTF-8', 'UTF-8');
         $cleaned = str_replace(['\\(', '\\)', '\\\\', '\\n', '\\r', '\\t'], ['(', ')', '\\', "\n", "\r", "\t"], $extractedText);
-        $cleaned = preg_replace('/[^\p{L}\p{N}\s\.\,\-\@\:\/\(\)\+\#]/u', ' ', $cleaned);
-        $cleaned = trim(preg_replace('/\s+/', ' ', (string) $cleaned));
+        $cleaned = preg_replace('/[^\p{L}\p{N}\s\.\,\-\@\:\/\(\)\+\#]/u', ' ', $cleaned) ?? '';
+        $cleaned = trim(preg_replace('/\s+/', ' ', $cleaned) ?? '');
+        $cleaned = $this->collapseSpacedLetters($cleaned);
 
         if (! $this->isSensibleText($cleaned)) {
             return '';
         }
 
         return $cleaned;
+    }
+
+    /**
+     * @param  array<string, string>  $cmaps
+     */
+    private function collectToUnicodeMaps(string $uncompressed, array &$cmaps): void
+    {
+        if (preg_match_all('/beginbfchar\s*([\s\S]*?)endbfchar/i', $uncompressed, $bfBlocks)) {
+            foreach ($bfBlocks[1] as $block) {
+                if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $block, $bf) === 0) {
+                    continue;
+                }
+                foreach ($bf[1] as $index => $src) {
+                    $this->rememberCmapEntry($cmaps, $src, $bf[2][$index]);
+                }
+            }
+        }
+
+        if (preg_match_all('/beginbfrange\s*([\s\S]*?)endbfrange/i', $uncompressed, $rangeBlocks)) {
+            foreach ($rangeBlocks[1] as $block) {
+                if (preg_match_all('/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/', $block, $ranges) === 0) {
+                    continue;
+                }
+                foreach ($ranges[1] as $index => $start) {
+                    $startCode = hexdec($start);
+                    $endCode = hexdec($ranges[2][$index]);
+                    $targetStart = hexdec($ranges[3][$index]);
+                    if ($endCode < $startCode || ($endCode - $startCode) > 256) {
+                        continue;
+                    }
+                    for ($code = $startCode; $code <= $endCode; $code++) {
+                        $src = sprintf('%0'.strlen($start).'x', $code);
+                        $tgt = sprintf('%04x', $targetStart + ($code - $startCode));
+                        $this->rememberCmapEntry($cmaps, $src, $tgt);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $cmaps
+     */
+    private function rememberCmapEntry(array &$cmaps, string $src, string $targetHex): void
+    {
+        if (count($cmaps) >= 2000) {
+            return;
+        }
+
+        $decodedChar = @hex2bin($targetHex);
+        if ($decodedChar === false) {
+            return;
+        }
+
+        $mapped = @mb_convert_encoding($decodedChar, 'UTF-8', 'UTF-16BE');
+        if (! is_string($mapped) || $mapped === '') {
+            return;
+        }
+
+        $src = strtolower($src);
+        $cmaps[$src] = $mapped;
+        $cmaps[str_pad($src, 4, '0', STR_PAD_LEFT)] = $mapped;
+    }
+
+    /**
+     * @param  list<string>  $parts
+     */
+    private function joinTextRuns(array $parts): string
+    {
+        $parts = array_values(array_filter($parts, fn (string $part): bool => $part !== ''));
+        if ($parts === []) {
+            return '';
+        }
+
+        $shortRuns = 0;
+        foreach ($parts as $part) {
+            if (mb_strlen(trim($part)) <= 2) {
+                $shortRuns++;
+            }
+        }
+
+        return implode(($shortRuns / count($parts)) >= 0.7 ? '' : ' ', $parts);
+    }
+
+    private function collapseSpacedLetters(string $text): string
+    {
+        $collapsed = preg_replace_callback(
+            '/(?:(?<=^)|(?<=\s))(?:[\p{L}\p{N}]\s){2,}[\p{L}\p{N}](?=\s|$)/u',
+            fn (array $match): string => str_replace(' ', '', $match[0]),
+            $text
+        );
+
+        return is_string($collapsed) ? $collapsed : $text;
+    }
+
+    private function unescapePdfLiteral(string $raw): string
+    {
+        $out = '';
+        $length = strlen($raw);
+
+        for ($i = 0; $i < $length; $i++) {
+            if ($raw[$i] !== '\\' || $i + 1 >= $length) {
+                $out .= $raw[$i];
+
+                continue;
+            }
+
+            $next = $raw[$i + 1];
+            $simple = ['n' => "\n", 'r' => "\r", 't' => "\t", 'b' => "\x08", 'f' => "\x0c", '(' => '(', ')' => ')', '\\' => '\\'];
+            if (isset($simple[$next])) {
+                $out .= $simple[$next];
+                $i++;
+
+                continue;
+            }
+
+            if (preg_match('/^[0-7]{1,3}/', substr($raw, $i + 1, 3), $octal) === 1) {
+                $out .= chr(octdec($octal[0]));
+                $i += strlen($octal[0]);
+
+                continue;
+            }
+
+            $out .= $next;
+            $i++;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, string>  $cmaps
+     */
+    private function decodeCodedText(string $bytes, array $cmaps): string
+    {
+        if ($bytes === '') {
+            return '';
+        }
+
+        if ($this->looksLikeUtf16Be($bytes)) {
+            $out = '';
+            $length = strlen($bytes);
+            for ($i = 0; $i + 1 < $length; $i += 2) {
+                $out .= $this->mappedCode(bin2hex(substr($bytes, $i, 2)), $cmaps, substr($bytes, $i, 2));
+            }
+
+            return $out;
+        }
+
+        if ($this->isMostlyPlainText($bytes)) {
+            return $bytes;
+        }
+
+        $out = '';
+        $length = strlen($bytes);
+        for ($i = 0; $i < $length; $i++) {
+            $out .= $this->mappedCode(sprintf('%02x', ord($bytes[$i])), $cmaps, $bytes[$i]);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, string>  $cmaps
+     */
+    private function decodeHexText(string $hex, array $cmaps): string
+    {
+        $chunk = '';
+        $length = strlen($hex);
+        for ($k = 0; $k < $length; $k += 2) {
+            $c4 = $k + 4 <= $length ? substr($hex, $k, 4) : '';
+            $c2 = substr($hex, $k, 2);
+            if ($c4 !== '' && isset($cmaps[strtolower($c4)])) {
+                $chunk .= $cmaps[strtolower($c4)];
+                $k += 2;
+
+                continue;
+            }
+
+            $bin = @hex2bin($c2);
+            $chunk .= $this->mappedCode($c2, $cmaps, $bin === false ? '' : $bin);
+        }
+
+        return $chunk;
+    }
+
+    /**
+     * @param  array<string, string>  $cmaps
+     */
+    private function mappedCode(string $hex, array $cmaps, string $fallbackBytes): string
+    {
+        $hex = strtolower($hex);
+        $padded = strlen($hex) === 2 ? '00'.$hex : $hex;
+        if (isset($cmaps[$padded])) {
+            return $cmaps[$padded];
+        }
+        if (isset($cmaps[$hex])) {
+            return $cmaps[$hex];
+        }
+
+        if ($fallbackBytes === '') {
+            return '';
+        }
+
+        if (strlen($fallbackBytes) === 2) {
+            $decoded = @mb_convert_encoding($fallbackBytes, 'UTF-8', 'UTF-16BE');
+            if (is_string($decoded) && preg_match('/[\p{L}\p{N}\s\.\,\-\@\:\/\(\)\+\#]/u', $decoded) === 1) {
+                return $decoded;
+            }
+        }
+
+        return ctype_print($fallbackBytes) ? $fallbackBytes : '';
+    }
+
+    private function isMostlyPlainText(string $bytes): bool
+    {
+        $alphaCount = preg_match_all('/[a-zA-Z0-9]/', $bytes);
+        $totalNonSpace = preg_match_all('/\S/', $bytes);
+
+        return $totalNonSpace > 0 && ($alphaCount / $totalNonSpace) >= 0.6;
+    }
+
+    private function looksLikeUtf16Be(string $bytes): bool
+    {
+        $length = strlen($bytes);
+        if ($length < 2 || ($length % 2) !== 0) {
+            return false;
+        }
+
+        $nulls = 0;
+        $pairs = (int) ($length / 2);
+        for ($i = 0; $i < $length; $i += 2) {
+            if ($bytes[$i] === "\x00") {
+                $nulls++;
+            }
+        }
+
+        return ($nulls / $pairs) >= 0.4;
     }
 }
