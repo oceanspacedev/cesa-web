@@ -1,7 +1,6 @@
 <?php
 
 use Cesa\Waste\Filament\Clusters\Configurations;
-use Cesa\Waste\Filament\Pages\WasteDashboard;
 use Cesa\Waste\Filament\Resources\WasteBrandResource;
 use Cesa\Waste\Filament\Resources\WasteCategoryResource;
 use Cesa\Waste\Filament\Resources\WasteItemResource;
@@ -16,10 +15,12 @@ use Database\Factories\UserFactory;
 use Filament\Forms\Components\Field;
 use Filament\Navigation\NavigationItem;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Blade;
 
-it('lists laporan waste and the dashboard beside pengaturan like form transfer', function (): void {
+it('lists laporan waste beside pengaturan like form transfer', function (): void {
     app()->setLocale('id');
     $this->actingAs(UserFactory::new()->createQuietly());
     filament()->setCurrentPanel(filament()->getPanel('admin'));
@@ -40,8 +41,6 @@ it('lists laporan waste and the dashboard beside pengaturan like form transfer',
     expect($wasteGroup?->getIcon())->toBe('icon-waste')
         ->and(WasteReportResource::getNavigationGroup())->toBe('Waste')
         ->and(WasteReportResource::getNavigationLabel())->toBe('Laporan waste')
-        ->and(WasteDashboard::getNavigationGroup())->toBe('Waste')
-        ->and(WasteDashboard::getNavigationLabel())->toBe('Dasbor')
         ->and(Configurations::getNavigationGroup())->toBe('Waste')
         ->and(Configurations::getNavigationLabel())->toBe('Pengaturan');
 
@@ -79,7 +78,21 @@ it('lists laporan waste and the dashboard beside pengaturan like form transfer',
         ->and(WasteCategoryResource::getNavigationGroup())->toBe('Pengaturan Khusus Brand')
         ->and(WasteItemResource::getNavigationGroup())->toBe('Pengaturan Khusus Brand')
         ->and(WasteItemUnitCandidateResource::getNavigationGroup())->toBe('Pengaturan Khusus Brand')
-        ->and(WasteWorkflowResource::getNavigationGroup())->toBe('Pengaturan Khusus Brand');
+        ->and(WasteWorkflowResource::getNavigationGroup())->toBe('Pengaturan Khusus Brand')
+        ->and(WasteBrandResource::getNavigationIcon())->toBe(Heroicon::OutlinedBuildingStorefront)
+        ->and(WasteUnitResource::getNavigationIcon())->toBe(Heroicon::OutlinedScale)
+        ->and(WasteOutletResource::getNavigationIcon())->toBe(Heroicon::OutlinedMapPin)
+        ->and(WasteSectionResource::getNavigationIcon())->toBe(Heroicon::OutlinedRectangleGroup)
+        ->and(WasteCategoryResource::getNavigationIcon())->toBe(Heroicon::OutlinedTag)
+        ->and(WasteItemResource::getNavigationIcon())->toBe(Heroicon::OutlinedCube)
+        ->and(WasteItemUnitCandidateResource::getNavigationIcon())->toBe(Heroicon::OutlinedQueueList)
+        ->and(WasteWorkflowResource::getNavigationIcon())->toBe(Heroicon::OutlinedCheckBadge);
+
+    $activeColumn = WasteBrandResource::table(Table::make(new ManageWasteWorkflows))->getColumn('is_active');
+
+    expect($activeColumn)->toBeInstanceOf(TextColumn::class)
+        ->and($activeColumn->formatState(true))->toBe('Aktif')
+        ->and($activeColumn->formatState(false))->toBe('Nonaktif');
 
     $html = Blade::render(
         '<x-filament-panels::sidebar.group :label="$label" icon="icon-waste" :items="$items" :sidebar-collapsible="false" />',
@@ -87,14 +100,12 @@ it('lists laporan waste and the dashboard beside pengaturan like form transfer',
             'label' => 'Waste',
             'items' => [
                 NavigationItem::make(WasteReportResource::getNavigationLabel())->url('/admin'),
-                NavigationItem::make(WasteDashboard::getNavigationLabel())->url('/admin'),
                 NavigationItem::make(Configurations::getNavigationLabel())->url('/admin'),
             ],
         ],
     );
 
     expect($html)->toContain('Laporan waste')
-        ->and($html)->toContain('Dasbor')
         ->and($html)->toContain('Pengaturan');
 });
 

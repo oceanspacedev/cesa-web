@@ -2,14 +2,17 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteUnitResource\Pages\ManageWasteUnits;
+use Cesa\Waste\Filament\Support\DerivedWasteFields;
+use Cesa\Waste\Filament\Support\WasteActiveColumn;
 use Cesa\Waste\Models\WasteUnit;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Webkul\PluginManager\Package;
@@ -47,26 +50,21 @@ class WasteUnitResource extends Resource
         return __('waste::waste.admin.units');
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedScale;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('code')
-                ->label('Kode')
-                ->helperText('Kode satuan di pilihan barang, contoh GR atau PCS.')
-                ->required()
-                ->maxLength(32)
+            DerivedWasteFields::name(codeMax: 32, normalizeUnit: true)
+                ->helperText('Nama satuan untuk admin, contoh Gram atau Pieces. Kode mengikuti nama ini.')
+                ->maxLength(100),
+            DerivedWasteFields::code(32)
+                ->helperText('Terisi otomatis, contoh GRAM menjadi GR. Tidak bisa diubah setelah disimpan.')
                 ->unique(ignoreRecord: true)
                 ->disabled(fn (?WasteUnit $record): bool => $record?->exists ?? false),
-            TextInput::make('name')
-                ->label('Nama')
-                ->helperText('Nama satuan untuk admin, contoh Gram atau Pieces.')
-                ->required()
-                ->maxLength(100),
             Toggle::make('is_active')
                 ->label('Aktif')
                 ->helperText('Nonaktif menyembunyikan satuan dari pilihan barang baru; barang lama tetap memakai satuan ini.')
@@ -79,7 +77,7 @@ class WasteUnitResource extends Resource
         return $table->columns([
             TextColumn::make('code')->label('Kode')->searchable()->sortable(),
             TextColumn::make('name')->label('Nama')->searchable()->sortable(),
-            TextColumn::make('is_active')->label('Aktif')->badge(),
+            WasteActiveColumn::make(),
         ])->recordActions([
             EditAction::make()->slideOver(),
         ]);

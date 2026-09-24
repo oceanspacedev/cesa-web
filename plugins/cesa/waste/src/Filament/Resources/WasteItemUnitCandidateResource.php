@@ -2,6 +2,7 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Enums\WasteAlternateUnitCandidateStatus;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteItemUnitCandidateResource\Pages\ManageWasteItemUnitCandidates;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -61,9 +63,9 @@ class WasteItemUnitCandidateResource extends Resource
         return 'Kandidat satuan alternatif';
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedQueueList;
     }
 
     public static function form(Schema $schema): Schema

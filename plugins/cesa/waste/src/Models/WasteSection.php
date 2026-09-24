@@ -2,12 +2,15 @@
 
 namespace Cesa\Waste\Models;
 
+use Cesa\Waste\Models\Concerns\FillsDerivedWasteKeys;
 use Cesa\Waste\Models\Concerns\GuardsWasteBrandAssignment;
+use Cesa\Waste\Support\WasteConfigurationKeys;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WasteSection extends Model
 {
+    use FillsDerivedWasteKeys;
     use GuardsWasteBrandAssignment;
 
     protected $table = 'waste_sections';
@@ -17,6 +20,11 @@ class WasteSection extends Model
     protected function casts(): array
     {
         return ['is_active' => 'boolean'];
+    }
+
+    public function fillDerivedWasteKeys(): void
+    {
+        WasteConfigurationKeys::assignCode($this, 100, static::query()->where('brand_id', $this->brand_id));
     }
 
     public function brand(): BelongsTo

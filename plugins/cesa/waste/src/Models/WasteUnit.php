@@ -2,6 +2,8 @@
 
 namespace Cesa\Waste\Models;
 
+use Cesa\Waste\Models\Concerns\FillsDerivedWasteKeys;
+use Cesa\Waste\Support\WasteConfigurationKeys;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,6 +12,7 @@ use Illuminate\Support\Str;
 
 class WasteUnit extends Model
 {
+    use FillsDerivedWasteKeys;
     use HasFactory;
 
     protected $table = 'waste_units';
@@ -36,6 +39,11 @@ class WasteUnit extends Model
     protected function casts(): array
     {
         return ['is_active' => 'boolean'];
+    }
+
+    public function fillDerivedWasteKeys(): void
+    {
+        WasteConfigurationKeys::assignCode($this, 32, static::query(), true);
     }
 
     public function items(): HasMany

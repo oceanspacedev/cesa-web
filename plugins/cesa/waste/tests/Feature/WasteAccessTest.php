@@ -1,7 +1,6 @@
 <?php
 
 use BezhanSalleh\FilamentShield\Facades\FilamentShield;
-use Cesa\Waste\Filament\Pages\WasteDashboard;
 use Cesa\Waste\Filament\Resources\WasteReportResource;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
@@ -40,8 +39,7 @@ it('allows a global manager to open and initialize empty waste resources', funct
 
     expect(WasteBrand::query()->count())->toBe(0)
         ->and(app(WasteAccessService::class)->canManageAnyBrand($user))->toBeTrue()
-        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue()
-        ->and(WasteDashboard::canAccess())->toBeTrue();
+        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue();
 
     foreach ([WasteBrandPolicy::class, WasteOutletPolicy::class, WasteItemPolicy::class, WasteSectionPolicy::class, WasteCategoryPolicy::class, WasteWorkflowPolicy::class] as $policy) {
         expect(app($policy)->viewAny($user))->toBeTrue()
@@ -58,8 +56,7 @@ it('allows assigned brand managers to initialize workflows and view empty report
     expect(app(WasteAccessService::class)->canManageAnyBrand($user))->toBeTrue()
         ->and(app(WasteBrandPolicy::class)->viewAny($user))->toBeTrue()
         ->and(app(WasteBrandPolicy::class)->create($user))->toBeFalse()
-        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue()
-        ->and(WasteDashboard::canAccess())->toBeTrue();
+        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue();
 
     foreach ([WasteOutletPolicy::class, WasteItemPolicy::class, WasteSectionPolicy::class, WasteCategoryPolicy::class, WasteWorkflowPolicy::class] as $policy) {
         expect(app($policy)->viewAny($user))->toBeTrue()
@@ -77,8 +74,7 @@ it('allows outlet managers to view empty reporting without managing brand master
     expect(app(WasteAccessService::class)->canManageAnyBrand($user))->toBeFalse()
         ->and(app(WasteOutletPolicy::class)->viewAny($user))->toBeTrue()
         ->and(app(WasteOutletPolicy::class)->create($user))->toBeFalse()
-        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue()
-        ->and(WasteDashboard::canAccess())->toBeTrue();
+        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue();
 
     foreach ([WasteBrandPolicy::class, WasteItemPolicy::class, WasteSectionPolicy::class, WasteCategoryPolicy::class, WasteWorkflowPolicy::class] as $policy) {
         expect(app($policy)->viewAny($user))->toBeFalse()
@@ -86,7 +82,7 @@ it('allows outlet managers to view empty reporting without managing brand master
     }
 });
 
-it('limits laporan, dasbor, and pengaturan to the assigned brand', function (): void {
+it('limits laporan and pengaturan to the assigned brand', function (): void {
     $user = UserFactory::new()->createQuietly();
     $permissions = FilamentShield::getDefaultPermissionKeys(WasteReportResource::class, ['viewAny']);
     $user->givePermissionTo(Permission::findOrCreate($permissions['viewAny']['key'], 'web'));
@@ -114,8 +110,7 @@ it('limits laporan, dasbor, and pengaturan to the assigned brand', function (): 
         ->and(app(WasteReportPolicy::class)->view($user, $momoyoReport))->toBeTrue()
         ->and(app(WasteReportPolicy::class)->update($user, $momoyoReport))->toBeTrue()
         ->and(app(WasteReportPolicy::class)->view($user, $jchickenReport))->toBeFalse()
-        ->and(app(WasteReportPolicy::class)->delete($user, $jchickenReport))->toBeFalse()
-        ->and(WasteDashboard::canAccess())->toBeTrue();
+        ->and(app(WasteReportPolicy::class)->delete($user, $jchickenReport))->toBeFalse();
 });
 
 it('denies waste navigation and master creation to unassigned users', function (): void {
@@ -124,8 +119,7 @@ it('denies waste navigation and master creation to unassigned users', function (
     $this->actingAs($user);
 
     expect(app(WasteAccessService::class)->canManageAnyBrand($user))->toBeFalse()
-        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeFalse()
-        ->and(WasteDashboard::canAccess())->toBeFalse();
+        ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeFalse();
 
     foreach ([WasteBrandPolicy::class, WasteOutletPolicy::class, WasteItemPolicy::class, WasteSectionPolicy::class, WasteCategoryPolicy::class, WasteWorkflowPolicy::class] as $policy) {
         expect(app($policy)->viewAny($user))->toBeFalse()

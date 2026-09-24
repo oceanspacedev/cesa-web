@@ -2,9 +2,12 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Enums\WasteAlternateUnitCandidateStatus;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteItemResource\Pages\ManageWasteItems;
+use Cesa\Waste\Filament\Support\DerivedWasteFields;
+use Cesa\Waste\Filament\Support\WasteActiveColumn;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteUnit;
@@ -20,6 +23,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -54,17 +58,17 @@ class WasteItemResource extends Resource
         return __('waste::waste.admin.items');
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedCube;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             Select::make('brand_id')->label('Brand')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->required()->searchable(),
-            TextInput::make('name')->label('Nama')->required(),
-            TextInput::make('code')->label('Kode')->helperText('Kode barang di label pilihan form.')->required(),
+            DerivedWasteFields::name(codeMax: 100)->helperText('Kode barang mengikuti nama ini. Isi kode sendiri jika memakai kode stok.'),
+            DerivedWasteFields::code(100)->helperText('Terisi otomatis dari nama. Ganti dengan kode stok jika sudah ada.'),
             Select::make('unit')
                 ->label('Satuan')
                 ->helperText('Pilih dari Master Satuan di Pengaturan Waste.')
@@ -133,7 +137,7 @@ class WasteItemResource extends Resource
                     ->map(fn (WasteUnit $unit): string => $unit->is_active ? $unit->code : "{$unit->code} (nonaktif)")
                     ->implode(', '))
                 ->placeholder('—'),
-            TextColumn::make('is_active')->badge(),
+            WasteActiveColumn::make(),
         ])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 

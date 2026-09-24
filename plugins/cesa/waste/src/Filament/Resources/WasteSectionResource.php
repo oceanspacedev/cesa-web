@@ -2,8 +2,11 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteSectionResource\Pages\ManageWasteSections;
+use Cesa\Waste\Filament\Support\DerivedWasteFields;
+use Cesa\Waste\Filament\Support\WasteActiveColumn;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Services\WasteAccessService;
@@ -12,10 +15,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -49,9 +52,9 @@ class WasteSectionResource extends Resource
         return __('waste::waste.admin.sections');
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedRectangleGroup;
     }
 
     public static function form(Schema $schema): Schema
@@ -62,8 +65,8 @@ class WasteSectionResource extends Resource
                 ->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())
                 ->required()
                 ->searchable(),
-            TextInput::make('name')->label('Nama')->helperText('Teks di dropdown Section.')->required(),
-            TextInput::make('code')->label('Kode')->helperText('Kode unik di dalam brand, contoh BAR.')->required()->maxLength(100),
+            DerivedWasteFields::name(codeMax: 100)->helperText('Teks di dropdown Section. Kode mengikuti nama ini.'),
+            DerivedWasteFields::code(100),
             Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menghilangkannya dari form.')->default(true),
         ])->columns(2);
     }
@@ -74,7 +77,7 @@ class WasteSectionResource extends Resource
             TextColumn::make('brand.name')->label('Brand'),
             TextColumn::make('code')->searchable(),
             TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('is_active')->badge(),
+            WasteActiveColumn::make(),
         ])->recordActions([
             EditAction::make()->slideOver(),
             DeleteAction::make(),

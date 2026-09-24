@@ -2,8 +2,11 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteBrandResource\Pages\ManageWasteBrands;
+use Cesa\Waste\Filament\Support\DerivedWasteFields;
+use Cesa\Waste\Filament\Support\WasteActiveColumn;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Services\WasteAccessService;
 use Filament\Actions\BulkActionGroup;
@@ -11,10 +14,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,16 +51,16 @@ class WasteBrandResource extends Resource
         return __('waste::waste.admin.brands');
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedBuildingStorefront;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->label('Nama')->helperText('Nama yang tampil untuk admin.')->required()->maxLength(255),
-            TextInput::make('code')->label('Kode')->helperText('Kode tetap di tautan form, contoh JCHICKEN. Jangan diubah setelah outlet dipakai.')->required()->maxLength(50),
+            DerivedWasteFields::name()->helperText('Nama yang tampil untuk admin.'),
+            DerivedWasteFields::code(50)->helperText('Terisi otomatis dari nama, contoh MOMOYO. Ubah hanya jika perlu, dan jangan diubah setelah outlet dipakai.'),
             Select::make('users')->label('Pengelola brand')->helperText('Bisa mengelola data form dan laporan brand ini.')->relationship('users', 'name')->multiple()->preload()->searchable()->columnSpanFull(),
             Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menyembunyikan brand dari form publik.')->default(true),
         ])->columns(2);
@@ -69,7 +72,7 @@ class WasteBrandResource extends Resource
             TextColumn::make('name')->searchable()->sortable(),
             TextColumn::make('code')->searchable()->sortable(),
             TextColumn::make('outlets_count')->counts('outlets')->label('Outlets'),
-            TextColumn::make('is_active')->badge(),
+            WasteActiveColumn::make(),
         ])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 

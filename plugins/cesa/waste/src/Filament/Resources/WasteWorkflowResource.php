@@ -2,12 +2,15 @@
 
 namespace Cesa\Waste\Filament\Resources;
 
+use BackedEnum;
 use Cesa\Waste\Filament\Clusters\Configurations;
 use Cesa\Waste\Filament\Resources\WasteWorkflowResource\Pages\ManageWasteWorkflows;
+use Cesa\Waste\Filament\Support\WasteActiveColumn;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteAccessService;
+use Cesa\Waste\Support\WasteConfigurationKeys;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -18,7 +21,9 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,20 +57,36 @@ class WasteWorkflowResource extends Resource
         return __('waste::waste.admin.workflows');
     }
 
-    public static function getNavigationIcon(): ?string
+    public static function getNavigationIcon(): string|BackedEnum|null
     {
-        return null;
+        return Heroicon::OutlinedCheckBadge;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('brand_id')->label('Brand')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->required()->live()->searchable(),
+            Select::make('brand_id')->label('Brand')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->required()->live()->searchable()
+                ->afterStateUpdated(function (mixed $state, mixed $old, Get $get, Set $set): void {
+                    $set('outlet_id', null);
+                    $previous = WasteConfigurationKeys::approvalName(is_numeric($old) ? (int) $old : null, null);
+                    $next = WasteConfigurationKeys::approvalName(is_numeric($state) ? (int) $state : null, null);
+                    if (blank($get('name')) || (string) $get('name') === $previous) {
+                        $set('name', $next);
+                    }
+                }),
             Select::make('outlet_id')->label('Outlet')->helperText('Kosongkan agar berlaku untuk semua outlet dalam brand ini.')->options(fn (Get $get): array => app(WasteAccessService::class)
                 ->scopeOutlets(WasteOutlet::query()->when($get('brand_id'), fn (Builder $query, mixed $brandId): Builder => $query->where('brand_id', (int) $brandId))->orderBy('name'), filament()->auth()->user())
                 ->pluck('name', 'id')
-                ->all())->nullable()->searchable(),
-            TextInput::make('name')->label('Nama')->helperText('Contoh: Persetujuan Ciledug.')->required(),
+                ->all())->nullable()->searchable()->live()
+                ->afterStateUpdated(function (mixed $state, mixed $old, Get $get, Set $set): void {
+                    $brandId = is_numeric($get('brand_id')) ? (int) $get('brand_id') : null;
+                    $previous = WasteConfigurationKeys::approvalName($brandId, is_numeric($old) ? (int) $old : null);
+                    $next = WasteConfigurationKeys::approvalName($brandId, is_numeric($state) ? (int) $state : null);
+                    if (blank($get('name')) || (string) $get('name') === $previous) {
+                        $set('name', $next);
+                    }
+                }),
+            TextInput::make('name')->label('Nama')->helperText('Terisi otomatis dari brand atau outlet, contoh Persetujuan Ciledug.')->required(),
             Repeater::make('steps')->label('Urutan persetujuan')->helperText('Orang pertama di atas menerima pemberitahuan lebih dulu. Setiap langkah memerlukan nama serta WhatsApp atau email.')->schema([
                 TextInput::make('label')->label('Jabatan')->helperText('Contoh Supervisor.')->required(),
                 TextInput::make('name')->label('Nama pemeriksa')->required(),
@@ -78,7 +99,7 @@ class WasteWorkflowResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->formatStateUsing(fn ($state): string => (string) count($state ?? []))->label('Langkah'), TextColumn::make('is_active')->label('Aktif')->badge()])->recordActions([EditAction::make()->slideOver()->modalWidth('xl'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->formatStateUsing(fn ($state): string => (string) count($state ?? []))->label('Langkah'), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('xl'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

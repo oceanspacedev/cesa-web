@@ -167,7 +167,7 @@ User admin brand melihat master dan laporan brandnya. User yang hanya dipasang d
 
 ## Admin
 
-Menu admin Waste sama polanya dengan form transfer: **Laporan waste**, **Dasbor**, lalu **Pengaturan**. Pengaturan berisi brand, outlet, barang, master satuan, kandidat satuan, kategori, section, dan approval yang menentukan isi form publik.
+Menu admin Waste sama polanya dengan form transfer: **Laporan waste**, lalu **Pengaturan**. Pengaturan berisi brand, outlet, barang, master satuan, kandidat satuan, kategori, section, dan approval yang menentukan isi form publik.
 
 `/admin/waste-reports` bisa membuat, mengubah, dan menghapus laporan. Tombol catat insiden untuk koreksi, bukan jalur harian outlet.
 
