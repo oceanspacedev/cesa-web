@@ -13,6 +13,7 @@
 @import '../../../../vendor/filament/schemas/resources/css/index.css';
 
 @source '../../../../plugins/cesa/id-card/resources/views/**/*.blade.php';
+@source '../../../../plugins/cesa/waste/resources/views/**/*.blade.php';
 
 body.cesa-public {
     --primary-50: #eff6ff;
@@ -63,3 +64,70 @@ body.cesa-public {
 }
 
 @variant dark (&:where(.dark, .dark *));
+
+body.waste-public {
+    color-scheme: light;
+}
+
+.waste-public .waste-square,
+.waste-public .waste-square * {
+    border-radius: 0 !important;
+}
+
+.waste-public .waste-camera-slots {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.waste-public .waste-camera-launch {
+    border: 2px dashed var(--primary-300);
+    background-color: var(--primary-50);
+}
+
+.waste-public .fi-input-wrp :is(input, select, textarea).fi-input {
+    width: 100%;
+    background-color: transparent;
+}
+
+.waste-public [data-waste-component] :is(input, textarea, button),
+.waste-public [role='listbox'] {
+    color-scheme: light;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.waste-public [data-waste-component='Select'] button[role='combobox'] {
+    width: 100%;
+    min-width: 0;
+}
+
+.waste-public :is(input, textarea, [role='combobox']).bg-surface-gray-2 {
+    border-color: #f3f3f3;
+}
+
+.waste-public :is(input, textarea, [role='combobox']).bg-surface-gray-2:hover {
+    border-color: #e2e2e2;
+}
+
+.waste-public :is(input, textarea, [role='combobox']).bg-surface-gray-2:focus {
+    border-color: #c7c7c7;
+}
+
+.waste-public [data-waste-component='Select'] button[role='combobox'] > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.waste-public [data-waste-component='Badge'] {
+    font-size: 0.75rem;
+}
+
+@media (max-width: 639px) {
+    .waste-public [data-waste-component] :is(input, textarea) {
+        font-size: 1rem;
+    }
+}

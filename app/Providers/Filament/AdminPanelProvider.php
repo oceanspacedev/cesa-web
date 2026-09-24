@@ -104,6 +104,9 @@ class AdminPanelProvider extends PanelProvider
                     ->label(__('admin.navigation.helpdesk'))
                     ->icon('icon-helpdesk'),
                 NavigationGroup::make()
+                    ->label(__('admin.navigation.waste'))
+                    ->icon('icon-waste'),
+                NavigationGroup::make()
                     ->label(__('admin.navigation.id-card'))
                     ->icon('icon-id-card'),
                 NavigationGroup::make()

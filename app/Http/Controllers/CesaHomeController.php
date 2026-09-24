@@ -120,6 +120,18 @@ class CesaHomeController extends Controller
             ->values()
             ->toArray();
 
+        if (Package::isPluginInstalled('waste')) {
+            array_splice($visibleApps, 1, 0, [[
+                'key'         => 'waste',
+                'name'        => 'Waste',
+                'description' => 'Laporan waste dan adjustment outlet',
+                'url'         => route('waste.public.index'),
+                'color'       => 'green',
+                'icon'        => 'waste',
+                'always_show' => false,
+            ]]);
+        }
+
         if (Package::isPluginInstalled('id-card')) {
             $visibleApps[] = [
                 'key'         => 'id-card',

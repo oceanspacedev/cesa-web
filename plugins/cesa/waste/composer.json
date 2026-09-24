@@ -1,0 +1,30 @@
+{
+    "name": "cesa/waste",
+    "description": "Pelaporan dan approval waste atau adjustment operasional.",
+    "type": "library",
+    "authors": [
+        {
+            "name": "apriansyahrs",
+            "email": "developer@rizqis.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Cesa\\Waste\\WasteServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Cesa\\Waste\\": "src/",
+            "Cesa\\Waste\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Cesa\\Waste\\Tests\\": "tests/"
+        }
+    }
+}

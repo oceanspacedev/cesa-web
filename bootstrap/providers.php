@@ -16,6 +16,7 @@ use Cesa\Payroll\PayrollServiceProvider;
 use Cesa\Presensi\PresensiServiceProvider;
 use Cesa\Rekrutmen\RekrutmenServiceProvider;
 use Cesa\Shelf\ShelfServiceProvider;
+use Cesa\Waste\WasteServiceProvider;
 use Webkul\Account\AccountServiceProvider;
 use Webkul\Accounting\AccountingServiceProvider;
 use Webkul\Analytic\AnalyticServiceProvider;
@@ -90,5 +91,6 @@ return [
     PresensiServiceProvider::class,
     RekrutmenServiceProvider::class,
     ShelfServiceProvider::class,
+    WasteServiceProvider::class,
     LegacySyncServiceProvider::class,
 ];

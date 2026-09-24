@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import vue from '@vitejs/plugin-vue';
 import path from 'path';
+import { lucideIcons } from './node_modules/frappe-ui/vite/lucideIcons.js';
 
 export default defineConfig({
     build: {
@@ -17,10 +18,12 @@ export default defineConfig({
                 'plugins/cesa/rekrutmen/resources/js/app.js',
                 'plugins/cesa/lead/resources/js/public-lead.js',
                 'plugins/cesa/rekrutmen/resources/js/public-man-power.js',
+                'plugins/cesa/waste/resources/js/public-waste.js',
             ],
             refresh: true,
         }),
         vue(),
+        lucideIcons().filter((plugin) => plugin.name === 'frappe-ui-lucide-icons'),
     ],
     resolve: {
         alias: {
