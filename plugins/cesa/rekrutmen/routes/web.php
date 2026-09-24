@@ -6,6 +6,10 @@ use Cesa\Rekrutmen\Http\Controllers\RekrutmenCommunicationSettingsController;
 use Cesa\Rekrutmen\Http\Controllers\RekrutmenSpaController;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerApprovalPage;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerProgressPage;
+use Cesa\Rekrutmen\Models\JobApplication;
+use Cesa\Rekrutmen\Models\JobApplicationHistory;
+use Cesa\Rekrutmen\Models\JobPosting;
+use Cesa\Rekrutmen\Models\RequestManPower;
 use Illuminate\Http\Middleware\SetCacheHeaders;
 use Illuminate\Support\Facades\Route;
 
@@ -54,22 +58,22 @@ Route::middleware(['web', 'auth', 'signed'])->group(function () {
 Route::middleware(['web', 'auth'])->group(function () {
     // API endpoints consumed by Vue SPA
     Route::prefix('rekrutmen/api')->group(function () {
-        Route::get('installed-plugins', [RekrutmenSpaController::class, 'getInstalledPluginsApi'])->name('rekrutmen.api.installed-plugins');
-        Route::get('dashboard', [RekrutmenSpaController::class, 'dashboard'])->name('rekrutmen.api.dashboard');
-        Route::get('requests', [RekrutmenSpaController::class, 'getRequests'])->name('rekrutmen.api.requests');
+        Route::get('installed-plugins', [RekrutmenSpaController::class, 'getInstalledPluginsApi'])->middleware('can:access_rekrutmen_spa')->name('rekrutmen.api.installed-plugins');
+        Route::get('dashboard', [RekrutmenSpaController::class, 'dashboard'])->middleware('can:access_rekrutmen_spa')->name('rekrutmen.api.dashboard');
+        Route::get('requests', [RekrutmenSpaController::class, 'getRequests'])->middleware('can:viewAny,'.RequestManPower::class)->name('rekrutmen.api.requests');
         Route::post('requests/{id}/approve', [RekrutmenSpaController::class, 'approveRequest'])->name('rekrutmen.api.requests.approve');
         Route::post('requests/{id}/reject', [RekrutmenSpaController::class, 'rejectRequest'])->name('rekrutmen.api.requests.reject');
         Route::post('requests/{id}/hold', [RekrutmenSpaController::class, 'holdRequest'])->name('rekrutmen.api.requests.hold');
 
-        Route::get('job-postings', [RekrutmenSpaController::class, 'getJobPostings'])->name('rekrutmen.api.job-postings');
-        Route::post('job-postings', [RekrutmenSpaController::class, 'storeJobPosting'])->name('rekrutmen.api.job-postings.store');
-        Route::get('companies', [RekrutmenSpaController::class, 'getCompanies'])->name('rekrutmen.api.companies');
+        Route::get('job-postings', [RekrutmenSpaController::class, 'getJobPostings'])->middleware('can:viewAny,'.JobPosting::class)->name('rekrutmen.api.job-postings');
+        Route::post('job-postings', [RekrutmenSpaController::class, 'storeJobPosting'])->middleware('can:create,'.JobPosting::class)->name('rekrutmen.api.job-postings.store');
+        Route::get('companies', [RekrutmenSpaController::class, 'getCompanies'])->middleware('can:access_rekrutmen_spa')->name('rekrutmen.api.companies');
         Route::patch('job-postings/{id}/publish', [RekrutmenSpaController::class, 'togglePublishJobPosting'])->name('rekrutmen.api.job-postings.publish');
         Route::put('job-postings/{id}', [RekrutmenSpaController::class, 'updateJobPosting'])->name('rekrutmen.api.job-postings.update');
         Route::post('job-postings/{id}', [RekrutmenSpaController::class, 'updateJobPosting'])->name('rekrutmen.api.job-postings.update-post');
         Route::delete('job-postings/{id}', [RekrutmenSpaController::class, 'destroyJobPosting'])->name('rekrutmen.api.job-postings.destroy');
 
-        Route::get('applications', [RekrutmenSpaController::class, 'getApplications'])->name('rekrutmen.api.applications');
+        Route::get('applications', [RekrutmenSpaController::class, 'getApplications'])->middleware('can:viewAny,'.JobApplication::class)->name('rekrutmen.api.applications');
         Route::get('applications/ai-status', [RekrutmenSpaController::class, 'aiScreeningStatus'])->name('rekrutmen.api.applications.ai-status');
         Route::get('applications/{id}/cv', [RekrutmenSpaController::class, 'viewCv'])->name('rekrutmen.api.applications.cv');
         Route::post('applications/{id}/upload-cv', [RekrutmenSpaController::class, 'uploadCv'])->name('rekrutmen.api.applications.upload-cv');
@@ -80,9 +84,9 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::post('applications/sync-cvs', [RekrutmenSpaController::class, 'syncCandidateCvsFromStorage'])->name('rekrutmen.api.applications.sync-cvs');
         Route::post('applications/{id}/analyze-ai', [RekrutmenSpaController::class, 'analyzeWithAi'])->name('rekrutmen.api.applications.analyze-ai');
         Route::post('applications/batch-analyze-ai', [RekrutmenSpaController::class, 'batchAnalyzeWithAi'])->name('rekrutmen.api.applications.batch-analyze-ai');
-        Route::get('progress-report', [RekrutmenSpaController::class, 'getProgressReport'])->name('rekrutmen.api.progress-report');
-        Route::get('progress-report/export', [RekrutmenSpaController::class, 'exportProgressReport'])->name('rekrutmen.api.progress-report.export');
-        Route::get('configurations', [RekrutmenSpaController::class, 'getConfigurations'])->name('rekrutmen.api.configurations');
+        Route::get('progress-report', [RekrutmenSpaController::class, 'getProgressReport'])->middleware('can:viewAny,'.JobApplicationHistory::class)->name('rekrutmen.api.progress-report');
+        Route::get('progress-report/export', [RekrutmenSpaController::class, 'exportProgressReport'])->middleware('can:viewAny,'.JobApplicationHistory::class)->name('rekrutmen.api.progress-report.export');
+        Route::get('configurations', [RekrutmenSpaController::class, 'getConfigurations'])->middleware('can:access_rekrutmen_configurations')->name('rekrutmen.api.configurations');
         Route::post('divisions', [RekrutmenSpaController::class, 'storeDivision'])->name('rekrutmen.api.divisions.store');
         Route::put('divisions/{id}', [RekrutmenSpaController::class, 'updateDivision'])->name('rekrutmen.api.divisions.update');
         Route::delete('divisions/{id}', [RekrutmenSpaController::class, 'destroyDivision'])->name('rekrutmen.api.divisions.destroy');
@@ -96,11 +100,11 @@ Route::middleware(['web', 'auth'])->group(function () {
         Route::get('settings/ai', [RekrutmenSpaController::class, 'getAiSettings'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai');
         Route::post('settings/ai', [RekrutmenSpaController::class, 'saveAiSettings'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai.save');
         Route::post('settings/ai/test', [RekrutmenSpaController::class, 'testAiConnection'])->middleware('can:manage_rekrutmen_ai')->name('rekrutmen.api.settings.ai.test');
-        Route::get('settings/mail-templates', [RekrutmenSpaController::class, 'getMailTemplates'])->name('rekrutmen.api.settings.mail-templates');
-        Route::post('settings/mail-templates', [RekrutmenSpaController::class, 'saveMailTemplates'])->name('rekrutmen.api.settings.mail-templates.save');
-        Route::get('settings/mail', [RekrutmenCommunicationSettingsController::class, 'getMailSettings'])->name('rekrutmen.api.settings.mail');
-        Route::put('settings/mail', [RekrutmenCommunicationSettingsController::class, 'saveMailSettings'])->name('rekrutmen.api.settings.mail.save');
-        Route::post('settings/mail/test', [RekrutmenCommunicationSettingsController::class, 'testMailSettings'])->name('rekrutmen.api.settings.mail.test');
+        Route::get('settings/mail-templates', [RekrutmenSpaController::class, 'getMailTemplates'])->middleware('can:manage_rekrutmen_mail')->name('rekrutmen.api.settings.mail-templates');
+        Route::post('settings/mail-templates', [RekrutmenSpaController::class, 'saveMailTemplates'])->middleware('can:manage_rekrutmen_mail')->name('rekrutmen.api.settings.mail-templates.save');
+        Route::get('settings/mail', [RekrutmenCommunicationSettingsController::class, 'getMailSettings'])->middleware('can:manage_rekrutmen_mail')->name('rekrutmen.api.settings.mail');
+        Route::put('settings/mail', [RekrutmenCommunicationSettingsController::class, 'saveMailSettings'])->middleware('can:manage_rekrutmen_mail')->name('rekrutmen.api.settings.mail.save');
+        Route::post('settings/mail/test', [RekrutmenCommunicationSettingsController::class, 'testMailSettings'])->middleware('can:manage_rekrutmen_mail')->name('rekrutmen.api.settings.mail.test');
         Route::get('whatsapp/senders', [RekrutmenCommunicationSettingsController::class, 'whatsappSenders'])->name('rekrutmen.api.whatsapp.senders');
         Route::get('notifications/{notification}', [RekrutmenSpaController::class, 'notificationProgress'])->whereNumber('notification')->name('rekrutmen.api.notifications.progress');
         Route::put('settings/whatsapp/integration', [RekrutmenCommunicationSettingsController::class, 'saveWagIntegration'])->middleware('can:manage_rekrutmen_whatsapp')->name('rekrutmen.api.settings.whatsapp.integration');
@@ -123,15 +127,16 @@ Route::middleware(['web', 'auth'])->group(function () {
     });
 
     // Native Admin Panel URLs taken over by Vue SPA:
-    Route::get('admin/request-man-powers{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
-    Route::get('admin/job-postings{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
-    Route::get('admin/job-applications{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
-    Route::get('admin/recruitment-progress{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
-    Route::get('admin/configurations{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
-    Route::get('admin/rekrutmen{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*');
+    Route::get('admin/request-man-powers{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:viewAny,'.RequestManPower::class);
+    Route::get('admin/job-postings{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:viewAny,'.JobPosting::class);
+    Route::get('admin/job-applications{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:viewAny,'.JobApplication::class);
+    Route::get('admin/recruitment-progress{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:viewAny,'.JobApplicationHistory::class);
+    Route::get('admin/configurations{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:access_rekrutmen_configurations');
+    Route::get('admin/rekrutmen{any?}', [RekrutmenSpaController::class, 'index'])->where('any', '.*')->middleware('can:access_rekrutmen_spa');
 
     // SPA wildcard fallback (excludes api/ paths to avoid conflicts with POST API routes)
     Route::get('rekrutmen/{any?}', [RekrutmenSpaController::class, 'index'])
         ->where('any', '^(?!api/).*')
+        ->middleware('can:access_rekrutmen_spa')
         ->name('rekrutmen.spa');
 });

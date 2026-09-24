@@ -102,6 +102,7 @@ class RekrutmenServiceProvider extends PackageServiceProvider
                 '2026_09_14_093000_rekrutmen_grant_whatsapp_management_permission',
                 '2026_09_18_233749_rekrutmen_add_ai_screening_queue_fields',
                 '2026_09_18_234915_rekrutmen_add_ai_management_permission',
+                '2026_09_24_112829_rekrutmen_add_mail_management_permission',
             ])
             ->runsMigrations()
             ->runsSeeders()
@@ -125,6 +126,18 @@ class RekrutmenServiceProvider extends PackageServiceProvider
     {
         Gate::define('manage_rekrutmen_ai', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_ai'));
         Gate::define('manage_rekrutmen_whatsapp', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_whatsapp'));
+        Gate::define('manage_rekrutmen_mail', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_mail'));
+        Gate::define('access_rekrutmen_configurations', fn (User $user): bool => $user->can('viewAny', RekrutmenPipeline::class)
+            || $user->can('viewAny', Division::class)
+            || $user->can('viewAny', Approver::class)
+            || $user->can('manage_rekrutmen_ai')
+            || $user->can('manage_rekrutmen_whatsapp')
+            || $user->can('manage_rekrutmen_mail'));
+        Gate::define('access_rekrutmen_spa', fn (User $user): bool => $user->can('viewAny', RequestManPower::class)
+            || $user->can('viewAny', JobPosting::class)
+            || $user->can('viewAny', JobApplication::class)
+            || $user->can('viewAny', JobApplicationHistory::class)
+            || $user->can('access_rekrutmen_configurations'));
         Panel::configureUsing(function (Panel $panel): void {
             $panel->plugin(RekrutmenPlugin::make());
         });

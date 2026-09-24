@@ -1,10 +1,17 @@
 <?php
 
 use Cesa\Rekrutmen\Models\JobPosting;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
+beforeEach(function (): void {
+    $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+    $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_job::posting', 'web'));
+    $this->actingAs($user);
+});
+
 it('returns every matching job posting across pages with deterministic ordering', function (): void {
-    $this->actingAs(User::factory()->create(['is_active' => true]));
     $this->freezeTime();
 
     $postingIds = collect();
@@ -55,8 +62,6 @@ it('returns every matching job posting across pages with deterministic ordering'
 });
 
 it('accepts null and blank searches when job posting fields are nullable', function (?string $search): void {
-    $this->actingAs(User::factory()->create(['is_active' => true]));
-
     $posting = JobPosting::query()->create([
         'title'        => 'Sales Nullable Fields',
         'slug'         => 'sales-nullable-fields',
@@ -82,7 +87,6 @@ it('accepts null and blank searches when job posting fields are nullable', funct
 ]);
 
 it('finds a nullable job posting beyond the first fifty records', function (): void {
-    $this->actingAs(User::factory()->create(['is_active' => true]));
     $this->freezeTime();
 
     $target = JobPosting::query()->create([

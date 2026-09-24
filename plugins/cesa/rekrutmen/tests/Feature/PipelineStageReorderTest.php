@@ -5,13 +5,19 @@ namespace Cesa\Rekrutmen\Tests\Feature;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
 class PipelineStageReorderTest extends RekrutmenTestCase
 {
     public function test_can_reorder_stages_via_spa_api(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_rekrutmen::pipeline', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::query()->firstOrCreate(['id' => 1], ['name' => 'Standard Pipeline']);
@@ -56,7 +62,10 @@ class PipelineStageReorderTest extends RekrutmenTestCase
 
     public function test_reorder_stages_validates_stage_ids(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
         $this->actingAs($user);
 
         $response = $this->postJson('/rekrutmen/api/stages/reorder', [

@@ -36,7 +36,7 @@
           Segarkan
         </FButton>
 
-        <a href="/man-power" target="_blank">
+        <a v-if="hasPermission('requestManPowers', 'create')" href="/man-power" target="_blank">
           <FButton
             theme="gray"
             variant="solid"
@@ -481,6 +481,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Skeleton } from '../components/ui/skeleton';
 import { isApprovedManPowerRequest, isPendingManPowerRequest } from '../lib/requestManPowerStatus';
 import { filterManPowerRequests } from '../lib/collectionFilters';
+import { canAccessRecord, hasPermission } from '../lib/permissions';
 
 // Icons
 import {
@@ -568,11 +569,13 @@ const getBadgeTheme = (status) => {
 };
 
 const openRequestDetail = (item) => {
+  if (!canAccessRecord('requestManPowers', 'view', item)) return;
   selectedRequest.value = item;
 };
 
 const canTakeAction = (req) => {
   if (!req) return false;
+  if (!canAccessRecord('requestManPowers', 'update', req)) return false;
   if (typeof req.can_approve_reject === 'boolean') {
     return req.can_approve_reject;
   }
@@ -581,7 +584,7 @@ const canTakeAction = (req) => {
 };
 
 const handleApprove = async (req) => {
-  if (!req || isActionLoading.value) return;
+  if (!canTakeAction(req) || isActionLoading.value) return;
 
   const result = await Swal.fire({
     title: 'Setujui Permintaan FPTK?',
@@ -652,7 +655,7 @@ const handleApprove = async (req) => {
 };
 
 const handleReject = async (req) => {
-  if (!req || isActionLoading.value) return;
+  if (!canTakeAction(req) || isActionLoading.value) return;
 
   const result = await Swal.fire({
     title: 'Tolak Permintaan FPTK?',

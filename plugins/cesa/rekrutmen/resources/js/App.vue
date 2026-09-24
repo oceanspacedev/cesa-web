@@ -18,6 +18,7 @@
 import { ref, onMounted } from 'vue';
 import Navbar from './components/Navbar.vue';
 import { useRekrutmenStore } from './stores/rekrutmen';
+import { hasPermission } from './lib/permissions';
 
 const store = useRekrutmenStore();
 const user = ref({ name: 'Reza', email: '' });
@@ -33,9 +34,11 @@ onMounted(() => {
   }
 
   // Preload all module data once into Pinia store
-  store.fetchRequests().catch(() => {});
-  store.fetchPostings().catch(() => {});
-  store.fetchProgressReport().catch(() => {});
-  store.fetchConfigurations().catch(() => {});
+  if (hasPermission('requestManPowers')) store.fetchRequests().catch(() => {});
+  if (hasPermission('jobPostings')) store.fetchPostings().catch(() => {});
+  if (hasPermission('recruitmentProgress')) store.fetchProgressReport().catch(() => {});
+  if (hasPermission('divisions') || hasPermission('pipelines') || hasPermission('approvers')) {
+    store.fetchConfigurations().catch(() => {});
+  }
 });
 </script>

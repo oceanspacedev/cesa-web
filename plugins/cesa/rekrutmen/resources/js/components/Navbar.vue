@@ -5,7 +5,7 @@
         
         <!-- Left: Brand Logo -->
         <div class="flex items-center shrink-0 z-10">
-          <router-link to="/admin/job-postings" class="flex items-center gap-2.5 group">
+          <router-link :to="homePath" class="flex items-center gap-2.5 group">
             <img
               :src="logoUrl"
               alt="CESA Logo"
@@ -21,6 +21,7 @@
         <!-- Center: Mathematically Centered Navigation Menu Links -->
         <nav class="hidden md:flex items-center justify-center gap-6 lg:gap-8 text-xs absolute inset-x-0 mx-auto w-fit z-0 pointer-events-none [&>*]:pointer-events-auto">
           <router-link
+            v-if="canVisitSection('jobPostings')"
             to="/admin/job-postings"
             class="py-1 text-xs font-medium transition-colors"
             :class="[
@@ -33,6 +34,7 @@
           </router-link>
 
           <router-link
+            v-if="canVisitSection('jobApplications')"
             to="/admin/job-applications"
             class="py-1 text-xs font-medium transition-colors"
             :class="[
@@ -45,6 +47,7 @@
           </router-link>
 
           <router-link
+            v-if="canVisitSection('requestManPowers')"
             to="/admin/request-man-powers"
             class="py-1 text-xs font-medium transition-colors"
             :class="[
@@ -57,6 +60,7 @@
           </router-link>
 
           <router-link
+            v-if="canVisitSection('recruitmentProgress')"
             to="/admin/recruitment-progress"
             class="py-1 text-xs font-medium transition-colors"
             :class="[
@@ -69,6 +73,7 @@
           </router-link>
 
           <router-link
+            v-if="canVisitSection('configurations')"
             to="/admin/configurations"
             class="py-1 text-xs font-medium transition-colors"
             :class="[
@@ -84,7 +89,7 @@
         <!-- Right: Admin Panel Launcher + Profile Dropdown -->
         <div class="flex items-center gap-2.5 shrink-0 z-10">
           <!-- 1. CESA Apps & Plugin Launcher Trigger -->
-          <div class="relative" ref="launcherRef">
+          <div v-if="pluginsList.length" class="relative" ref="launcherRef">
             <button
               @click="toggleLauncher"
               class="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-50 hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 border border-zinc-200 shadow-2xs transition-all cursor-pointer focus:outline-none"
@@ -232,6 +237,7 @@
           <!-- Drawer Navigation (Pure Typography, Staggered Smooth Entrance) -->
           <nav class="p-4 space-y-1 overflow-y-auto flex-1">
             <router-link
+              v-if="canVisitSection('jobPostings')"
               to="/admin/job-postings"
               @click="mobileMenuOpen = false"
               class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
@@ -241,6 +247,7 @@
             </router-link>
 
             <router-link
+              v-if="canVisitSection('jobApplications')"
               to="/admin/job-applications"
               @click="mobileMenuOpen = false"
               class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
@@ -250,6 +257,7 @@
             </router-link>
 
             <router-link
+              v-if="canVisitSection('requestManPowers')"
               to="/admin/request-man-powers"
               @click="mobileMenuOpen = false"
               class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
@@ -259,6 +267,7 @@
             </router-link>
 
             <router-link
+              v-if="canVisitSection('recruitmentProgress')"
               to="/admin/recruitment-progress"
               @click="mobileMenuOpen = false"
               class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
@@ -270,6 +279,7 @@
             <div class="my-2 border-t border-zinc-100"></div>
 
             <router-link
+              v-if="canVisitSection('configurations')"
               to="/admin/configurations"
               @click="mobileMenuOpen = false"
               class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
@@ -279,7 +289,7 @@
             </router-link>
 
             <!-- Mobile Drawer: CESA Apps Grid -->
-            <div class="pt-3 pb-1">
+            <div v-if="pluginsList.length" class="pt-3 pb-1">
               <div class="px-3.5 pb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Aplikasi CESA
               </div>
@@ -338,6 +348,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
+import { canVisitSection, firstAccessiblePath } from '../lib/permissions';
 import { LayoutDashboard, User, LogOut, Menu, X } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -354,19 +365,9 @@ const launcherOpen = ref(false);
 const launcherRef = ref(null);
 const mobileMenuOpen = ref(false);
 const route = useRoute();
+const homePath = firstAccessiblePath();
 
-const defaultPlugins = [
-  { key: 'exit-clearance', label: 'Exit Clearance', url: '/admin/requests', icon: 'icon-exit-clearance' },
-  { key: 'form-transfer', label: 'Form Transfer', url: '/admin/transfer-requests', icon: 'icon-form-transfer' },
-  { key: 'rekrutmen', label: 'Rekrutmen', url: '/admin/request-man-powers', icon: 'icon-rekrutmen' },
-  { key: 'padelnis', label: 'Padelnis', url: '/admin/reservations', icon: 'icon-padelnis' },
-  { key: 'lead', label: 'Leads', url: '/admin/leads', icon: 'icon-lead' },
-  { key: 'document', label: 'Documents', url: '/admin/documents', icon: 'icon-document' },
-  { key: 'plugin', label: 'Plugins', url: '/admin/plugins', icon: 'icon-plugin' },
-  { key: 'settings', label: 'Settings', url: '/admin/shield/roles', icon: 'icon-settings' },
-];
-
-const pluginsList = ref(defaultPlugins);
+const pluginsList = ref([]);
 
 const isCurrentPlugin = (plugin) => {
   if (!plugin) return false;
@@ -394,7 +395,7 @@ const loadPlugins = async () => {
   if (mountEl && mountEl.dataset.plugins) {
     try {
       const parsed = JSON.parse(mountEl.dataset.plugins);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         pluginsList.value = parsed;
         return;
       }
@@ -405,12 +406,10 @@ const loadPlugins = async () => {
 
   try {
     const res = await axios.get('/rekrutmen/api/installed-plugins');
-    if (Array.isArray(res.data) && res.data.length > 0) {
+    if (Array.isArray(res.data)) {
       pluginsList.value = res.data;
     }
-  } catch (err) {
-    // Keep default plugins
-  }
+  } catch (err) {}
 };
 
 const isActive = (path) => {

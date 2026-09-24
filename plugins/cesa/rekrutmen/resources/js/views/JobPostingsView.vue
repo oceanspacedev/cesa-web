@@ -36,6 +36,7 @@
         </FButton>
 
         <FButton
+          v-if="hasPermission('jobPostings', 'create')"
           theme="gray"
           variant="solid"
           size="sm"
@@ -256,6 +257,7 @@
           Reset Filter
         </FButton>
         <FButton
+          v-if="hasPermission('jobPostings', 'create')"
           theme="gray"
           variant="solid"
           size="sm"
@@ -288,9 +290,9 @@
               :theme="job.is_published ? 'green' : 'gray'"
               variant="subtle"
               size="sm"
-              class="cursor-pointer select-none shrink-0"
+              :class="canAccessRecord('jobPostings', 'update', job) ? 'cursor-pointer select-none shrink-0' : 'select-none shrink-0'"
               @click.stop="togglePublish(job)"
-              :title="job.is_published ? 'Klik untuk jadikan Draft' : 'Klik untuk Tayangkan'"
+              :title="canAccessRecord('jobPostings', 'update', job) ? (job.is_published ? 'Klik untuk jadikan Draft' : 'Klik untuk Tayangkan') : ''"
             >
               <template #prefix>
                 <span
@@ -332,6 +334,7 @@
 
           <div class="flex items-center gap-1.5" @click.stop>
             <FButton
+              v-if="canAccessRecord('jobPostings', 'view', job)"
               theme="gray"
               variant="ghost"
               size="sm"
@@ -340,6 +343,7 @@
               Detail
             </FButton>
             <FButton
+              v-if="canAccessRecord('jobPostings', 'update', job)"
               theme="gray"
               variant="outline"
               size="sm"
@@ -349,6 +353,7 @@
               Edit
             </FButton>
             <FButton
+              v-if="canVisitSection('jobApplications')"
               theme="gray"
               variant="solid"
               size="sm"
@@ -358,6 +363,7 @@
               Pelamar
             </FButton>
             <FButton
+              v-if="canAccessRecord('jobPostings', 'delete', job)"
               theme="red"
               variant="ghost"
               size="sm"
@@ -398,6 +404,7 @@
           <div class="px-6 py-2.5 bg-zinc-50/70 border-b border-zinc-100 flex items-center justify-between gap-2 shrink-0">
             <div class="flex items-center gap-2">
               <FButton
+                v-if="canVisitSection('jobApplications')"
                 theme="gray"
                 variant="solid"
                 size="sm"
@@ -408,6 +415,7 @@
               </FButton>
 
               <FButton
+                v-if="canAccessRecord('jobPostings', 'update', activeJob)"
                 theme="gray"
                 variant="outline"
                 size="sm"
@@ -430,6 +438,7 @@
 
             <!-- Publish Status Badge / Toggle (positioned in toolbar away from close button) -->
             <button
+              v-if="canAccessRecord('jobPostings', 'update', activeJob)"
               type="button"
               @click="togglePublish(activeJob)"
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer"
@@ -499,6 +508,7 @@
           <!-- Footer -->
           <div class="px-6 py-3 border-t border-zinc-100 flex items-center justify-between shrink-0 bg-zinc-50/50">
             <button
+              v-if="canAccessRecord('jobPostings', 'delete', activeJob)"
               type="button"
               @click="handleDeleteJob(activeJob)"
               class="text-xs font-medium text-rose-600 hover:text-rose-700 transition-colors cursor-pointer flex items-center gap-1.5"
@@ -759,6 +769,7 @@ import { ref, computed, onMounted, onUnmounted, onDeactivated, watch } from 'vue
 import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import { filterJobPostings } from '../lib/jobPostings';
+import { canAccessRecord, canVisitSection, hasPermission } from '../lib/permissions';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
@@ -851,12 +862,14 @@ const goToApplications = (job) => {
 };
 
 const inspectJob = (job) => {
+  if (!canAccessRecord('jobPostings', 'view', job)) return;
   activeJob.value = job;
   sheetMode.value = 'view';
   isSheetOpen.value = true;
 };
 
 const openCreateSheet = () => {
+  if (!hasPermission('jobPostings', 'create')) return;
   editingJob.value = null;
   isEditMode.value = false;
   sheetMode.value = 'create';
@@ -879,6 +892,7 @@ const openCreateSheet = () => {
 };
 
 const openEditSheet = (job) => {
+  if (!canAccessRecord('jobPostings', 'update', job)) return;
   activeJob.value = job;
   editingJob.value = job;
   isEditMode.value = true;
@@ -975,6 +989,7 @@ const resetFilters = () => {
 };
 
 const togglePublish = async (job) => {
+  if (!canAccessRecord('jobPostings', 'update', job)) return;
   try {
     const res = await store.togglePublishPosting(job.id);
     if (res.success) {
@@ -1047,6 +1062,8 @@ const removeThumbnail = () => {
 };
 
 const saveEditJob = async () => {
+  if (isEditMode.value && !canAccessRecord('jobPostings', 'update', editingJob.value)) return;
+  if (!isEditMode.value && !hasPermission('jobPostings', 'create')) return;
   const title = editForm.value.title?.trim();
   if (!title) {
     Swal.fire({
@@ -1148,6 +1165,7 @@ const saveEditJob = async () => {
 };
 
 const handleDeleteJob = async (job) => {
+  if (!canAccessRecord('jobPostings', 'delete', job)) return;
   const result = await Swal.fire({
     target: document.querySelector('[data-job-posting-sheet]') || document.body,
     title: 'Hapus Lowongan?',

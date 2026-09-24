@@ -16,6 +16,7 @@ use Cesa\Rekrutmen\Jobs\QueueCandidateCvScreeningBatchJob;
 use Cesa\Rekrutmen\Models\Approver;
 use Cesa\Rekrutmen\Models\Division;
 use Cesa\Rekrutmen\Models\JobApplication;
+use Cesa\Rekrutmen\Models\JobApplicationHistory;
 use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
@@ -27,6 +28,8 @@ use Cesa\Rekrutmen\Services\RecruitmentProgressReportExport;
 use Cesa\Rekrutmen\Services\RecruitmentProgressReportService;
 use Cesa\Rekrutmen\Services\RekrutmenStorage;
 use Cesa\Rekrutmen\Services\ScheduledNotificationService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -43,6 +46,8 @@ use Illuminate\View\View;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Webkul\Security\Enums\PermissionType;
+use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 
 class RekrutmenSpaController extends Controller
@@ -52,6 +57,10 @@ class RekrutmenSpaController extends Controller
      */
     protected function checkAndProcessDueNotifications(): void
     {
+        if (! Gate::allows('update_rekrutmen_job::application')) {
+            return;
+        }
+
         if (Cache::add('rekrutmen_scheduled_due_lock', 1, 15)) {
             try {
                 app(ScheduledNotificationService::class)->processDueNotifications();
@@ -115,6 +124,7 @@ class RekrutmenSpaController extends Controller
      */
     public function index(): View
     {
+        Gate::authorize('access_rekrutmen_spa');
         $this->checkAndProcessDueNotifications();
 
         $user = auth()->user();
@@ -125,8 +135,93 @@ class RekrutmenSpaController extends Controller
                 'name'  => $user->name,
                 'email' => $user->email,
             ],
-            'plugins' => $this->getInstalledPlugins(),
+            'plugins'     => $this->getInstalledPlugins(),
+            'permissions' => $this->permissionsFor($user),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function permissionsFor(User $user): array
+    {
+        return [
+            'requestManPowers'    => $this->resourcePermissions($user, RequestManPower::class, 'rekrutmen_request::man::power'),
+            'jobPostings'         => $this->resourcePermissions($user, JobPosting::class, 'rekrutmen_job::posting'),
+            'jobApplications'     => $this->resourcePermissions($user, JobApplication::class, 'rekrutmen_job::application'),
+            'recruitmentProgress' => ['viewAny' => $user->can('viewAny', JobApplicationHistory::class)],
+            'divisions'           => $this->resourcePermissions($user, Division::class, 'rekrutmen_division', 'rekrutmen_request::man::power'),
+            'pipelines'           => $this->resourcePermissions($user, RekrutmenPipeline::class, 'rekrutmen_rekrutmen::pipeline'),
+            'approvers'           => $this->resourcePermissions($user, Approver::class, 'rekrutmen_approver', 'rekrutmen_request::man::power'),
+            'ai'                  => ['manage' => $user->can('manage_rekrutmen_ai')],
+            'whatsapp'            => ['manage' => $user->can('manage_rekrutmen_whatsapp')],
+            'mailSettings'        => ['viewAny' => $user->can('manage_rekrutmen_mail'), 'update' => $user->can('manage_rekrutmen_mail')],
+            'mailTemplates'       => ['viewAny' => $user->can('manage_rekrutmen_mail'), 'update' => $user->can('manage_rekrutmen_mail')],
+        ];
+    }
+
+    /**
+     * @param  class-string  $modelClass
+     * @return array{viewAny: bool, create: bool, update: bool, delete: bool}
+     */
+    private function resourcePermissions(User $user, string $modelClass, string $suffix, ?string $fallbackSuffix = null): array
+    {
+        $hasPermission = static fn (string $action): bool => $user->can("{$action}_{$suffix}")
+            || ($fallbackSuffix !== null && $user->can("{$action}_{$fallbackSuffix}"));
+
+        return [
+            'viewAny' => $user->can('viewAny', $modelClass),
+            'create'  => $user->can('create', $modelClass),
+            'update'  => $hasPermission('update'),
+            'delete'  => $hasPermission('delete'),
+        ];
+    }
+
+    /**
+     * @template T of \Illuminate\Database\Eloquent\Model
+     *
+     * @param  Builder<T>  $query
+     * @return Builder<T>
+     */
+    private function visibleRecords(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if ($user->resource_permission === PermissionType::GLOBAL) {
+            return $query;
+        }
+
+        $userIds = [$user->id];
+        if ($user->resource_permission === PermissionType::GROUP) {
+            $teamIds = $user->teams()->pluck('teams.id');
+            if ($teamIds->isNotEmpty()) {
+                $userIds = User::query()->whereHas('teams', fn (Builder $teamQuery): Builder => $teamQuery->whereIn('teams.id', $teamIds))
+                    ->pluck('id')->push($user->id)->unique()->all();
+            }
+        }
+
+        $model = $query->getModel();
+        $table = $model->getTable();
+        $hasAssignedUser = $model->getConnection()->getSchemaBuilder()->hasColumn($table, 'user_id');
+
+        return $query->where(function (Builder $scopedQuery) use ($table, $userIds, $hasAssignedUser): void {
+            $scopedQuery->whereIn("{$table}.creator_id", $userIds);
+            if ($hasAssignedUser) {
+                $scopedQuery->orWhereIn("{$table}.user_id", $userIds);
+            }
+        });
+    }
+
+    /**
+     * @return array{allowed_posting_ids?: array<int, int>}
+     */
+    private function reportPostingFilter(): array
+    {
+        if (auth()->user()->resource_permission === PermissionType::GLOBAL) {
+            return [];
+        }
+
+        return ['allowed_posting_ids' => $this->visibleRecords(JobPosting::query())->pluck('id')->all()];
     }
 
     /**
@@ -134,17 +229,28 @@ class RekrutmenSpaController extends Controller
      */
     public function getRequests(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', RequestManPower::class);
         $this->checkAndProcessDueNotifications();
 
-        $query = RequestManPower::with([
+        $query = $this->visibleRecords(RequestManPower::with([
+            'creator.teams',
             'approver',
             'currentPendingApproval',
             'division',
             'company',
-            'jobPosting.applications:id,job_posting_id,status',
+            'jobPosting.applications' => function (Builder|Relation $query): void {
+                if (! Gate::allows('viewAny', JobApplication::class)) {
+                    $query->whereKey([]);
+
+                    return;
+                }
+
+                $builder = $query instanceof Relation ? $query->getQuery() : $query;
+                $this->visibleRecords($builder->select(['id', 'job_posting_id', 'status']));
+            },
             'jobPosting.requestManPowers',
             'jobPosting.rekrutmenPipeline',
-        ])->latest('created_at')->latest('id');
+        ]))->withExists('approvals')->latest('created_at')->latest('id');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -158,6 +264,8 @@ class RekrutmenSpaController extends Controller
         $records = $query->paginate(max(1, min(100, $request->integer('per_page', 50))));
 
         $records->getCollection()->transform(function (RequestManPower $record) {
+            $canView = Gate::allows('view', $record);
+            $canUpdate = Gate::allows('update', $record);
             $fulfillmentStatus = $record->fulfillmentStatus();
             $approvalDesc = RequestManPowerResource::formatApprovalDescription($record);
             $positionDesc = RequestManPowerResource::formatTablePositionDescription($record);
@@ -185,9 +293,9 @@ class RekrutmenSpaController extends Controller
                 'quantity'                   => $neededCount,
                 'fulfilled_count'            => $hiredCount,
                 'estimasi_tanggal_join'      => $record->estimasi_tanggal_join ? $record->estimasi_tanggal_join->format('d/m/Y') : '-',
-                'requirements_kualifikasi'   => $record->requirements_kualifikasi,
-                'job_description'            => $record->job_description,
-                'keterangan'                 => $record->keterangan,
+                'requirements_kualifikasi'   => $canView ? $record->requirements_kualifikasi : null,
+                'job_description'            => $canView ? $record->job_description : null,
+                'keterangan'                 => $canView ? $record->keterangan : null,
                 'fulfillment_status'         => $fulfillmentStatus ? $fulfillmentStatus->getLabel() : 'No Candidate Yet',
                 'fulfillment_color'          => $fulfillmentStatus ? $fulfillmentStatus->getColor() : 'danger',
                 'fulfillment_summary'        => $record->fulfillmentSummary(),
@@ -199,11 +307,15 @@ class RekrutmenSpaController extends Controller
                 'status_color'               => $record->status ? $record->status->getColor() : 'warning',
                 'approval_status'            => $record->status ? $record->status->getLabel() : 'Pending',
                 'approval_description'       => $approvalDesc,
-                'public_progress_url'        => $record->getPublicProgressUrl(),
-                'can_approve_reject'         => in_array($record->status, [
-                    RequestManPowerStatus::PENDING,
-                    RequestManPowerStatus::HOLD,
-                ], true),
+                'public_progress_url'        => $canView ? $record->getPublicProgressUrl() : null,
+                'can_view'                   => $canView,
+                'can_update'                 => $canUpdate,
+                'can_delete'                 => Gate::allows('delete', $record),
+                'can_approve_reject'         => $record->status === RequestManPowerStatus::PENDING
+                    && ! $record->approvals_exists
+                    && $canUpdate,
+                'can_hold'                   => $record->status === RequestManPowerStatus::APPROVED
+                    && $canUpdate,
             ];
         });
 
@@ -216,6 +328,8 @@ class RekrutmenSpaController extends Controller
     public function approveRequest(Request $request, $id): JsonResponse
     {
         $record = RequestManPower::findOrFail($id);
+        Gate::authorize('update', $record);
+        abort_unless(RequestManPowerResource::canManualApproveOrReject($record), 403);
 
         try {
             $record->approveBy(Auth::id());
@@ -240,6 +354,8 @@ class RekrutmenSpaController extends Controller
     public function rejectRequest(Request $request, $id): JsonResponse
     {
         $record = RequestManPower::findOrFail($id);
+        Gate::authorize('update', $record);
+        abort_unless(RequestManPowerResource::canManualApproveOrReject($record), 403);
 
         try {
             $record->rejectBy(Auth::id());
@@ -263,11 +379,13 @@ class RekrutmenSpaController extends Controller
      */
     public function holdRequest(Request $request, $id): JsonResponse
     {
+        $record = RequestManPower::findOrFail($id);
+        Gate::authorize('update', $record);
+        abort_unless(RequestManPowerResource::canHold($record), 403);
+
         $request->validate([
             'reason' => 'required|string|min:3',
         ]);
-
-        $record = RequestManPower::findOrFail($id);
 
         try {
             $record->markOnHold(Auth::id(), $request->input('reason'));
@@ -289,13 +407,32 @@ class RekrutmenSpaController extends Controller
      */
     public function getJobPostings(Request $request): JsonResponse
     {
-        $query = JobPosting::with([
+        Gate::authorize('viewAny', JobPosting::class);
+
+        $query = $this->visibleRecords(JobPosting::with([
+            'creator.teams',
             'company',
             'requestManPower.company',
-            'requestManPowers.company',
+            'requestManPowers' => function (Builder|Relation $query): void {
+                if (! Gate::allows('viewAny', RequestManPower::class)) {
+                    $query->whereKey([]);
+
+                    return;
+                }
+
+                $builder = $query instanceof Relation ? $query->getQuery() : $query;
+                $this->visibleRecords($builder->with('company'));
+            },
             'rekrutmenPipeline',
-        ])
-            ->withCount(['applications', 'requestManPowers'])
+        ]))
+            ->withCount([
+                'applications'     => fn (Builder $query): Builder => Gate::allows('viewAny', JobApplication::class)
+                    ? $this->visibleRecords($query)
+                    : $query->whereKey([]),
+                'requestManPowers' => fn (Builder $query): Builder => Gate::allows('viewAny', RequestManPower::class)
+                    ? $this->visibleRecords($query)
+                    : $query->whereKey([]),
+            ])
             ->latest('created_at')
             ->latest('id');
 
@@ -319,18 +456,20 @@ class RekrutmenSpaController extends Controller
         $postings = $query->paginate($request->input('per_page', 50));
 
         $postings->getCollection()->transform(function (JobPosting $record) {
+            $canView = Gate::allows('view', $record);
+
             return [
                 'id'                     => $record->id,
                 'title'                  => $record->title,
                 'slug'                   => $record->slug,
                 'company_id'             => $record->company_id ?? $record->resolveCompany()?->id,
                 'company_name'           => $record->resolveCompanyName(),
-                'description'            => $record->description,
-                'requirements'           => $record->requirements,
-                'context_description'    => JobPostingResource::formatJobPostingContext($record),
+                'description'            => $canView ? $record->description : null,
+                'requirements'           => $canView ? $record->requirements : null,
+                'context_description'    => $canView ? JobPostingResource::formatJobPostingContext($record) : null,
                 'location'               => $record->location ?? 'Indonesia',
-                'thumbnail_path'         => $record->thumbnail_path,
-                'thumbnail_url'          => $record->thumbnail_url,
+                'thumbnail_path'         => $canView ? $record->thumbnail_path : null,
+                'thumbnail_url'          => $canView ? $record->thumbnail_url : null,
                 'is_published'           => (bool) $record->is_published,
                 'rekrutmen_pipeline_id'  => $record->rekrutmen_pipeline_id ?? 1,
                 'pipeline_name'          => $record->rekrutmenPipeline?->name ?? 'Default Recruitment Pipeline',
@@ -339,12 +478,17 @@ class RekrutmenSpaController extends Controller
                 'closing_date'           => $record->closing_date ? $record->closing_date->format('Y-m-d') : null,
                 'closing_date_formatted' => $record->closing_date ? $record->closing_date->format('d/m/Y') : '-',
                 'created_at'             => $record->created_at ? $record->created_at->format('d/m/Y') : '-',
+                'can_view'               => $canView,
+                'can_update'             => Gate::allows('update', $record),
+                'can_delete'             => Gate::allows('delete', $record),
             ];
         });
 
         $responseData = $postings->toArray();
         $responseData['companies'] = Company::query()->whereNull('deleted_at')->orderBy('name')->get(['id', 'name']);
-        $responseData['pipelines'] = RekrutmenPipeline::query()->orderBy('id')->get(['id', 'name']);
+        $responseData['pipelines'] = Gate::allows('viewAny', RekrutmenPipeline::class)
+            ? $this->visibleRecords(RekrutmenPipeline::query())->orderBy('id')->get(['id', 'name'])
+            : collect();
 
         return response()->json($responseData);
     }
@@ -354,6 +498,8 @@ class RekrutmenSpaController extends Controller
      */
     public function getCompanies(): JsonResponse
     {
+        Gate::authorize('access_rekrutmen_spa');
+
         return response()->json(
             Company::query()->whereNull('deleted_at')->orderBy('name')->get(['id', 'name'])
         );
@@ -365,6 +511,7 @@ class RekrutmenSpaController extends Controller
     public function togglePublishJobPosting(Request $request, $id): JsonResponse
     {
         $posting = JobPosting::findOrFail($id);
+        Gate::authorize('update', $posting);
 
         $newStatus = $request->has('is_published')
             ? (bool) $request->input('is_published')
@@ -387,6 +534,8 @@ class RekrutmenSpaController extends Controller
      */
     public function storeJobPosting(Request $request): JsonResponse
     {
+        Gate::authorize('create', JobPosting::class);
+
         $request->validate([
             'title'                 => 'required|string|max:255',
             'company_id'            => 'nullable',
@@ -414,6 +563,10 @@ class RekrutmenSpaController extends Controller
         }
         if (! isset($pipeline) || ! $pipeline) {
             $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Recruitment Pipeline']);
+        }
+
+        if ((int) $pipeline->id !== 1) {
+            Gate::authorize('view', $pipeline);
         }
 
         $companyId = $request->input('company_id');
@@ -464,6 +617,9 @@ class RekrutmenSpaController extends Controller
      */
     public function updateJobPosting(Request $request, $id): JsonResponse
     {
+        $posting = JobPosting::findOrFail($id);
+        Gate::authorize('update', $posting);
+
         $request->validate([
             'title'                 => 'required|string|max:255',
             'company_id'            => 'nullable',
@@ -477,7 +633,25 @@ class RekrutmenSpaController extends Controller
             'remove_thumbnail'      => 'nullable',
         ]);
 
-        $posting = JobPosting::findOrFail($id);
+        $companyId = $request->input('company_id');
+        $companyId = filled($companyId) ? (int) $companyId : null;
+        $shouldSyncLinkedRequests = $request->has('company_id') && $companyId !== $posting->company_id;
+        $linkedRequests = collect();
+        if ($shouldSyncLinkedRequests) {
+            $linkedRequests = RequestManPower::query()
+                ->where(function (Builder $query) use ($posting): void {
+                    $query->where('job_posting_id', $posting->id);
+                    if ($posting->request_man_power_id) {
+                        $query->orWhere($query->getModel()->getQualifiedKeyName(), $posting->request_man_power_id);
+                    }
+                })
+                ->with('creator.teams')
+                ->get();
+
+            foreach ($linkedRequests as $linkedRequest) {
+                Gate::authorize('update', $linkedRequest);
+            }
+        }
 
         if ($request->has('rekrutmen_pipeline_id')) {
             $pipelineId = $request->filled('rekrutmen_pipeline_id') ? $request->integer('rekrutmen_pipeline_id') : 1;
@@ -488,19 +662,17 @@ class RekrutmenSpaController extends Controller
                 ]);
             }
 
+            if ($pipelineId !== 1 && $pipelineId !== (int) $posting->rekrutmen_pipeline_id) {
+                Gate::authorize('view', RekrutmenPipeline::findOrFail($pipelineId));
+            }
+
             $posting->rekrutmen_pipeline_id = $pipelineId;
         }
 
         $posting->title = $request->input('title');
 
         if ($request->has('company_id')) {
-            $companyId = $request->input('company_id');
-            $posting->company_id = filled($companyId) ? (int) $companyId : null;
-
-            if ($posting->request_man_power_id) {
-                RequestManPower::whereKey($posting->request_man_power_id)->update(['company_id' => $posting->company_id]);
-            }
-            RequestManPower::where('job_posting_id', $posting->id)->update(['company_id' => $posting->company_id]);
+            $posting->company_id = $companyId;
         }
 
         $posting->location = $request->input('location');
@@ -519,7 +691,13 @@ class RekrutmenSpaController extends Controller
             $posting->thumbnail_path = null;
         }
 
-        $posting->save();
+        DB::transaction(function () use ($posting, $linkedRequests): void {
+            $posting->save();
+
+            foreach ($linkedRequests as $linkedRequest) {
+                $linkedRequest->update(['company_id' => $posting->company_id]);
+            }
+        });
 
         return response()->json([
             'success' => true,
@@ -541,6 +719,7 @@ class RekrutmenSpaController extends Controller
     public function destroyJobPosting($id): JsonResponse
     {
         $posting = JobPosting::findOrFail($id);
+        Gate::authorize('delete', $posting);
 
         $hasApplications = DB::table('rekrutmen_job_applications')
             ->where('job_posting_id', $posting->id)
@@ -567,14 +746,16 @@ class RekrutmenSpaController extends Controller
      */
     public function getApplications(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', JobApplication::class);
         $this->checkAndProcessDueNotifications();
 
-        $query = JobApplication::with([
+        $query = $this->visibleRecords(JobApplication::with([
+            'creator.teams',
             'jobPosting.company',
             'jobPosting.requestManPower.company',
             'jobPosting.requestManPowers.company',
             'currentStage',
-        ])->latest('created_at')->latest('id');
+        ]))->latest('created_at')->latest('id');
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
@@ -590,7 +771,7 @@ class RekrutmenSpaController extends Controller
         if ($request->filled('job_id')) {
             $jobId = (int) $request->input('job_id');
             $query->where('job_posting_id', $jobId);
-            $activeJob = JobPosting::find($jobId);
+            $activeJob = $this->visibleRecords(JobPosting::query())->find($jobId);
         }
 
         $colors = [
@@ -612,7 +793,16 @@ class RekrutmenSpaController extends Controller
             $query->whereHas('jobPosting', fn ($postingQuery) => $postingQuery->where('rekrutmen_pipeline_id', $pipelineId));
         }
 
+        $visiblePipelineIds = $this->visibleRecords(JobApplication::query())
+            ->join('rekrutmen_job_postings', 'rekrutmen_job_applications.job_posting_id', '=', 'rekrutmen_job_postings.id')
+            ->distinct()
+            ->pluck('rekrutmen_job_postings.rekrutmen_pipeline_id');
+        if ($activeJob?->rekrutmen_pipeline_id) {
+            $visiblePipelineIds->push($activeJob->rekrutmen_pipeline_id);
+        }
+
         $stages = RekrutmenStage::query()
+            ->whereIn('rekrutmen_pipeline_id', $visiblePipelineIds)
             ->when($pipelineId, fn ($stageQuery) => $stageQuery->where('rekrutmen_pipeline_id', $pipelineId))
             ->orderBy('rekrutmen_pipeline_id')
             ->orderBy('order_column')
@@ -628,6 +818,7 @@ class RekrutmenSpaController extends Controller
         $paginatedApplications = $query->paginate(max(1, min(100, $request->integer('per_page', 100))));
 
         $applications = $paginatedApplications->getCollection()->map(function (JobApplication $app) use ($colors) {
+            $canView = Gate::allows('view', $app);
             $stage = $app->currentStage;
             $stageData = null;
             if ($stage) {
@@ -647,39 +838,51 @@ class RekrutmenSpaController extends Controller
                     : (string) $app->gender;
             }
 
-            $hasResumeOnDisk = $this->resolveAndSyncCandidateCv($app);
+            $resumeFile = $canView ? $this->candidateCv($app) : null;
+            $hasResumeOnDisk = $resumeFile !== null;
+            $screening = $this->screeningPayload($app);
+            if (! $canView) {
+                $screening['ai_screening_error'] = null;
+                $screening['ai_match_score'] = null;
+                $screening['ai_recommendation'] = null;
+                $screening['ai_summary'] = null;
+                $screening['ai_analyzed_at'] = null;
+            }
 
             return [
                 'id'                         => $app->id,
-                'full_name'                  => $app->full_name,
-                'email'                      => $app->email,
-                'phone'                      => $app->whatsapp_number ?? $app->active_phone ?? '-',
-                'whatsapp_number'            => $app->whatsapp_number ?? '-',
-                'active_phone'               => $app->active_phone ?? '-',
-                'gender'                     => $genderLabel,
-                'birth_date'                 => $app->birth_date ? $app->birth_date->format('d/m/Y') : '-',
-                'marital_status'             => $marital,
-                'address'                    => $app->address_domicile ?? $app->address_ktp ?? '-',
-                'address_domicile'           => $app->address_domicile ?? '-',
-                'address_ktp'                => $app->address_ktp ?? '-',
-                'emergency_contact_name'     => $app->emergency_contact_name ?? '-',
-                'emergency_contact_relation' => $app->emergency_contact_relation ?? '-',
-                'emergency_contact_phone'    => $app->emergency_contact_phone ?? '-',
-                'photo_path'                 => $app->photo_path,
-                'has_photo'                  => filled($app->photo_path),
-                'photo_url'                  => $app->photo_path ? url("/rekrutmen/api/applications/{$app->id}/photo") : null,
+                'full_name'                  => $canView ? $app->full_name : null,
+                'email'                      => $canView ? $app->email : null,
+                'phone'                      => $canView ? ($app->whatsapp_number ?? $app->active_phone ?? '-') : null,
+                'whatsapp_number'            => $canView ? ($app->whatsapp_number ?? '-') : null,
+                'active_phone'               => $canView ? ($app->active_phone ?? '-') : null,
+                'gender'                     => $canView ? $genderLabel : null,
+                'birth_date'                 => $canView ? ($app->birth_date ? $app->birth_date->format('d/m/Y') : '-') : null,
+                'marital_status'             => $canView ? $marital : null,
+                'address'                    => $canView ? ($app->address_domicile ?? $app->address_ktp ?? '-') : null,
+                'address_domicile'           => $canView ? ($app->address_domicile ?? '-') : null,
+                'address_ktp'                => $canView ? ($app->address_ktp ?? '-') : null,
+                'emergency_contact_name'     => $canView ? ($app->emergency_contact_name ?? '-') : null,
+                'emergency_contact_relation' => $canView ? ($app->emergency_contact_relation ?? '-') : null,
+                'emergency_contact_phone'    => $canView ? ($app->emergency_contact_phone ?? '-') : null,
+                'photo_path'                 => $canView ? $app->photo_path : null,
+                'has_photo'                  => $canView && filled($app->photo_path),
+                'photo_url'                  => $canView && $app->photo_path ? url("/rekrutmen/api/applications/{$app->id}/photo") : null,
                 'source'                     => $app->source ?? 'Website',
                 'job_posting_id'             => $app->job_posting_id,
                 'job_posting'                => $app->jobPosting ? ['id' => $app->jobPosting->id, 'title' => $app->jobPosting->title, 'rekrutmen_pipeline_id' => $app->jobPosting->rekrutmen_pipeline_id, 'location' => $app->jobPosting->location, 'company_name' => $app->jobPosting->resolveCompanyName()] : null,
                 'current_stage_id'           => $app->current_stage_id ?? 1,
                 'stage'                      => $stageData,
                 'status'                     => $app->status ? (is_object($app->status) ? $app->status->value : $app->status) : 'in_progress',
-                ...$this->screeningPayload($app),
+                ...$screening,
                 'has_resume'                 => $hasResumeOnDisk,
-                'resume_path'                => $hasResumeOnDisk ? $app->resume_path : null,
-                'resume_filename'            => $hasResumeOnDisk ? basename($app->resume_path) : "CV-{$app->id}.pdf",
+                'resume_path'                => $resumeFile['path'] ?? null,
+                'resume_filename'            => $canView ? ($hasResumeOnDisk ? basename($resumeFile['path']) : "CV-{$app->id}.pdf") : null,
                 'resume_url'                 => $hasResumeOnDisk ? url("/rekrutmen/api/applications/{$app->id}/cv") : null,
                 'created_at'                 => $app->created_at ? $app->created_at->format('d/m/Y') : '-',
+                'can_view'                   => $canView,
+                'can_update'                 => Gate::allows('update', $app),
+                'can_delete'                 => Gate::allows('delete', $app),
             ];
         });
 
@@ -701,7 +904,8 @@ class RekrutmenSpaController extends Controller
     {
         $application = JobApplication::query()->findOrFail($id);
         Gate::authorize('view', $application);
-        $disk = $application->resolveAttachmentDisk('photo');
+        abort_if(blank($application->photo_path), 404, 'File foto tidak ditemukan pada penyimpanan asal.');
+        $disk = app(RekrutmenStorage::class)->resolveDisk($application->photo_path, $application->photo_disk);
         abort_if($disk === null, 404, 'File foto tidak ditemukan pada penyimpanan asal.');
 
         return Storage::disk($disk)->response($application->photo_path, basename($application->photo_path));
@@ -711,11 +915,10 @@ class RekrutmenSpaController extends Controller
     {
         $application = JobApplication::query()->with('jobPosting')->findOrFail($id);
         Gate::authorize('view', $application);
-        $this->resolveAndSyncCandidateCv($application);
-        $disk = $application->resolveAttachmentDisk('resume');
-        abort_if($disk === null, 404, 'Berkas CV tidak ditemukan pada penyimpanan asal.');
+        $resumeFile = $this->candidateCv($application);
+        abort_if($resumeFile === null, 404, 'Berkas CV tidak ditemukan pada penyimpanan asal.');
 
-        return Storage::disk($disk)->response($application->resume_path, basename($application->resume_path));
+        return Storage::disk($resumeFile['disk'])->response($resumeFile['path'], basename($resumeFile['path']));
     }
 
     /**
@@ -748,7 +951,7 @@ class RekrutmenSpaController extends Controller
         $application = JobApplication::query()->with('jobPosting')->findOrFail($id);
         Gate::authorize('update', $application);
         $this->assertAiConfigured();
-        $this->resolveAndSyncCandidateCv($application);
+        $this->candidateCv($application);
         $queued = app(AiScreeningService::class)->queue($application, $request->boolean('force'));
 
         return response()->json([
@@ -767,7 +970,7 @@ class RekrutmenSpaController extends Controller
         Gate::authorize('update_rekrutmen_job::application');
         $this->assertAiConfigured();
         $data = $request->validated();
-        $query = JobApplication::query()->applyPermissionScope();
+        $query = $this->visibleRecords(JobApplication::query());
         if (! empty($data['application_ids'])) {
             $query->whereIn('id', $data['application_ids']);
         }
@@ -804,7 +1007,7 @@ class RekrutmenSpaController extends Controller
     public function aiScreeningStatus(QueueAiScreeningRequest $request): JsonResponse
     {
         Gate::authorize('viewAny', JobApplication::class);
-        $query = JobApplication::query()->applyPermissionScope();
+        $query = $this->visibleRecords(JobApplication::query());
         if ($request->filled('job_id')) {
             $query->where('job_posting_id', $request->integer('job_id'));
         }
@@ -865,6 +1068,7 @@ class RekrutmenSpaController extends Controller
     public function updateApplicationStage(Request $request, $id): JsonResponse
     {
         $application = JobApplication::findOrFail($id);
+        Gate::authorize('update', $application);
         $stageInput = $request->input('stage_id');
 
         if ($stageInput === 'rejected' || $stageInput === 'reject') {
@@ -902,27 +1106,28 @@ class RekrutmenSpaController extends Controller
      */
     public function batchRejectApplications(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', JobApplication::class);
+        Gate::authorize('update_rekrutmen_job::application');
+
         $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'required|integer|exists:rekrutmen_job_applications,id',
         ]);
 
-        $ids = $request->input('ids', []);
-        $count = 0;
+        $applications = JobApplication::query()->whereIn('id', $request->input('ids', []))->get();
+        foreach ($applications as $application) {
+            Gate::authorize('update', $application);
+        }
 
-        foreach ($ids as $appId) {
-            $application = JobApplication::find($appId);
-            if ($application) {
-                $application->status = 'rejected';
-                $application->save();
-                $count++;
-            }
+        foreach ($applications as $application) {
+            $application->status = 'rejected';
+            $application->save();
         }
 
         return response()->json([
             'success' => true,
-            'count'   => $count,
-            'message' => "{$count} pelamar berhasil ditolak (tanpa notifikasi WA maupun email).",
+            'count'   => $applications->count(),
+            'message' => "{$applications->count()} pelamar berhasil ditolak (tanpa notifikasi WA maupun email).",
         ]);
     }
 
@@ -931,11 +1136,13 @@ class RekrutmenSpaController extends Controller
      */
     public function updateApplicationStatus(Request $request, $id): JsonResponse
     {
+        $application = JobApplication::findOrFail($id);
+        Gate::authorize('update', $application);
+
         $request->validate([
             'status' => 'required|string',
         ]);
 
-        $application = JobApplication::findOrFail($id);
         $application->status = $request->input('status');
         $application->save();
 
@@ -951,11 +1158,14 @@ class RekrutmenSpaController extends Controller
      */
     public function getProgressReport(Request $request): JsonResponse
     {
+        Gate::authorize('viewAny', JobApplicationHistory::class);
+
         $reportData = app(RecruitmentProgressReportService::class)->build([
-            'date_from'      => $request->input('date_from'),
-            'date_to'        => $request->input('date_to'),
-            'job_posting_id' => $request->filled('job_posting_id') ? (int) $request->input('job_posting_id') : null,
-            'company_id'     => $request->filled('company_id') ? (int) $request->input('company_id') : null,
+            'date_from'           => $request->input('date_from'),
+            'date_to'             => $request->input('date_to'),
+            'job_posting_id'      => $request->filled('job_posting_id') ? (int) $request->input('job_posting_id') : null,
+            'company_id'          => $request->filled('company_id') ? (int) $request->input('company_id') : null,
+            ...$this->reportPostingFilter(),
         ]);
 
         $positions = $reportData['positions']->map(function ($item) {
@@ -998,6 +1208,8 @@ class RekrutmenSpaController extends Controller
      */
     public function exportProgressReport(Request $request): BinaryFileResponse
     {
+        Gate::authorize('viewAny', JobApplicationHistory::class);
+
         ini_set('memory_limit', '512M');
         set_time_limit(180);
 
@@ -1007,10 +1219,11 @@ class RekrutmenSpaController extends Controller
         $companyId = $request->filled('company_id') ? (int) $request->input('company_id') : null;
 
         $reportData = app(RecruitmentProgressReportService::class)->build([
-            'date_from'      => $dateFrom,
-            'date_to'        => $dateTo,
-            'job_posting_id' => $jobPostingId,
-            'company_id'     => $companyId,
+            'date_from'           => $dateFrom,
+            'date_to'             => $dateTo,
+            'job_posting_id'      => $jobPostingId,
+            'company_id'          => $companyId,
+            ...$this->reportPostingFilter(),
         ]);
 
         $periodLabel = 'Semua Periode';
@@ -1050,26 +1263,32 @@ class RekrutmenSpaController extends Controller
      */
     public function getConfigurations(?Request $request = null): JsonResponse
     {
+        Gate::authorize('access_rekrutmen_configurations');
         $request = $request ?? request();
-        $divisions = Division::query()
-            ->with('company:id,name')
-            ->orderBy('name')
-            ->get()
-            ->map(static function (Division $division): array {
-                $companyName = $division->company?->name;
+        $divisions = Gate::allows('viewAny', Division::class)
+            ? $this->visibleRecords(Division::query())
+                ->with(['company:id,name', 'creator.teams'])
+                ->orderBy('name')
+                ->get()
+                ->map(static function (Division $division): array {
+                    $companyName = $division->company?->name;
 
-                return [
-                    'id'           => $division->id,
-                    'name'         => $division->name,
-                    'display_name' => $division->nameWithCompany(),
-                    'is_active'    => (bool) $division->is_active,
-                    'company_id'   => $division->company_id,
-                    'company_name' => $companyName,
-                    'badan_usaha'  => $companyName,
-                ];
-            })
-            ->sortBy(fn (array $division): string => mb_strtolower(($division['company_name'] ?? '').' '.$division['name']))
-            ->values();
+                    return [
+                        'id'           => $division->id,
+                        'name'         => $division->name,
+                        'display_name' => $division->nameWithCompany(),
+                        'is_active'    => (bool) $division->is_active,
+                        'company_id'   => $division->company_id,
+                        'company_name' => $companyName,
+                        'badan_usaha'  => $companyName,
+                        'can_view'     => Gate::allows('view', $division),
+                        'can_update'   => Gate::allows('update', $division),
+                        'can_delete'   => Gate::allows('delete', $division),
+                    ];
+                })
+                ->sortBy(fn (array $division): string => mb_strtolower(($division['company_name'] ?? '').' '.$division['name']))
+                ->values()
+            : collect();
 
         $companies = Company::query()->whereNull('deleted_at')->orderBy('name')->get(['id', 'name']);
 
@@ -1085,39 +1304,84 @@ class RekrutmenSpaController extends Controller
             'Hired'                     => '#059669',
         ];
 
-        $stageCandidateCounts = DB::table('rekrutmen_job_applications')
-            ->whereNull('deleted_at')
-            ->where('status', '!=', 'rejected')
-            ->select('current_stage_id', DB::raw('count(*) as total'))
-            ->groupBy('current_stage_id')
-            ->pluck('total', 'current_stage_id');
+        $stageCandidateCounts = Gate::allows('viewAny', JobApplication::class)
+            ? $this->visibleRecords(JobApplication::query())
+                ->where('status', '!=', 'rejected')
+                ->select('current_stage_id')
+                ->selectRaw('count(*) as total')
+                ->groupBy('current_stage_id')
+                ->pluck('total', 'current_stage_id')
+            : collect();
 
-        $pipelines = RekrutmenPipeline::query()->with('activeStages')->withCount('jobPostings')
-            ->orderBy('id')
-            ->get()
-            ->map(function (RekrutmenPipeline $p) use ($colors, $stageCandidateCounts): array {
-                $pipelineStages = $p->activeStages
-                    ->map(function (RekrutmenStage $s) use ($colors, $stageCandidateCounts): array {
-                        return [
-                            'id'                    => $s->id,
-                            'rekrutmen_pipeline_id' => $s->rekrutmen_pipeline_id,
-                            'name'                  => $s->name,
-                            'order_column'          => $s->order_column,
-                            'color'                 => $colors[$s->name] ?? '#3b82f6',
-                            'applications_count'    => (int) ($stageCandidateCounts[$s->id] ?? 0),
-                            'is_locked'             => $s->isLockedFinalStage(),
-                        ];
-                    });
+        $pipelines = Gate::allows('viewAny', RekrutmenPipeline::class)
+            ? $this->visibleRecords(RekrutmenPipeline::query())
+                ->with(['activeStages', 'creator.teams'])
+                ->withCount(['jobPostings' => fn (Builder $query): Builder => Gate::allows('viewAny', JobPosting::class)
+                    ? $this->visibleRecords($query)
+                    : $query->whereKey([])])
+                ->orderBy('id')
+                ->get()
+                ->map(function (RekrutmenPipeline $p) use ($colors, $stageCandidateCounts): array {
+                    $pipelineStages = $p->activeStages
+                        ->map(function (RekrutmenStage $s) use ($colors, $stageCandidateCounts): array {
+                            return [
+                                'id'                    => $s->id,
+                                'rekrutmen_pipeline_id' => $s->rekrutmen_pipeline_id,
+                                'name'                  => $s->name,
+                                'order_column'          => $s->order_column,
+                                'color'                 => $colors[$s->name] ?? '#3b82f6',
+                                'applications_count'    => (int) ($stageCandidateCounts[$s->id] ?? 0),
+                                'is_locked'             => $s->isLockedFinalStage(),
+                            ];
+                        });
 
-                return [
-                    'id'                 => $p->id,
-                    'name'               => $p->name,
-                    'description'        => $p->description,
-                    'stages_count'       => $pipelineStages->count(),
-                    'job_postings_count' => (int) $p->job_postings_count,
-                    'stages'             => $pipelineStages,
-                ];
-            });
+                    return [
+                        'id'                 => $p->id,
+                        'name'               => $p->name,
+                        'description'        => $p->description,
+                        'stages_count'       => $pipelineStages->count(),
+                        'job_postings_count' => (int) $p->job_postings_count,
+                        'stages'             => $pipelineStages,
+                        'can_view'           => Gate::allows('view', $p),
+                        'can_update'         => Gate::allows('update', $p),
+                        'can_delete'         => Gate::allows('delete', $p),
+                    ];
+                })
+            : collect();
+
+        $approvers = Gate::allows('viewAny', Approver::class)
+            ? $this->visibleRecords(Approver::with(['division.company:id,name', 'company:id,name', 'creator.teams']))
+                ->latest()
+                ->get()
+                ->map(function (Approver $approver): array {
+                    $canView = Gate::allows('view', $approver);
+                    $company = $approver->company;
+                    $division = $approver->division;
+                    $divisionCompany = $division?->company;
+
+                    return [
+                        'id'             => $approver->id,
+                        'name'           => $approver->name,
+                        'email'          => $approver->email,
+                        'phone'          => $canView ? $approver->phone : null,
+                        'title'          => $approver->title,
+                        'approval_order' => $approver->approval_order,
+                        'divisi'         => $approver->divisi,
+                        'is_active'      => (bool) $approver->is_active,
+                        'company_id'     => $approver->company_id,
+                        'division_id'    => $approver->division_id,
+                        'company'        => $company ? ['id' => $company->id, 'name' => $company->name] : null,
+                        'division'       => $division ? [
+                            'id'      => $division->id,
+                            'name'    => $division->name,
+                            'company' => $divisionCompany ? ['id' => $divisionCompany->id, 'name' => $divisionCompany->name] : null,
+                        ] : null,
+                        'can_view'   => $canView,
+                        'can_update' => Gate::allows('update', $approver),
+                        'can_delete' => Gate::allows('delete', $approver),
+                    ];
+                })
+            : collect();
 
         $selectedPipelineId = (int) $request->input('pipeline_id', $pipelines->first()['id'] ?? 1);
         $selectedPipeline = $pipelines->firstWhere('id', $selectedPipelineId) ?? $pipelines->first();
@@ -1127,7 +1391,7 @@ class RekrutmenSpaController extends Controller
             'selected_pipeline_id' => $selectedPipeline['id'] ?? null,
             'stages'               => $stages,
             'divisions'            => $divisions,
-            'approvers'            => Approver::with(['division.company:id,name', 'company:id,name'])->latest()->get(),
+            'approvers'            => $approvers,
             'pipelines'            => $pipelines,
             'companies'            => $companies,
         ]);
@@ -1138,7 +1402,12 @@ class RekrutmenSpaController extends Controller
      */
     public function storePipeline(SaveRecruitmentPipelineRequest $request): JsonResponse
     {
+        Gate::authorize('create', RekrutmenPipeline::class);
         $validated = $request->validated();
+
+        if (! empty($validated['clone_from_pipeline_id'])) {
+            Gate::authorize('view', RekrutmenPipeline::findOrFail($validated['clone_from_pipeline_id']));
+        }
 
         $pipeline = RekrutmenPipeline::getConnectionResolver()->connection()->transaction(function () use ($validated): RekrutmenPipeline {
             $pipeline = RekrutmenPipeline::create([
@@ -1188,6 +1457,7 @@ class RekrutmenSpaController extends Controller
     public function updatePipeline(SaveRecruitmentPipelineRequest $request, $id): JsonResponse
     {
         $pipeline = RekrutmenPipeline::findOrFail($id);
+        Gate::authorize('update', $pipeline);
 
         $validated = $request->validated();
 
@@ -1209,6 +1479,7 @@ class RekrutmenSpaController extends Controller
     public function destroyPipeline(Request $request, $id): JsonResponse
     {
         $pipeline = RekrutmenPipeline::findOrFail($id);
+        Gate::authorize('delete', $pipeline);
 
         if ($pipeline->id === 1) {
             return response()->json([
@@ -1240,6 +1511,8 @@ class RekrutmenSpaController extends Controller
      */
     public function storeDivision(Request $request): JsonResponse
     {
+        Gate::authorize('create', Division::class);
+
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
             'company_id' => 'required|integer|exists:companies,id',
@@ -1290,6 +1563,7 @@ class RekrutmenSpaController extends Controller
     public function updateDivision(Request $request, $id): JsonResponse
     {
         $division = Division::findOrFail($id);
+        Gate::authorize('update', $division);
 
         $validated = $request->validate([
             'name'       => 'required|string|max:255',
@@ -1341,6 +1615,7 @@ class RekrutmenSpaController extends Controller
     public function destroyDivision(Request $request, $id): JsonResponse
     {
         $division = Division::findOrFail($id);
+        Gate::authorize('delete', $division);
 
         $hasApprovers = Approver::where('division_id', $division->id)->exists();
         if ($hasApprovers) {
@@ -1372,7 +1647,8 @@ class RekrutmenSpaController extends Controller
         $name = trim($validated['name']);
         $pipelineId = $validated['rekrutmen_pipeline_id'] ?? $validated['pipeline_id'] ?? 1;
 
-        $pipeline = RekrutmenPipeline::firstOrCreate(['id' => $pipelineId], ['name' => 'Standard Recruitment Pipeline']);
+        $pipeline = RekrutmenPipeline::findOrFail($pipelineId);
+        Gate::authorize('update', $pipeline);
 
         $maxOrder = (int) RekrutmenStage::where('rekrutmen_pipeline_id', $pipeline->id)->max('order_column');
 
@@ -1405,6 +1681,7 @@ class RekrutmenSpaController extends Controller
         $stageIds = array_values(array_unique(array_map('intval', $validated['stage_ids'])));
         $firstStage = RekrutmenStage::find($stageIds[0]);
         $pipelineId = $validated['rekrutmen_pipeline_id'] ?? $validated['pipeline_id'] ?? ($firstStage?->rekrutmen_pipeline_id ?? 1);
+        Gate::authorize('update', RekrutmenPipeline::findOrFail($pipelineId));
 
         $pipelineStages = RekrutmenStage::query()
             ->where('rekrutmen_pipeline_id', $pipelineId)
@@ -1462,6 +1739,7 @@ class RekrutmenSpaController extends Controller
     public function updateStage(Request $request, $id): JsonResponse
     {
         $stage = RekrutmenStage::findOrFail($id);
+        Gate::authorize('update', $stage->pipeline);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -1493,6 +1771,7 @@ class RekrutmenSpaController extends Controller
     public function destroyStage($id): JsonResponse
     {
         $stage = RekrutmenStage::findOrFail($id);
+        Gate::authorize('update', $stage->pipeline);
 
         if ($stage->isLockedFinalStage()) {
             return response()->json([
@@ -1839,6 +2118,7 @@ class RekrutmenSpaController extends Controller
     public function heartbeatScheduled(): JsonResponse
     {
         Gate::authorize('viewAny', JobApplication::class);
+        Gate::authorize('update_rekrutmen_job::application');
 
         try {
             $processed = app(ScheduledNotificationService::class)->processDueNotifications();
@@ -1862,28 +2142,34 @@ class RekrutmenSpaController extends Controller
         }
     }
 
-    private function resolveAndSyncCandidateCv(JobApplication $application): bool
+    /**
+     * @return array{disk: string, path: string}|null
+     */
+    private function candidateCv(JobApplication $application): ?array
     {
         $storage = app(RekrutmenStorage::class);
         $file = $storage->findCandidateResume($application);
         if ($file === null) {
-            return false;
+            return null;
         }
 
-        $storage->rememberCandidateResume($application, $file);
+        if (Gate::allows('update', $application)) {
+            $storage->rememberCandidateResume($application, $file);
+        }
 
-        return $application->resolveAttachmentDisk('resume') !== null;
+        return $file;
     }
 
     public function syncCandidateCvsFromStorage(): JsonResponse
     {
         Gate::authorize('viewAny', JobApplication::class);
+        Gate::authorize('update_rekrutmen_job::application');
         $storage = app(RekrutmenStorage::class);
         $files = $storage->files(JobApplication::RESUME_DIRECTORY);
         $matched = 0;
         $updated = 0;
 
-        foreach (JobApplication::query()->get(['id', 'creator_id', 'resume_path', 'resume_disk']) as $application) {
+        foreach ($this->visibleRecords(JobApplication::query())->get(['id', 'creator_id', 'resume_path', 'resume_disk']) as $application) {
             if (! Gate::allows('update', $application)) {
                 continue;
             }

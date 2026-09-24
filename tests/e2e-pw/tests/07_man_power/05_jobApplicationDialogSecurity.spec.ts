@@ -87,7 +87,7 @@ async function mountApplications(page: Page, candidateName: string, jobTitle?: s
         const request = route.request();
         const pathname = new URL(request.url()).pathname;
         if (request.isNavigationRequest()) {
-            await route.fulfill({ contentType: "text/html", body: '<html><body class="rekrutmen-spa"><div id="app"></div></body></html>' });
+            await route.fulfill({ contentType: "text/html", body: '<html><body class="rekrutmen-spa"><div id="app" data-permissions=\'{"jobApplications":{"viewAny":true,"update":true},"jobPostings":{"viewAny":true}}\'></div></body></html>' });
         } else if (pathname === "/rekrutmen/api/applications") {
             await route.fulfill({ json: {
                 applications: [application],

@@ -7,6 +7,8 @@ use Cesa\Rekrutmen\Enums\StatusKebutuhan;
 use Cesa\Rekrutmen\Models\RequestManPower;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Support\Facades\Notification;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
 class RequestManPowerPendingBadgeTest extends RekrutmenTestCase
@@ -25,7 +27,11 @@ class RequestManPowerPendingBadgeTest extends RekrutmenTestCase
         Notification::fake();
         app()->setLocale('id');
 
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_request::man::power', 'web'));
         $this->actingAs($user);
 
         $this->createRequest(RequestManPowerStatus::PENDING, 'Staff Menunggu A');

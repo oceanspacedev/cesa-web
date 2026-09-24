@@ -8,6 +8,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const views = path.join(root, "plugins/cesa/rekrutmen/resources/js/views");
 let javascript = "";
 let styles = "";
+const fullPermissions = {
+    jobPostings: { viewAny: true, create: true, update: true, delete: true },
+    jobApplications: { viewAny: true, create: true, update: true, delete: true },
+    requestManPowers: { viewAny: true, create: true, update: true, delete: true },
+    recruitmentProgress: { viewAny: true },
+    divisions: { viewAny: true, create: true, update: true, delete: true },
+    pipelines: { viewAny: true, create: true, update: true, delete: true },
+    approvers: { viewAny: true, create: true, update: true, delete: true },
+    ai: { manage: true },
+    whatsapp: { manage: true },
+    mailSettings: { viewAny: true, update: true },
+    mailTemplates: { viewAny: true, update: true },
+};
 
 test.setTimeout(45_000);
 test.use({ actionTimeout: 10_000 });
@@ -55,7 +68,7 @@ test.beforeAll(async () => {
     }
 });
 
-async function mount(page: Page, pathname: string, denyAiSettings = false, includeMatchedCandidate = false) {
+async function mount(page: Page, pathname: string, denyAiSettings = false, includeMatchedCandidate = false, permissions = fullPermissions) {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const postings = [
@@ -81,7 +94,7 @@ async function mount(page: Page, pathname: string, denyAiSettings = false, inclu
         const url = new URL(request.url());
         let data: unknown = {};
         if (request.isNavigationRequest()) {
-            await route.fulfill({ contentType: "text/html", body: '<html><body class="rekrutmen-spa"><div id="app"></div></body></html>' });
+            await route.fulfill({ contentType: "text/html", body: `<html><body class="rekrutmen-spa"><div id="app" data-permissions='${JSON.stringify(permissions)}'></div></body></html>` });
             return;
         }
         if (request.method() !== "GET") mutations.push(`${request.method()} ${url.pathname}`);
@@ -157,6 +170,39 @@ test("saving a posting with a duplicate title keeps its own inspector open", asy
 test("candidate deep links open the requested profile", async ({ page }) => {
     const { errors } = await mount(page, "/admin/job-applications?application_id=41&job_id=8");
     await expect(page.getByRole("dialog", { name: "Profil pelamar", exact: true }).getByRole("heading", { name: "BUDI SANTOSO", exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+test("read-only recruitment access keeps candidate browsing without mutation controls or background posts", async ({ page }) => {
+    const permissions = {
+        jobApplications: { viewAny: true, update: false },
+        jobPostings: { viewAny: false },
+    };
+    const { errors, mutations } = await mount(page, "/admin/job-applications", false, false, permissions);
+    const candidate = page.getByRole("group", { name: "Pelamar BUDI SANTOSO", exact: true });
+    await expect(candidate).toBeVisible();
+    await expect(candidate.getByRole("button", { name: "Detail" })).toBeVisible();
+    await expect(candidate.getByTitle("Kirim Notifikasi (Email / WhatsApp)")).toHaveCount(0);
+    await expect(candidate.locator("select")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Cocokkan CV" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Analisis yang belum dinilai" })).toHaveCount(0);
+    await candidate.getByRole("button", { name: "Detail" }).click();
+    await expect(page.getByRole("dialog", { name: "Profil pelamar", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Kirim Notifikasi", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Analisis CV", exact: true })).toHaveCount(0);
+    expect(mutations).toEqual([]);
+    expect(errors).toEqual([]);
+});
+
+test("read-only job posting access hides create, publish, edit, and delete controls", async ({ page }) => {
+    const permissions = { jobPostings: { viewAny: true, create: false, update: false, delete: false } };
+    const { errors, mutations } = await mount(page, "/admin/job-postings?id=8", false, false, permissions);
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tambah Lowongan" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Hapus Lowongan" })).toHaveCount(0);
+    await expect(page.getByTitle("Klik untuk mengubah status publikasi")).toHaveCount(0);
+    expect(mutations).toEqual([]);
     expect(errors).toEqual([]);
 });
 

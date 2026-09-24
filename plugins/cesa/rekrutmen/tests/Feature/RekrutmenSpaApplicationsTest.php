@@ -20,7 +20,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 {
     public function test_can_fetch_applications_via_spa_api(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -61,7 +62,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
     public function test_can_fetch_applications_filtered_by_job_id(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -171,7 +173,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
     public function test_can_fetch_progress_report_via_spa_api(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_activity::log', 'web'));
         $this->actingAs($user);
 
         $response = $this->getJson('/rekrutmen/api/progress-report');
@@ -189,7 +192,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
     {
         Excel::fake();
 
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_activity::log', 'web'));
         $this->actingAs($user);
 
         $response = $this->get('/rekrutmen/api/progress-report/export');
@@ -208,7 +212,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
     public function test_can_update_application_stage_to_rejected(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('update_rekrutmen_job::application', 'web'));
         $this->actingAs($user);
 
         $posting = JobPosting::create([
@@ -219,11 +224,13 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
         $app = JobApplication::create([
             'job_posting_id' => $posting->id,
+            'creator_id'     => $user->id,
             'full_name'      => 'Kandidat Ditolak',
             'email'          => 'ditolak@example.com',
             'status'         => 'in_progress',
         ]);
 
+        $this->assertTrue($user->can('update', $app));
         $response = $this->patchJson("/rekrutmen/api/applications/{$app->id}/stage", [
             'stage_id' => 'rejected',
         ]);
@@ -235,7 +242,11 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
     public function test_can_batch_reject_applications_without_notifications(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo([
+            Permission::findOrCreate('view_any_rekrutmen_job::application', 'web'),
+            Permission::findOrCreate('update_rekrutmen_job::application', 'web'),
+        ]);
         $this->actingAs($user);
 
         $posting = JobPosting::create([
@@ -246,6 +257,7 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
         $app1 = JobApplication::create([
             'job_posting_id' => $posting->id,
+            'creator_id'     => $user->id,
             'full_name'      => 'Kandidat 1',
             'email'          => 'kandidat1@example.com',
             'status'         => 'in_progress',
@@ -253,11 +265,14 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
         $app2 = JobApplication::create([
             'job_posting_id' => $posting->id,
+            'creator_id'     => $user->id,
             'full_name'      => 'Kandidat 2',
             'email'          => 'kandidat2@example.com',
             'status'         => 'in_progress',
         ]);
 
+        $this->assertTrue($user->can('update', $app1));
+        $this->assertTrue($user->can('update', $app2));
         $response = $this->postJson('/rekrutmen/api/applications/batch-reject', [
             'ids' => [$app1->id, $app2->id],
         ]);
@@ -274,7 +289,8 @@ class RekrutmenSpaApplicationsTest extends RekrutmenTestCase
 
     public function test_requests_api_returns_aligned_fields_for_fptk_table(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::INDIVIDUAL]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_request::man::power', 'web'));
         $this->actingAs($user);
 
         $response = $this->getJson('/rekrutmen/api/requests');

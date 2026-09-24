@@ -7,6 +7,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const buildRoot = path.join(projectRoot, 'public/build');
 const sender = { id: 1, name: 'HR Satu', phone_number: '628111111111', is_active: true, is_default: true, status: 'disconnected', delivery_ready: false };
 const readySender = { ...sender, status: 'connected', delivery_ready: true };
+const testPermissions = { jobApplications: { viewAny: true, update: true }, ai: { manage: true }, whatsapp: { manage: true }, mailTemplates: { viewAny: true, update: true } };
+let currentPermissions = testPermissions;
 const session = (account = sender) => ({ ...account, status: 'qr', engine_ready: true, qr: 'data:image/png;base64,iVBORw0KGgo=', pairing_code: null });
 const json = (route: Route, data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
 
@@ -24,7 +26,7 @@ async function mockApplication(page: Page) {
       return route.fulfill({ path: asset, contentType: asset.endsWith('.css') ? 'text/css' : 'application/javascript' });
     }
     if (route.request().isNavigationRequest()) {
-      return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">${styles.map((style) => `<link rel="stylesheet" href="/build/${style}">`).join('')}</head><body><div id="rekrutmen-app" data-user='{"name":"Test Admin"}'></div><script type="module" src="/build/${entry.file}"></script></body></html>` });
+      return route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">${styles.map((style) => `<link rel="stylesheet" href="/build/${style}">`).join('')}</head><body><div id="rekrutmen-app" data-user='{"name":"Test Admin"}' data-permissions='${JSON.stringify(currentPermissions)}'></div><script type="module" src="/build/${entry.file}"></script></body></html>` });
     }
     if (url.pathname === '/rekrutmen/api/settings/whatsapp') return json(route, { gateway: { enabled: true, engine_ready: true }, accounts: [sender] });
     if (url.pathname === '/rekrutmen/api/whatsapp/senders') return json(route, { accounts: [readySender], engine_ready: true });
@@ -42,7 +44,25 @@ async function mockApplication(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  currentPermissions = testPermissions;
   await mockApplication(page);
+});
+
+test('restricted SPA navigation opens the first permitted page and hides inaccessible links', async ({ page }) => {
+  currentPermissions = { jobApplications: { viewAny: true, update: false } };
+  await page.goto('http://whatsapp-ui.test/rekrutmen');
+  await expect(page).toHaveURL(/\/admin\/job-applications$/);
+  await expect(page.getByRole('link', { name: 'Data Pelamar', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Lowongan Kerja', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Master Data', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Aplikasi CESA', exact: true })).toHaveCount(0);
+});
+
+test('SPA shows access denied when no recruitment section is permitted', async ({ page }) => {
+  currentPermissions = {};
+  await page.goto('http://whatsapp-ui.test/rekrutmen');
+  await expect(page).toHaveURL(/\/rekrutmen\/access-denied$/);
+  await expect(page.getByRole('alert')).toHaveText('Anda tidak memiliki akses ke modul Rekrutmen.');
 });
 
 async function openGateway(page: Page) {

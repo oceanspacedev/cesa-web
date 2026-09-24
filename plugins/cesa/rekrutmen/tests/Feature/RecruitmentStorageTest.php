@@ -41,7 +41,7 @@ function recruitmentStorageCandidate(array $attributes = []): JobApplication
 function recruitmentStorageOperator(): User
 {
     $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::GLOBAL]);
-    foreach (['view_any_rekrutmen_job::application', 'view_rekrutmen_job::application', 'update_rekrutmen_job::application'] as $permission) {
+    foreach (['view_any_rekrutmen_job::application', 'view_rekrutmen_job::application', 'update_rekrutmen_job::application', 'create_rekrutmen_job::posting', 'update_rekrutmen_job::posting'] as $permission) {
         Permission::findOrCreate($permission, 'web');
         $user->givePermissionTo($permission);
     }

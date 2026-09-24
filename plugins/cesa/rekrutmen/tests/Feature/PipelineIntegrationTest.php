@@ -6,13 +6,32 @@ use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RekrutmenStage;
 use Illuminate\Support\Facades\Notification;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 
 beforeEach(function (): void {
     Notification::fake();
 
-    $this->actingAs(User::factory()->create(['is_active' => true]));
+    $user = User::factory()->create([
+        'is_active'           => true,
+        'resource_permission' => PermissionType::INDIVIDUAL,
+    ]);
+    $user->givePermissionTo(collect([
+        'view_any_rekrutmen_rekrutmen::pipeline',
+        'view_rekrutmen_rekrutmen::pipeline',
+        'create_rekrutmen_rekrutmen::pipeline',
+        'update_rekrutmen_rekrutmen::pipeline',
+        'delete_rekrutmen_rekrutmen::pipeline',
+        'view_any_rekrutmen_job::application',
+        'update_rekrutmen_job::application',
+        'update_rekrutmen_job::posting',
+        'view_any_rekrutmen_division',
+        'create_rekrutmen_division',
+        'update_rekrutmen_division',
+    ])->map(fn (string $name): Permission => Permission::findOrCreate($name, 'web'))->all());
+    $this->actingAs($user);
 });
 
 it('reads configurations without creating sample pipelines or stages', function (): void {

@@ -9,6 +9,8 @@ use Cesa\Rekrutmen\Models\Division;
 use Cesa\Rekrutmen\Models\RequestManPower;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
 use Illuminate\Support\Facades\Notification;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 
@@ -16,7 +18,11 @@ class DivisionBusinessEntityDisplayTest extends RekrutmenTestCase
 {
     public function test_configurations_api_includes_business_entity_so_duplicate_division_names_are_distinct(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_division', 'web'));
         $this->actingAs($user);
 
         $companyA = Company::query()->create(['name' => 'PT Cesa A']);
@@ -68,7 +74,11 @@ class DivisionBusinessEntityDisplayTest extends RekrutmenTestCase
     {
         Notification::fake();
 
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_request::man::power', 'web'));
         $this->actingAs($user);
 
         $companyA = Company::query()->create(['name' => 'PT Alpha Selular']);

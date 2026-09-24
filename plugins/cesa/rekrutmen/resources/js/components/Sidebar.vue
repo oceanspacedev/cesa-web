@@ -43,6 +43,7 @@
       </div>
 
       <router-link
+        v-if="canVisitSection('jobPostings')"
         to="/admin/job-postings"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
         :class="[
@@ -56,6 +57,7 @@
       </router-link>
 
       <router-link
+        v-if="canVisitSection('jobApplications')"
         to="/admin/job-applications"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
         :class="[
@@ -69,6 +71,7 @@
       </router-link>
 
       <router-link
+        v-if="canVisitSection('requestManPowers')"
         to="/admin/request-man-powers"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
         :class="[
@@ -82,6 +85,7 @@
       </router-link>
 
       <router-link
+        v-if="canVisitSection('recruitmentProgress')"
         to="/admin/recruitment-progress"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
         :class="[
@@ -100,6 +104,7 @@
       </div>
 
       <router-link
+        v-if="canVisitSection('configurations')"
         to="/admin/configurations"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
         :class="[
@@ -128,6 +133,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { canVisitSection } from '../lib/permissions';
 import { 
   FileText, Briefcase, Users, BarChart3, Settings, LogOut
 } from 'lucide-vue-next';

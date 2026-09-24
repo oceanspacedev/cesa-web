@@ -77,8 +77,12 @@ trait HasPermissionScope
 
         $userIds = bouncer()->getAuthorizedUserIds();
 
-        if (empty($userIds)) {
+        if ($userIds === null) {
             return $query;
+        }
+
+        if ($userIds === []) {
+            return $query->whereKey([]);
         }
 
         return $query->where(function (Builder $subQuery) use ($userIds) {

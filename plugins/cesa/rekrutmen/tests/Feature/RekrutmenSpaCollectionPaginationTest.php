@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 
 beforeEach(function (): void {
@@ -23,7 +25,15 @@ beforeEach(function (): void {
     $this->mock(ScheduledNotificationService::class)
         ->shouldReceive('processDueNotifications')
         ->andReturn(0);
-    $this->actingAs(User::factory()->create(['is_active' => true]));
+    $user = User::factory()->create([
+        'is_active'           => true,
+        'resource_permission' => PermissionType::INDIVIDUAL,
+    ]);
+    $user->givePermissionTo([
+        Permission::findOrCreate('view_any_rekrutmen_request::man::power', 'web'),
+        Permission::findOrCreate('view_any_rekrutmen_job::application', 'web'),
+    ]);
+    $this->actingAs($user);
     $this->freezeTime();
 });
 

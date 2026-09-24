@@ -8,6 +8,8 @@ use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Models\RekrutmenPipeline;
 use Cesa\Rekrutmen\Models\RequestManPower;
 use Cesa\Rekrutmen\Tests\RekrutmenTestCase;
+use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 
@@ -68,7 +70,11 @@ class JobPostingCompanyResolutionTest extends RekrutmenTestCase
 
     public function test_get_job_postings_api_returns_company_name_and_allows_search(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_job::posting', 'web'));
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -106,7 +112,14 @@ class JobPostingCompanyResolutionTest extends RekrutmenTestCase
 
     public function test_can_update_company_in_job_posting_via_api(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo([
+            Permission::findOrCreate('update_rekrutmen_job::posting', 'web'),
+            Permission::findOrCreate('update_rekrutmen_request::man::power', 'web'),
+        ]);
         $this->actingAs($user);
 
         $pipeline = RekrutmenPipeline::firstOrCreate(['id' => 1], ['name' => 'Default Pipeline']);
@@ -149,7 +162,11 @@ class JobPostingCompanyResolutionTest extends RekrutmenTestCase
 
     public function test_can_fetch_companies_api(): void
     {
-        $user = User::factory()->create(['is_active' => true]);
+        $user = User::factory()->create([
+            'is_active'           => true,
+            'resource_permission' => PermissionType::INDIVIDUAL,
+        ]);
+        $user->givePermissionTo(Permission::findOrCreate('view_any_rekrutmen_job::posting', 'web'));
         $this->actingAs($user);
 
         Company::query()->create(['name' => 'PT Test Entity']);

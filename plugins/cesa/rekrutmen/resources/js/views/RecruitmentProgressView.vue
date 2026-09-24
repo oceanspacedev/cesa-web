@@ -191,7 +191,8 @@
             <div class="min-w-0 flex-1">
               <h3
                 @click="navigateToJob(item)"
-                class="text-sm font-bold text-ink-gray-9 group-hover:text-blue-600 transition-colors cursor-pointer truncate"
+                :class="canVisitSection('jobApplications') ? 'cursor-pointer group-hover:text-blue-600' : ''"
+                class="text-sm font-bold text-ink-gray-9 transition-colors truncate"
                 :title="item.position"
               >
                 {{ item.position }}
@@ -268,6 +269,7 @@
         <!-- Action Button -->
         <div class="pt-1">
           <FButton
+            v-if="canVisitSection('jobApplications')"
             variant="subtle"
             size="sm"
             class="w-full justify-center"
@@ -295,6 +297,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { useRekrutmenStore } from '../stores/rekrutmen';
+import { canVisitSection } from '../lib/permissions';
 
 // Frappe UI Components
 import FButton from '../components/frappe/Button.vue';
@@ -323,6 +326,7 @@ const store = useRekrutmenStore();
 const router = useRouter();
 
 const navigateToJob = (item) => {
+  if (!canVisitSection('jobApplications')) return;
   const id = item?.id || item?.job_posting_id;
   if (!id) return;
   router.push({

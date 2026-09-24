@@ -23,6 +23,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
     public function test_mail_settings_can_be_saved_and_override_rekrutmen_mailer_only(): void
     {
         $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_mail', 'web'));
         $this->actingAs($user);
 
         $response = $this->putJson('/rekrutmen/api/settings/mail', [
@@ -64,6 +65,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
         Mail::fake();
 
         $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_mail', 'web'));
         $this->actingAs($user);
 
         MailSetting::query()->create([
@@ -255,6 +257,7 @@ class CommunicationGatewayTest extends RekrutmenTestCase
     public function test_saving_mail_settings_does_not_expose_password(): void
     {
         $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo(Permission::findOrCreate('manage_rekrutmen_mail', 'web'));
         $this->actingAs($user);
 
         MailSetting::query()->create([

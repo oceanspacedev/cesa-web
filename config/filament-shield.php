@@ -233,6 +233,8 @@ return [
     */
 
     'custom_permissions' => [
+        'manage_rekrutmen_ai'       => 'Kelola AI Rekrutmen',
+        'manage_rekrutmen_mail'     => 'Kelola Email Rekrutmen',
         'manage_rekrutmen_whatsapp' => 'Kelola WhatsApp Rekrutmen',
     ],
 

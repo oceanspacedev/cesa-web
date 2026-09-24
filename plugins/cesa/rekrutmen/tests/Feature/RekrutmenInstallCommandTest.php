@@ -40,6 +40,10 @@ class RekrutmenInstallCommandTest extends RekrutmenTestCase
             '2026_09_03_140200_rekrutmen_add_whatsapp_account_id_to_scheduled_notifications_table',
             $package->migrationFileNames,
         );
+        $this->assertContains(
+            '2026_09_24_112829_rekrutmen_add_mail_management_permission',
+            $package->migrationFileNames,
+        );
     }
 
     public function test_rekrutmen_install_and_uninstall_commands_are_registered(): void

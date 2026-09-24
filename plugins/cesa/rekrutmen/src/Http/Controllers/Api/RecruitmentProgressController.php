@@ -4,9 +4,13 @@ namespace Cesa\Rekrutmen\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Cesa\Rekrutmen\Models\JobApplicationHistory;
+use Cesa\Rekrutmen\Models\JobPosting;
 use Cesa\Rekrutmen\Services\RecruitmentProgressReportService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Webkul\Security\Enums\PermissionType;
+use Webkul\Security\Models\User;
 
 class RecruitmentProgressController extends Controller
 {
@@ -120,12 +124,13 @@ class RecruitmentProgressController extends Controller
      *     job_posting_id: ?int,
      *     stage_id: ?int,
      *     stage_name: ?string,
-     *     company_id: ?int
+     *     company_id: ?int,
+     *     allowed_posting_ids?: int[]
      * }
      */
     private function normalizeFilters(Request $request): array
     {
-        return [
+        $filters = [
             'date_from'      => $request->input('date_from'),
             'date_to'        => $request->input('date_to'),
             'job_posting_id' => $request->integer('job_posting_id') ?: null,
@@ -133,6 +138,31 @@ class RecruitmentProgressController extends Controller
             'stage_name'     => $request->string('stage_name')->trim()->toString() ?: null,
             'company_id'     => $request->integer('company_id') ?: null,
         ];
+
+        $user = $request->user();
+        if ($user->resource_permission === PermissionType::GLOBAL) {
+            return $filters;
+        }
+
+        $userIds = [$user->id];
+        if ($user->resource_permission === PermissionType::GROUP) {
+            $teamIds = $user->teams()->pluck('teams.id');
+            if ($teamIds->isNotEmpty()) {
+                $userIds = User::query()
+                    ->whereHas('teams', fn (Builder $query): Builder => $query->whereIn('teams.id', $teamIds))
+                    ->pluck('id')
+                    ->push($user->id)
+                    ->unique()
+                    ->all();
+            }
+        }
+
+        $filters['allowed_posting_ids'] = JobPosting::query()
+            ->whereIn('creator_id', $userIds)
+            ->pluck('id')
+            ->all();
+
+        return $filters;
     }
 
     /**

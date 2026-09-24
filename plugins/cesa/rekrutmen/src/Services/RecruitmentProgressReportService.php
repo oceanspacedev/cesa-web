@@ -22,7 +22,8 @@ class RecruitmentProgressReportService
      *     job_posting_id?: ?int,
      *     stage_id?: ?int,
      *     stage_name?: ?string,
-     *     company_id?: ?int
+     *     company_id?: ?int,
+     *     allowed_posting_ids?: int[]
      * }  $filters
      * @return array{
      *     posting_ids: int[],
@@ -79,13 +80,17 @@ class RecruitmentProgressReportService
     }
 
     /**
-     * @param  array{job_posting_id?: ?int, company_id?: ?int}  $filters
+     * @param  array{job_posting_id?: ?int, company_id?: ?int, allowed_posting_ids?: int[]}  $filters
      * @return int[]
      */
     protected function resolvePostingIds(array $filters, Carbon $snapshotDate): array
     {
         return JobPosting::query()
             ->when($filters['job_posting_id'] ?? null, fn (Builder $query, int $jobPostingId) => $query->whereKey($jobPostingId))
+            ->when(
+                array_key_exists('allowed_posting_ids', $filters),
+                fn (Builder $query): Builder => $query->whereKey($filters['allowed_posting_ids'])
+            )
             ->where(function (Builder $query) use ($snapshotDate): void {
                 $query->whereHas(
                     'requestManPowers',

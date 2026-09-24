@@ -28,6 +28,7 @@
     <!-- Navigation Tabs -->
     <div class="inline-flex items-center p-1 bg-zinc-100/90 border border-zinc-200/80 rounded-lg text-xs overflow-x-auto no-scrollbar gap-1 max-w-full">
       <button
+        v-if="hasPermission('divisions')"
         type="button"
         @click="activeTab = 'divisions'"
         :class="[
@@ -49,6 +50,7 @@
       </button>
 
       <button
+        v-if="hasPermission('pipelines')"
         type="button"
         @click="activeTab = 'stages'"
         :class="[
@@ -70,6 +72,7 @@
       </button>
 
       <button
+        v-if="hasPermission('approvers')"
         type="button"
         @click="activeTab = 'approvers'"
         :class="[
@@ -91,6 +94,7 @@
       </button>
 
       <button
+        v-if="hasPermission('ai', 'manage')"
         type="button"
         @click="activeTab = 'ai'"
         :class="[
@@ -104,6 +108,7 @@
       </button>
 
       <button
+        v-if="hasPermission('mailSettings')"
         type="button"
         @click="activeTab = 'mail_gateway'"
         :class="[
@@ -117,6 +122,7 @@
       </button>
 
       <button
+        v-if="hasPermission('whatsapp', 'manage')"
         type="button"
         @click="activeTab = 'whatsapp_gateway'"
         :class="[
@@ -130,6 +136,7 @@
       </button>
 
       <button
+        v-if="hasPermission('mailTemplates')"
         type="button"
         @click="activeTab = 'mail_templates'"
         :class="[
@@ -154,7 +161,7 @@
     <template v-else>
       <!-- DIVISIONS TABLE -->
       <div
-        v-if="activeTab === 'divisions'"
+        v-if="activeTab === 'divisions' && hasPermission('divisions')"
         class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
       >
         <div class="p-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
@@ -176,6 +183,7 @@
             </div>
 
             <Button
+              v-if="hasPermission('divisions', 'create')"
               size="sm"
               variant="default"
               @click="openDivisionModal()"
@@ -217,6 +225,7 @@
               <TableCell class="text-right">
                 <div class="flex items-center justify-end gap-1">
                   <Button
+                    v-if="canAccessRecord('divisions', 'update', div)"
                     variant="ghost"
                     size="xs"
                     @click="openDivisionModal(div)"
@@ -226,6 +235,7 @@
                     <Pencil class="w-3.5 h-3.5" />
                   </Button>
                   <Button
+                    v-if="canAccessRecord('divisions', 'delete', div)"
                     variant="ghost"
                     size="xs"
                     @click="confirmDeleteDivision(div)"
@@ -248,7 +258,7 @@
 
       <!-- STAGES TABLE -->
       <div
-        v-else-if="activeTab === 'stages'"
+        v-else-if="activeTab === 'stages' && hasPermission('pipelines')"
         class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
       >
         <div class="p-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
@@ -278,6 +288,7 @@
 
             <!-- Quick Actions for selected pipeline -->
             <Button
+              v-if="currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline)"
               variant="outline"
               size="sm"
               @click="openEditPipelineModal(currentPipeline)"
@@ -288,7 +299,7 @@
             </Button>
 
             <Button
-              v-if="currentPipeline && currentPipeline.id !== 1"
+              v-if="currentPipeline && currentPipeline.id !== 1 && canAccessRecord('pipelines', 'delete', currentPipeline)"
               variant="outline"
               size="sm"
               @click="handleDeletePipeline(currentPipeline)"
@@ -300,6 +311,7 @@
 
             <!-- Create New Master Pipeline Button -->
             <Button
+              v-if="hasPermission('pipelines', 'create')"
               size="sm"
               variant="outline"
               @click="openCreatePipelineModal"
@@ -311,6 +323,7 @@
 
             <!-- Add Stage to current pipeline -->
             <Button
+              v-if="currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline)"
               size="sm"
               variant="default"
               @click="openCreateStageModal"
@@ -335,7 +348,7 @@
             <TableRow
               v-for="(stage, idx) in displayedStages"
               :key="stage.id"
-              :draggable="!stage.is_locked"
+              :draggable="!stage.is_locked && currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline)"
               @dragstart="handleStageDragStart(stage, idx, $event)"
               @dragover.prevent="handleStageDragOver(stage, idx, $event)"
               @dragleave="handleStageDragLeave(stage, idx, $event)"
@@ -343,7 +356,7 @@
               @dragend="handleStageDragEnd"
               :class="[
                 'transition-all duration-150 select-none group',
-                !stage.is_locked ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+                !stage.is_locked && currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline) ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
                 draggedStageIndex === idx ? 'opacity-35 bg-zinc-100 scale-[0.99]' : '',
                 dragOverStageIndex === idx && draggedStageIndex !== idx
                   ? 'bg-blue-50/80 border-l-4 border-l-[#0c2340]'
@@ -355,7 +368,7 @@
                   <GripVertical
                     :class="[
                       'w-3.5 h-3.5 transition-colors shrink-0',
-                      stage.is_locked
+                      stage.is_locked || !currentPipeline || !canAccessRecord('pipelines', 'update', currentPipeline)
                         ? 'text-zinc-200 cursor-not-allowed'
                         : 'text-zinc-400 group-hover:text-zinc-700 cursor-grab active:cursor-grabbing'
                     ]"
@@ -384,6 +397,7 @@
               <TableCell class="text-right whitespace-nowrap pr-4">
                 <div class="flex items-center justify-end gap-1" draggable="false" @mousedown.stop>
                   <button
+                    v-if="currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline)"
                     type="button"
                     @click.stop="openEditStageModal(stage)"
                     :disabled="stage.is_locked"
@@ -398,6 +412,7 @@
                     <Pencil class="w-3.5 h-3.5" />
                   </button>
                   <button
+                    v-if="currentPipeline && canAccessRecord('pipelines', 'update', currentPipeline)"
                     type="button"
                     @click.stop="handleDeleteStage(stage)"
                     :disabled="stage.is_locked"
@@ -425,7 +440,7 @@
 
       <!-- APPROVERS TABLE -->
       <div
-        v-else-if="activeTab === 'approvers'"
+        v-else-if="activeTab === 'approvers' && hasPermission('approvers')"
         class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden"
       >
         <div class="p-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
@@ -471,7 +486,7 @@
 
       <!-- AI SETTINGS TAB -->
       <div
-        v-else-if="activeTab === 'ai'"
+        v-else-if="activeTab === 'ai' && hasPermission('ai', 'manage')"
         class="max-w-3xl"
       >
         <Card>
@@ -573,7 +588,7 @@
 
       <!-- EMAIL GATEWAY TAB -->
       <div
-        v-else-if="activeTab === 'mail_gateway'"
+        v-else-if="activeTab === 'mail_gateway' && hasPermission('mailSettings')"
         class="max-w-4xl"
       >
         <Card>
@@ -686,7 +701,7 @@
 
       <!-- WHATSAPP GATEWAY TAB -->
       <div
-        v-else-if="activeTab === 'whatsapp_gateway'"
+        v-else-if="activeTab === 'whatsapp_gateway' && hasPermission('whatsapp', 'manage')"
         class="space-y-6 max-w-4xl"
       >
         <p v-if="whatsappAccessError" role="alert" class="text-sm text-rose-700">{{ whatsappAccessError }}</p>
@@ -897,7 +912,7 @@
 
       <!-- MAIL TEMPLATES TAB (Master Table View) -->
       <div
-        v-else-if="activeTab === 'mail_templates'"
+        v-else-if="activeTab === 'mail_templates' && hasPermission('mailTemplates')"
         class="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden font-sans"
       >
         <div class="p-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-zinc-50/50">
@@ -929,7 +944,8 @@
             <TableRow
               v-for="(tpl, key, idx) in mailTemplates"
               :key="key"
-              class="hover:bg-zinc-50/80 transition-colors cursor-pointer group"
+              class="hover:bg-zinc-50/80 transition-colors group"
+              :class="hasPermission('mailTemplates', 'update') ? 'cursor-pointer' : ''"
               @click="openEditTemplateModal(key, tpl)"
             >
               <TableCell class="text-center tabular-nums text-zinc-400 font-semibold text-xs">
@@ -979,6 +995,7 @@
               </TableCell>
               <TableCell class="text-right pr-4" @click.stop>
                 <Button
+                  v-if="hasPermission('mailTemplates', 'update')"
                   variant="outline"
                   size="sm"
                   @click="openEditTemplateModal(key, tpl)"
@@ -1388,6 +1405,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
 import { createRequestKey } from '../lib/utils';
+import { canAccessRecord, firstAccessibleConfigurationTab, hasPermission } from '../lib/permissions';
 import LoadingState from '../components/LoadingState.vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -1410,7 +1428,9 @@ import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, RotateCw, GripVertical
 const store = useRekrutmenStore();
 const route = useRoute();
 const router = useRouter();
-const activeTab = ref(route.query.tab === 'whatsapp_gateway' ? 'whatsapp_gateway' : 'divisions');
+const activeTab = ref(route.query.tab === 'whatsapp_gateway' && hasPermission('whatsapp', 'manage')
+  ? 'whatsapp_gateway'
+  : firstAccessibleConfigurationTab());
 let whatsappViewActive = true;
 const divisionCompanyFilter = ref('all');
 
@@ -1552,6 +1572,7 @@ const templateModal = ref({
 });
 
 const openEditTemplateModal = (key, tpl) => {
+  if (!hasPermission('mailTemplates', 'update')) return;
   templateModal.value = {
     open: true,
     key: key,
@@ -1571,6 +1592,7 @@ const openEditTemplateModal = (key, tpl) => {
 };
 
 const saveTemplateModal = async () => {
+  if (!hasPermission('mailTemplates', 'update')) return;
   if (!templateModal.value.key) return;
   const key = templateModal.value.key;
 
@@ -1624,6 +1646,7 @@ const fetchMailTemplates = async () => {
 };
 
 const saveAllMailTemplates = async () => {
+  if (!hasPermission('mailTemplates', 'update')) return;
   const result = await Swal.fire({
     title: 'Simpan Template Email?',
     text: 'Perubahan template akan disimpan dan digunakan sebagai format pengiriman email ke pelamar.',
@@ -1692,6 +1715,7 @@ const fetchAiSettings = async () => {
 };
 
 const saveAiSettings = async () => {
+  if (!hasPermission('ai', 'manage')) return;
   const result = await Swal.fire({
     title: 'Simpan Pengaturan Analisis CV?',
     text: aiForm.value.clear_api_key ? 'API key akan dihapus. Analisis CV berhenti sampai key baru disimpan.' : 'Pengaturan ini berlaku untuk analisis CV berikutnya. API key yang dikosongkan tetap memakai key tersimpan.',
@@ -1746,6 +1770,7 @@ const saveAiSettings = async () => {
 };
 
 const testAiConnection = async () => {
+  if (!hasPermission('ai', 'manage')) return;
   isTestingAi.value = true;
   try {
     const res = await axios.post('/rekrutmen/api/settings/ai/test', {
@@ -1809,6 +1834,7 @@ const fetchMailSettings = async () => {
 };
 
 const saveMailSettings = async () => {
+  if (!hasPermission('mailSettings', 'update')) return;
   isSavingMail.value = true;
   try {
     const payload = { ...mailForm.value };
@@ -1839,6 +1865,7 @@ const saveMailSettings = async () => {
 };
 
 const testMailSettings = async () => {
+  if (!hasPermission('mailSettings', 'update')) return;
   if (!mailTestRecipient.value) {
     Swal.fire({
       title: 'Email Tes Kosong',
@@ -1906,6 +1933,7 @@ const fetchWhatsappSettings = async () => {
 };
 
 const saveWhatsappSettings = async () => {
+  if (!hasPermission('whatsapp', 'manage')) return;
   isSavingWhatsapp.value = true;
   try {
     const res = await axios.put('/rekrutmen/api/settings/whatsapp', {
@@ -2298,19 +2326,23 @@ const whatsappStatusClass = (account) => {
 
 onMounted(() => {
   whatsappListTimer = setInterval(async () => {
-    if (!whatsappViewActive || document.hidden || activeTab.value !== 'whatsapp_gateway' || whatsappListBusy) return;
+    if (!hasPermission('whatsapp', 'manage') || !whatsappViewActive || document.hidden || activeTab.value !== 'whatsapp_gateway' || whatsappListBusy) return;
     whatsappListBusy = true;
     try { await fetchWhatsappSettings(); } finally { whatsappListBusy = false; }
   }, 15000);
   document.addEventListener('visibilitychange', onWhatsappVisibilityChange);
-  store.fetchConfigurations(true).catch(() => {});
-  fetchAiSettings();
-  fetchMailTemplates();
-  fetchMailSettings();
-  fetchWhatsappSettings().then(() => {
-    const account = whatsappAccounts.value.find(item => String(item.id) === sessionStorage.getItem('wag-connect-account'));
-    if (account && ['qr', 'pairing', 'connecting'].includes(account.status)) { applyWhatsappSession(account); startWhatsappPoll(account.id); }
-  });
+  if (hasPermission('divisions') || hasPermission('pipelines') || hasPermission('approvers')) {
+    store.fetchConfigurations(true).catch(() => {});
+  }
+  if (hasPermission('ai', 'manage')) fetchAiSettings();
+  if (hasPermission('mailTemplates')) fetchMailTemplates();
+  if (hasPermission('mailSettings')) fetchMailSettings();
+  if (hasPermission('whatsapp', 'manage')) {
+    fetchWhatsappSettings().then(() => {
+      const account = whatsappAccounts.value.find(item => String(item.id) === sessionStorage.getItem('wag-connect-account'));
+      if (account && ['qr', 'pairing', 'connecting'].includes(account.status)) { applyWhatsappSession(account); startWhatsappPoll(account.id); }
+    });
+  }
 });
 
 onUnmounted(() => {
@@ -2321,8 +2353,8 @@ onUnmounted(() => {
 onDeactivated(() => { whatsappViewActive = false; closeWhatsappConnect(); });
 onActivated(async () => {
   whatsappViewActive = true;
-  if (route.query.tab === 'whatsapp_gateway') activeTab.value = 'whatsapp_gateway';
-  if (route.query.connect === '1') {
+  if (route.query.tab === 'whatsapp_gateway' && hasPermission('whatsapp', 'manage')) activeTab.value = 'whatsapp_gateway';
+  if (route.query.connect === '1' && hasPermission('whatsapp', 'manage')) {
     await fetchWhatsappSettings();
     router.replace({ path: route.path, query: { tab: 'whatsapp_gateway' } });
     if (whatsappSettings.value.engine_ready && !whatsappAccessError.value) startWhatsappConnect('qr');
@@ -2383,6 +2415,7 @@ watch(
 );
 
 const handleStageDragStart = (stage, idx, event) => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   if (stage.is_locked) {
     event.preventDefault();
     return;
@@ -2412,6 +2445,7 @@ const handleStageDragLeave = (stage, idx, event) => {
 };
 
 const handleStageDrop = async (stage, targetIdx, event) => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   const sourceIdx = draggedStageIndex.value;
   dragOverStageIndex.value = null;
 
@@ -2485,6 +2519,7 @@ const handleStageDragEnd = () => {
 
 // PIPELINE MANAGEMENT METHODS
 const openCreatePipelineModal = () => {
+  if (!hasPermission('pipelines', 'create')) return;
   pipelineModal.value = {
     open: true,
     isEdit: false,
@@ -2499,6 +2534,7 @@ const openCreatePipelineModal = () => {
 };
 
 const openEditPipelineModal = (pipeline) => {
+  if (!canAccessRecord('pipelines', 'update', pipeline)) return;
   if (!pipeline) return;
   pipelineModal.value = {
     open: true,
@@ -2514,6 +2550,8 @@ const openEditPipelineModal = (pipeline) => {
 };
 
 const savePipeline = async () => {
+  if (pipelineModal.value.isEdit && !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
+  if (!pipelineModal.value.isEdit && !hasPermission('pipelines', 'create')) return;
   const name = pipelineModal.value.form.name?.trim();
   if (!name) {
     Swal.fire({
@@ -2567,6 +2605,7 @@ const savePipeline = async () => {
 };
 
 const handleDeletePipeline = async (pipeline) => {
+  if (!canAccessRecord('pipelines', 'delete', pipeline)) return;
   if (!pipeline || pipeline.id === 1) {
     Swal.fire({
       title: 'Tidak Dapat Dihapus',
@@ -2645,6 +2684,8 @@ const filteredDivisions = computed(() => {
 });
 
 const openDivisionModal = (div = null) => {
+  if (div && !canAccessRecord('divisions', 'update', div)) return;
+  if (!div && !hasPermission('divisions', 'create')) return;
   if (div) {
     divisionModal.value = {
       open: true,
@@ -2674,6 +2715,8 @@ const openDivisionModal = (div = null) => {
 };
 
 const saveDivision = async () => {
+  if (divisionModal.value.isEdit && !hasPermission('divisions', 'update')) return;
+  if (!divisionModal.value.isEdit && !hasPermission('divisions', 'create')) return;
   if (!divisionModal.value.form.name || !divisionModal.value.form.company_id) {
     Swal.fire({
       title: 'Data Belum Lengkap',
@@ -2716,6 +2759,7 @@ const saveDivision = async () => {
 };
 
 const confirmDeleteDivision = async (div) => {
+  if (!canAccessRecord('divisions', 'delete', div)) return;
   const companyName = div.company_name || div.badan_usaha || div.company?.name || 'Badan Usaha';
   const result = await Swal.fire({
     title: 'Hapus Divisi Ini?',
@@ -2758,6 +2802,7 @@ const confirmDeleteDivision = async (div) => {
 };
 
 const openCreateStageModal = () => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   stageModal.value = {
     open: true,
     isEdit: false,
@@ -2770,6 +2815,7 @@ const openCreateStageModal = () => {
 };
 
 const openEditStageModal = (stage) => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   if (stage.is_locked) {
     Swal.fire({
       title: 'Tahap Terkunci',
@@ -2793,6 +2839,7 @@ const openEditStageModal = (stage) => {
 };
 
 const saveStage = async () => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   const name = stageModal.value.form.name?.trim();
   if (!name) {
     Swal.fire({
@@ -2839,6 +2886,7 @@ const saveStage = async () => {
 };
 
 const handleDeleteStage = async (stage) => {
+  if (!currentPipeline.value || !canAccessRecord('pipelines', 'update', currentPipeline.value)) return;
   if (stage.is_locked) {
     Swal.fire({
       title: 'Tahap Terkunci',

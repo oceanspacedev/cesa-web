@@ -47,6 +47,9 @@ class Bouncer
             ->leftJoin('teams', 'user_team.team_id', '=', 'teams.id')
             ->whereIn('teams.id', $user->teams()->pluck('id'))
             ->pluck('users.id')
+            ->push($user->id)
+            ->unique()
+            ->values()
             ->toArray();
     }
 }

@@ -21,6 +21,8 @@ use Livewire\Livewire;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Spatie\Permission\Models\Permission;
+use Webkul\Security\Enums\PermissionType;
+use Webkul\Security\Models\Team;
 use Webkul\Security\Models\User;
 use Webkul\Support\Models\Company;
 
@@ -50,6 +52,143 @@ class RecruitmentProgressReportConsistencyTest extends RekrutmenTestCase
         $this->assertSame('3 Orang Tidak Lolos', RecruitmentProgressReportService::activitySummaryText(3, 0, 3, 0));
         $this->assertSame('2 Orang Menunggu', RecruitmentProgressReportService::activitySummaryText(2, 0, 0, 2));
         $this->assertSame('12 Orang 10 Lolos 2 Menunggu', RecruitmentProgressReportService::activitySummaryText(12, 10, 0, 2));
+    }
+
+    public function test_report_limits_every_section_to_allowed_postings(): void
+    {
+        [$allowedPosting, $allowedStage] = $this->createFixtureForDivision('IT', 'allowed-report-posting');
+        [$otherPosting, $otherStage] = $this->createFixtureForDivision('Finance', 'other-report-posting');
+
+        $allowedCandidate = $this->makeJobApplication($allowedPosting, $allowedStage, 'allowed-report@example.com', 'Allowed Candidate');
+        $otherCandidate = $this->makeJobApplication($otherPosting, $otherStage, 'other-report@example.com', 'Other Candidate');
+
+        foreach ([[$allowedPosting, $allowedStage, $allowedCandidate], [$otherPosting, $otherStage, $otherCandidate]] as [$posting, $stage, $candidate]) {
+            JobApplication::recordBatchActivity(
+                $posting->id,
+                $stage->id,
+                '2026-04-07',
+                [['job_application_id' => $candidate->id, 'result' => 'pending', 'notes' => 'Pending']],
+                $this->user->id,
+            );
+        }
+
+        $filters = ['date_from' => '2026-04-01', 'date_to' => '2026-04-30'];
+        $reportService = app(RecruitmentProgressReportService::class);
+
+        $unrestrictedReport = $reportService->build($filters);
+        $this->assertEqualsCanonicalizing([$allowedPosting->id, $otherPosting->id], $unrestrictedReport['posting_ids']);
+
+        $report = $reportService->build([...$filters, 'allowed_posting_ids' => [$allowedPosting->id]]);
+
+        $this->assertSame([$allowedPosting->id], $report['posting_ids']);
+        $this->assertSame([$allowedPosting->id], $report['postings']->pluck('id')->all());
+        $this->assertSame(1, $report['summary']['total_positions_active']);
+        $this->assertSame(1, $report['summary']['total_activities_this_period']);
+        $this->assertSame([$allowedPosting->id], $report['positions']->map(fn (array $position): int => $position['posting']->id)->all());
+        $this->assertSame([$allowedPosting->id], $report['overview']->pluck('job_posting_id')->all());
+        $this->assertSame([$allowedPosting->id], $report['activities']->pluck('job_posting_id')->all());
+        $this->assertSame([$allowedPosting->id], $report['timeline']->first()['activities']->pluck('job_posting_id')->all());
+        $this->assertSame($allowedCandidate->full_name, $report['activities']->first()['entries']->first()->jobApplication->full_name);
+
+        foreach ([
+            ['allowed_posting_ids' => []],
+            ['allowed_posting_ids' => [$allowedPosting->id], 'job_posting_id' => $otherPosting->id],
+        ] as $restrictedFilters) {
+            $emptyReport = $reportService->build([...$filters, ...$restrictedFilters]);
+
+            $this->assertSame([], $emptyReport['posting_ids']);
+            $this->assertSame(0, $emptyReport['summary']['total_positions_active']);
+            $this->assertSame(0, $emptyReport['summary']['total_activities_this_period']);
+            $this->assertTrue($emptyReport['postings']->isEmpty());
+            $this->assertTrue($emptyReport['positions']->isEmpty());
+            $this->assertTrue($emptyReport['overview']->isEmpty());
+            $this->assertTrue($emptyReport['activities']->isEmpty());
+            $this->assertTrue($emptyReport['timeline']->isEmpty());
+            $this->assertTrue($emptyReport['hr_kpis']->isEmpty());
+        }
+    }
+
+    public function test_progress_api_scopes_report_positions_by_creator_and_team_without_posting_view_permission(): void
+    {
+        [$ownPosting, $ownStage] = $this->createFixtureForDivision('IT', 'api-own-report');
+        $teammate = User::factory()->create(['is_active' => true]);
+        $outsider = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($teammate);
+        [$teamPosting, $teamStage] = $this->createFixtureForDivision('Finance', 'api-team-report');
+
+        $this->actingAs($outsider);
+        [$outsidePosting, $outsideStage] = $this->createFixtureForDivision('Sales', 'api-outside-report');
+
+        foreach ([
+            [$ownPosting, $ownStage],
+            [$teamPosting, $teamStage],
+            [$outsidePosting, $outsideStage],
+        ] as [$posting, $stage]) {
+            $candidate = $this->makeJobApplication($posting, $stage, "api-report-{$posting->id}@example.com", "Candidate {$posting->id}");
+            JobApplication::recordBatchActivity(
+                $posting->id,
+                $stage->id,
+                '2026-04-07',
+                [['job_application_id' => $candidate->id, 'result' => 'pending', 'notes' => 'Pending']],
+                $this->user->id,
+            );
+        }
+
+        $this->actingAs($this->user);
+        $this->assertFalse($this->user->can('viewAny', JobPosting::class));
+
+        $url = '/api/recruitment/progress-report?date_from=2026-04-01&date_to=2026-04-30';
+        $individualReport = $this->getJson($url)->assertOk();
+        $this->assertSame([$ownPosting->id], collect($individualReport->json('positions'))->pluck('job_posting_id')->all());
+        $this->getJson($url.'&job_posting_id='.$teamPosting->id)
+            ->assertOk()
+            ->assertJsonPath('summary.total_positions_active', 0)
+            ->assertJsonCount(0, 'positions');
+
+        $this->user->update(['resource_permission' => PermissionType::GROUP]);
+        $this->actingAs($this->user->fresh());
+        $this->getJson($url)
+            ->assertOk()
+            ->assertJsonCount(1, 'positions');
+
+        $team = Team::query()->create(['name' => 'Progress API Team']);
+        $this->user->teams()->attach($team->id);
+        $teammate->teams()->attach($team->id);
+
+        $groupReport = $this->getJson($url)->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$ownPosting->id, $teamPosting->id],
+            collect($groupReport->json('positions'))->pluck('job_posting_id')->all(),
+        );
+
+        $groupTimeline = $this->getJson('/api/recruitment/progress-report/timeline?date_from=2026-04-01&date_to=2026-04-30')->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$ownPosting->id, $teamPosting->id],
+            collect($groupTimeline->json('timeline'))->flatMap(fn (array $day): array => $day['activities'])->pluck('job_posting_id')->all(),
+        );
+
+        $groupOverview = $this->getJson('/api/recruitment/progress-report/overview?date_from=2026-04-01&date_to=2026-04-30')->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$ownPosting->id, $teamPosting->id],
+            collect($groupOverview->json('overview'))->pluck('job_posting_id')->all(),
+        );
+
+        $this->user->update(['resource_permission' => PermissionType::GLOBAL]);
+        $this->actingAs($this->user->fresh());
+        $globalReport = $this->getJson($url)->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$ownPosting->id, $teamPosting->id, $outsidePosting->id],
+            collect($globalReport->json('positions'))->pluck('job_posting_id')->all(),
+        );
+
+        $noPostingUser = User::factory()->create(['is_active' => true]);
+        $noPostingUser->givePermissionTo('view_any_cesa::rekrutmen::models::job::application::history');
+        $this->actingAs($noPostingUser);
+        $this->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('summary.total_positions_active', 0)
+            ->assertJsonCount(0, 'positions');
     }
 
     public function test_report_endpoints_use_consistent_pipeline_based_counts(): void

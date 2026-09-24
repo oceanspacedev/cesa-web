@@ -40,6 +40,7 @@
 
         <!-- Sinkronkan Berkas CV Action Button -->
         <FButton
+          v-if="hasPermission('jobApplications', 'update')"
           theme="gray"
           variant="outline"
           size="sm"
@@ -53,6 +54,7 @@
 
         <!-- Evaluasi Kualifikasi Action Button -->
         <FButton
+          v-if="hasPermission('jobApplications', 'update')"
           :theme="selectedAppIds.length ? 'blue' : 'gray'"
           :variant="selectedAppIds.length ? 'solid' : 'outline'"
           size="sm"
@@ -375,7 +377,7 @@
       >
         <!-- Left: Checkbox & Selection Info -->
         <div class="flex items-center gap-2.5">
-          <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+          <label v-if="hasPermission('jobApplications', 'update')" class="inline-flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
               :checked="isAllSelected"
@@ -413,6 +415,7 @@
 
         <div v-else class="flex items-center gap-2 flex-wrap">
           <FButton
+            v-if="hasPermission('jobApplications', 'update')"
             theme="gray"
             variant="outline"
             size="sm"
@@ -425,6 +428,7 @@
           </FButton>
 
           <FButton
+            v-if="hasPermission('jobApplications', 'update')"
             theme="red"
             variant="outline"
             size="sm"
@@ -436,6 +440,7 @@
           </FButton>
 
           <FButton
+            v-if="hasPermission('jobApplications', 'update')"
             theme="gray"
             variant="solid"
             size="sm"
@@ -462,7 +467,7 @@
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3.5">
             <!-- Left Side: Checkbox + Avatar + Info -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
-              <div class="shrink-0 flex items-center justify-center" @click.stop>
+              <div v-if="canAccessRecord('jobApplications', 'update', app)" class="shrink-0 flex items-center justify-center" @click.stop>
                 <input
                   type="checkbox"
                   :value="app.id"
@@ -548,7 +553,7 @@
                     </FBadge>
                   </button>
                 </div>
-                <div v-else-if="!isAiInProgress(app)">
+                <div v-else-if="!isAiInProgress(app) && canAccessRecord('jobApplications', 'update', app)">
                   <FButton
                     theme="gray"
                     variant="outline"
@@ -564,7 +569,7 @@
               </div>
 
               <!-- Stage Selector Dropdown -->
-              <div class="relative min-w-[140px] shrink-0" @click.stop>
+              <div v-if="canAccessRecord('jobApplications', 'update', app)" class="relative min-w-[140px] shrink-0" @click.stop>
                 <select
                   :value="app.status === 'rejected' ? 'rejected' : (app.current_stage_id || app.stage?.id || 1)"
                   @change="handleStageChange(app, $event.target.value)"
@@ -589,6 +594,7 @@
               <!-- Action Buttons -->
               <div class="flex items-center gap-1.5 shrink-0" @click.stop>
                 <FButton
+                  v-if="canAccessRecord('jobApplications', 'view', app)"
                   theme="gray"
                   variant="outline"
                   size="sm"
@@ -600,6 +606,7 @@
                 </FButton>
 
                 <FButton
+                  v-if="canAccessRecord('jobApplications', 'update', app)"
                   theme="gray"
                   variant="ghost"
                   size="sm"
@@ -664,8 +671,9 @@
           <div
             v-for="app in getStageApplications(stage.id)"
             :key="app.id"
-            class="bg-surface-white p-3.5 rounded-lg border border-outline-gray-2 shadow-2xs hover:shadow-xs transition-all cursor-grab active:cursor-grabbing hover:border-outline-gray-3 group"
-            draggable="true"
+            class="bg-surface-white p-3.5 rounded-lg border border-outline-gray-2 shadow-2xs hover:shadow-xs transition-all hover:border-outline-gray-3 group"
+            :class="canAccessRecord('jobApplications', 'update', app) ? 'cursor-grab active:cursor-grabbing' : ''"
+            :draggable="canAccessRecord('jobApplications', 'update', app)"
             @dragstart="handleDragStart(app, $event)"
             @dragend="handleDragEnd"
             @click="openDetail(app)"
@@ -758,8 +766,9 @@
           <div
             v-for="app in rejectedApplications"
             :key="app.id"
-            class="bg-surface-white p-3.5 rounded-lg border border-surface-red-2 shadow-2xs hover:shadow-xs transition-all cursor-grab active:cursor-grabbing hover:border-surface-red-3 group opacity-90"
-            draggable="true"
+            class="bg-surface-white p-3.5 rounded-lg border border-surface-red-2 shadow-2xs hover:shadow-xs transition-all hover:border-surface-red-3 group opacity-90"
+            :class="canAccessRecord('jobApplications', 'update', app) ? 'cursor-grab active:cursor-grabbing' : ''"
+            :draggable="canAccessRecord('jobApplications', 'update', app)"
             @dragstart="handleDragStart(app, $event)"
             @dragend="handleDragEnd"
             @click="openDetail(app)"
@@ -853,7 +862,7 @@
 
           <!-- Top Right Actions -->
           <div class="flex items-center gap-2 shrink-0">
-            <div class="flex items-center gap-1.5">
+            <div v-if="canAccessRecord('jobApplications', 'update', selectedApp)" class="flex items-center gap-1.5">
               <span class="text-xs font-medium text-zinc-500">Tahap:</span>
               <div class="relative">
                 <select
@@ -874,6 +883,7 @@
             </div>
 
             <FButton
+              v-if="canAccessRecord('jobApplications', 'update', selectedApp)"
               theme="gray"
               variant="solid"
               size="sm"
@@ -939,6 +949,7 @@
                 <span v-else></span>
                 <div class="flex items-center gap-2">
                   <FButton
+                    v-if="canAccessRecord('jobApplications', 'update', selectedApp)"
                     theme="gray"
                     variant="outline"
                     size="sm"
@@ -1244,6 +1255,7 @@
         <!-- Modal Footer -->
         <div class="px-6 py-3.5 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between shrink-0">
           <FButton
+            v-if="canAccessRecord('jobApplications', 'update', analysisModalApp)"
             theme="gray"
             variant="outline"
             size="sm"
@@ -1735,6 +1747,7 @@ import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
 import { createRequestKey, escapeHtml } from '../lib/utils';
 import { filterJobApplications } from '../lib/collectionFilters';
+import { canAccessRecord, hasPermission } from '../lib/permissions';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -1910,21 +1923,25 @@ const candidateSchedules = ref({});
 const selectedCandidatesList = computed(() => {
   return selectedAppIds.value
     .map(id => applications.value.find(a => a.id === id))
-    .filter(Boolean);
+    .filter(app => app && canAccessRecord('jobApplications', 'update', app));
 });
 
 const isAllSelected = computed(() => {
-  if (!filteredApplications.value.length) return false;
-  return filteredApplications.value.every(app => selectedAppIds.value.includes(app.id));
+  const selectable = filteredApplications.value.filter(app => canAccessRecord('jobApplications', 'update', app));
+  if (!selectable.length) return false;
+  return selectable.every(app => selectedAppIds.value.includes(app.id));
 });
 
 const isSelected = (id) => selectedAppIds.value.includes(id);
 
 const toggleSelectAll = () => {
+  if (!hasPermission('jobApplications', 'update')) return;
   if (isAllSelected.value) {
     selectedAppIds.value = [];
   } else {
-    selectedAppIds.value = filteredApplications.value.map(app => app.id);
+    selectedAppIds.value = filteredApplications.value
+      .filter(app => canAccessRecord('jobApplications', 'update', app))
+      .map(app => app.id);
   }
 };
 
@@ -1942,7 +1959,7 @@ const defaultStages = [
 let heartbeatTimer = null;
 
 const checkHeartbeat = async () => {
-  if (!isAiViewActive) return;
+  if (!isAiViewActive || !hasPermission('jobApplications', 'update')) return;
   try {
     const res = await axios.post('/rekrutmen/api/notifications/heartbeat');
     if (res.data?.processed > 0) {
@@ -1963,23 +1980,25 @@ const checkHeartbeat = async () => {
 onMounted(() => {
   isAiViewActive = true;
   loadApplications(false);
-  if (!store.postings?.length) {
+  if (hasPermission('jobPostings') && !store.postings?.length) {
     store.fetchPostings('', false).catch(() => {});
   }
-  checkHeartbeat();
-  heartbeatTimer = setInterval(checkHeartbeat, 25000);
+  if (hasPermission('jobApplications', 'update')) {
+    checkHeartbeat();
+    heartbeatTimer = setInterval(checkHeartbeat, 25000);
+  }
   document.addEventListener('visibilitychange', resumeAiPolling);
   resumeAiPolling();
 });
 
 let hasActivatedApplications = false;
 onActivated(() => {
-  fetchWhatsappAccounts();
+  if (hasPermission('jobApplications', 'update')) fetchWhatsappAccounts();
   isAiViewActive = true;
   resumeAiPolling();
   if (hasActivatedApplications) loadApplications(true);
   hasActivatedApplications = true;
-  if (!store.postings?.length) {
+  if (hasPermission('jobPostings') && !store.postings?.length) {
     store.fetchPostings('', false).catch(() => {});
   }
 });
@@ -2033,7 +2052,7 @@ watch(
     if (!applicationId) return;
     const application = availableApplications.find(app => String(app.id) === String(applicationId));
     if (!application) return;
-    selectedApp.value = application;
+    if (canAccessRecord('jobApplications', 'view', application)) selectedApp.value = application;
     const query = { ...route.query };
     delete query.application_id;
     router.replace({ path: route.path, query });
@@ -2150,10 +2169,12 @@ const resetJobFilter = () => {
 const isUploadingCv = ref(false);
 
 const openDetail = (app) => {
+  if (!canAccessRecord('jobApplications', 'view', app)) return;
   selectedApp.value = app;
 };
 
 const handleCvUploadForApplicant = async (event) => {
+  if (!canAccessRecord('jobApplications', 'update', selectedApp.value)) return;
   const file = event.target.files?.[0];
   if (!file || !selectedApp.value) return;
 
@@ -2245,6 +2266,7 @@ const openAnalysisModal = (app) => {
 const isSyncingCvs = ref(false);
 
 const startSyncCvs = async () => {
+  if (!hasPermission('jobApplications', 'update')) return;
   isSyncingCvs.value = true;
   Swal.fire({
     title: 'Mencocokkan Berkas CV',
@@ -2297,6 +2319,7 @@ const showAiQueueError = (error) => {
 };
 
 const rescreenSelectedCandidates = async () => {
+  if (!hasPermission('jobApplications', 'update') || selectedCandidatesList.value.length !== selectedAppIds.value.length) return;
   if (!selectedAppIds.value.length || isScreening.value) return;
   const ids = [...selectedAppIds.value];
   const confirm = await Swal.fire({
@@ -2322,6 +2345,7 @@ const rescreenSelectedCandidates = async () => {
 };
 
 const startRescreening = async () => {
+  if (!hasPermission('jobApplications', 'update')) return;
   if (isScreening.value) return;
   if (selectedAppIds.value.length) return rescreenSelectedCandidates();
   isScreening.value = true;
@@ -2335,6 +2359,7 @@ const startRescreening = async () => {
 };
 
 const rescreenSingleCandidate = async (app) => {
+  if (!canAccessRecord('jobApplications', 'update', app)) return;
   if (!app || isScreening.value || isAiInProgress(app)) return;
   if (hasAiResult(app)) {
     const confirm = await Swal.fire({
@@ -2365,6 +2390,7 @@ const rescreenSingleCandidate = async (app) => {
 };
 
 const handleDragStart = (app, event) => {
+  if (!canAccessRecord('jobApplications', 'update', app)) return;
   if (event && event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(app.id));
@@ -2386,12 +2412,13 @@ const handleDragLeave = (stageId) => {
 };
 
 const handleDrop = async (stageId, event) => {
+  if (!hasPermission('jobApplications', 'update')) return;
   dragOverStageId.value = null;
   const appId = event?.dataTransfer?.getData('text/plain');
   if (!appId) return;
 
   const app = store.applications.find(a => String(a.id) === String(appId));
-  if (!app) return;
+  if (!app || !canAccessRecord('jobApplications', 'update', app)) return;
 
   if (String(stageId) === 'rejected') {
     if (app.status !== 'rejected') {
@@ -2407,6 +2434,7 @@ const handleDrop = async (stageId, event) => {
 };
 
 const handleStageChange = async (app, stageId) => {
+  if (!canAccessRecord('jobApplications', 'update', app)) return;
   if (String(stageId) === 'rejected') {
     await rejectCandidate(app);
   } else {
@@ -2415,6 +2443,7 @@ const handleStageChange = async (app, stageId) => {
 };
 
 const rejectCandidate = async (app) => {
+  if (!canAccessRecord('jobApplications', 'update', app)) return;
   try {
     const res = await store.updateApplicationStage(app.id, 'rejected');
     if (res && res.success) {
@@ -2433,6 +2462,7 @@ const rejectCandidate = async (app) => {
 };
 
 const bulkRejectSelected = async () => {
+  if (!hasPermission('jobApplications', 'update') || selectedCandidatesList.value.length !== selectedAppIds.value.length) return;
   if (!selectedAppIds.value.length) return;
 
   const count = selectedAppIds.value.length;
@@ -2484,6 +2514,7 @@ const bulkRejectSelected = async () => {
 };
 
 const moveCandidateStage = async (app, stageId) => {
+  if (!canAccessRecord('jobApplications', 'update', app)) return;
   if (!getApplicationStages(app).some(stage => String(stage.id) === String(stageId))) {
     toastType.value = 'error';
     toastMessage.value = 'Pilih tahapan dari pipeline lowongan kandidat ini.';
@@ -2692,7 +2723,7 @@ const getCandidateCurrentStageName = (app) => {
 };
 
 const openSendEmailModal = async (app) => {
-  if (!app) return;
+  if (!app || !canAccessRecord('jobApplications', 'update', app)) return;
   notificationRequest = null;
   isBulkMode.value = false;
   sendEmailModalApp.value = app;
@@ -2736,7 +2767,7 @@ const onToggleIndividualSchedules = () => {
 };
 
 const openBulkNotificationModal = async () => {
-  if (!selectedAppIds.value.length) return;
+  if (!hasPermission('jobApplications', 'update') || !selectedAppIds.value.length || selectedCandidatesList.value.length !== selectedAppIds.value.length) return;
   notificationRequest = null;
   isBulkMode.value = true;
   useIndividualSchedules.value = false;
@@ -2871,6 +2902,9 @@ const insertTag = (tag) => {
 
 const executeSendNotification = async () => {
   if (!sendEmailModalApp.value || isSendingEmail.value) return;
+  if (!hasPermission('jobApplications', 'update')) return;
+  if (isBulkMode.value && selectedCandidatesList.value.length !== selectedAppIds.value.length) return;
+  if (!isBulkMode.value && !canAccessRecord('jobApplications', 'update', sendEmailModalApp.value)) return;
 
   if (!selectedChannels.value.length) {
     Swal.fire({
