@@ -47,6 +47,35 @@ class CareerJobPostingPresentationTest extends RekrutmenTestCase
         );
     }
 
+    public function test_public_job_thumbnail_uses_recorded_s3_disk_when_a_local_copy_also_exists(): void
+    {
+        Storage::fake('s3');
+        Storage::fake('public');
+
+        $path = 'rekrutmen/job-postings/s3-banner.jpg';
+        Storage::disk('s3')->put($path, 's3-image');
+        Storage::disk('public')->put($path, 'local-image');
+
+        $jobPosting = $this->createReadyJobPosting([
+            'title'          => 'S3 Banner Developer',
+            'slug'           => 's3-banner-developer',
+            'thumbnail_path' => $path,
+            'thumbnail_disk' => 's3',
+        ]);
+
+        $indexPayload = $this->getJobIndexPayload();
+        $detailPayload = app(CareerController::class)->show($jobPosting->slug)->getData(true);
+        $publicUrl = Storage::disk('public')->url($path);
+
+        $this->assertNotNull($indexPayload['data'][0]['thumbnail_url'] ?? null);
+        $this->assertNotSame($publicUrl, $indexPayload['data'][0]['thumbnail_url']);
+        $this->assertStringContainsString($path, $indexPayload['data'][0]['thumbnail_url']);
+        $this->assertNotNull($detailPayload['data']['thumbnail_url'] ?? null);
+        $this->assertNotSame($publicUrl, $detailPayload['data']['thumbnail_url']);
+        $this->assertStringContainsString($path, $detailPayload['data']['thumbnail_url']);
+        $this->assertArrayNotHasKey('thumbnail_disk', $detailPayload['data']);
+    }
+
     public function test_job_listing_is_limited_and_exposes_pagination_metadata(): void
     {
         foreach (range(1, 13) as $sequence) {

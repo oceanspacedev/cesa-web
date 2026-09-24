@@ -9,7 +9,7 @@ class Configurations extends Cluster
 {
     public static function getSlug(?Panel $panel = null): string
     {
-        return 'rekrutmen/configurations';
+        return 'rekrutmen-shield/configurations';
     }
 
     public static function getNavigationLabel(): string

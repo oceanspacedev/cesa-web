@@ -124,6 +124,14 @@ class RekrutmenServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
+        $shieldConfig = require __DIR__.'/../config/filament-shield.php';
+        config([
+            'filament-shield.resources.manage' => array_replace(
+                config('filament-shield.resources.manage', []),
+                $shieldConfig['resources']['manage'] ?? [],
+            ),
+        ]);
+
         Gate::define('manage_rekrutmen_ai', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_ai'));
         Gate::define('manage_rekrutmen_whatsapp', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_whatsapp'));
         Gate::define('manage_rekrutmen_mail', fn (User $user): bool => $user->roles()->where('name', config('filament-shield.super_admin.name', 'super_admin'))->exists() || $user->checkPermissionTo('manage_rekrutmen_mail'));

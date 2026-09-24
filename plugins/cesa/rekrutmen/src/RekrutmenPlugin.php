@@ -2,9 +2,14 @@
 
 namespace Cesa\Rekrutmen;
 
+use Cesa\Rekrutmen\Models\JobApplication;
+use Cesa\Rekrutmen\Models\JobApplicationHistory;
+use Cesa\Rekrutmen\Models\JobPosting;
+use Cesa\Rekrutmen\Models\RequestManPower;
 use Filament\Contracts\Plugin;
 use Filament\Navigation\NavigationItem;
 use Filament\Panel;
+use Illuminate\Support\Facades\Gate;
 use ReflectionClass;
 use Webkul\PluginManager\Package;
 
@@ -28,28 +33,38 @@ class RekrutmenPlugin implements Plugin
 
         $panel
             ->when($panel->getId() === 'admin', function (Panel $panel) {
-                // Register high-level navigation items for Rekrutmen in Filament topbar pointing to Vue SPA
+                $panel->discoverResources(
+                    in: $this->getPluginBasePath('/Filament/Resources'),
+                    for: 'Cesa\\Rekrutmen\\Filament\\Resources',
+                );
+
+                // Vue SPA owns the visible Rekrutmen menu. Resources stay registered so Shield can list their permissions.
                 $panel->navigationItems([
                     NavigationItem::make('Manpower Requests')
                         ->url('/admin/request-man-powers')
                         ->group('Rekrutmen')
-                        ->sort(1),
+                        ->sort(1)
+                        ->visible(fn (): bool => Gate::allows('viewAny', RequestManPower::class)),
                     NavigationItem::make('Job Postings')
                         ->url('/admin/job-postings')
                         ->group('Rekrutmen')
-                        ->sort(2),
+                        ->sort(2)
+                        ->visible(fn (): bool => Gate::allows('viewAny', JobPosting::class)),
                     NavigationItem::make('Job Applications')
                         ->url('/admin/job-applications')
                         ->group('Rekrutmen')
-                        ->sort(3),
+                        ->sort(3)
+                        ->visible(fn (): bool => Gate::allows('viewAny', JobApplication::class)),
                     NavigationItem::make('Recruitment Progress')
                         ->url('/admin/recruitment-progress')
                         ->group('Rekrutmen')
-                        ->sort(4),
+                        ->sort(4)
+                        ->visible(fn (): bool => Gate::allows('viewAny', JobApplicationHistory::class)),
                     NavigationItem::make('Configurations')
                         ->url('/admin/configurations')
                         ->group('Rekrutmen')
-                        ->sort(5),
+                        ->sort(5)
+                        ->visible(fn (): bool => Gate::allows('access_rekrutmen_configurations')),
                 ]);
             });
     }

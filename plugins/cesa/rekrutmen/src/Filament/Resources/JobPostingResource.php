@@ -42,7 +42,14 @@ class JobPostingResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = null;
 
+    protected static ?string $slug = 'rekrutmen-shield/job-postings';
+
     protected static ?int $navigationSort = 2;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getNavigationGroup(): string
     {

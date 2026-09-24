@@ -46,7 +46,14 @@ class RequestManPowerResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = null;
 
+    protected static ?string $slug = 'rekrutmen-shield/request-man-powers';
+
     protected static ?int $navigationSort = 1;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getNavigationGroup(): string
     {

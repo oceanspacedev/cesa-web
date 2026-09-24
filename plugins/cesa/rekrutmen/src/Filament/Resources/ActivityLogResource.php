@@ -15,6 +15,8 @@ class ActivityLogResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = null;
 
+    protected static ?string $slug = 'rekrutmen-shield/activity-logs';
+
     protected static ?int $navigationSort = 4;
 
     public static function getNavigationGroup(): string

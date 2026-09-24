@@ -5,7 +5,6 @@ namespace Cesa\Rekrutmen\Filament\Resources;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Webkul\PluginManager\Package;
 use Webkul\Security\Traits\HasResourcePermissionQuery;
 
 abstract class RekrutmenConfigurationResource extends Resource
@@ -23,7 +22,7 @@ abstract class RekrutmenConfigurationResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Package::isPluginInstalled('rekrutmen');
+        return false;
     }
 
     public static function getEloquentQuery(): Builder

@@ -118,6 +118,7 @@ class CareerController extends Controller
                 'slug',
                 'location',
                 'thumbnail_path',
+                'thumbnail_disk',
                 'closing_date',
             ])
             ->withQueryString();
@@ -154,12 +155,14 @@ class CareerController extends Controller
         $job = $this->publicJobPostingsQuery()
             ->where('slug', $slug)
             ->first([
+                'id',
                 'title',
                 'slug',
                 'description',
                 'requirements',
                 'location',
                 'thumbnail_path',
+                'thumbnail_disk',
                 'closing_date',
             ]);
 
@@ -174,7 +177,7 @@ class CareerController extends Controller
             'success' => true,
             'message' => __('rekrutmen::api/career.messages.job_detail_retrieved'),
             'data'    => [
-                ...$job->toArray(),
+                ...$job->makeHidden(['id', 'thumbnail_disk'])->toArray(),
                 'thumbnail_url'    => $job->thumbnail_url,
                 'application_form' => $this->resolveApplicationFormFields($job->slug),
             ],

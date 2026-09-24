@@ -43,7 +43,14 @@ class JobApplicationResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = null;
 
+    protected static ?string $slug = 'rekrutmen-shield/job-applications';
+
     protected static ?int $navigationSort = 3;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getNavigationGroup(): string
     {
