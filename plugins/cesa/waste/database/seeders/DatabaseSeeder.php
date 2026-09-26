@@ -15,8 +15,14 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        foreach (['GR' => 'Gram', 'KG' => 'Kilogram', 'ML' => 'Mililiter', 'L' => 'Liter', 'PCS' => 'Pieces', 'PRS' => 'Porsi'] as $code => $name) {
-            WasteUnit::query()->firstOrCreate(['code' => $code], [
+        foreach ([
+            'GR'   => 'Gram', 'KG' => 'Kilogram', 'ML' => 'Mililiter', 'L' => 'Liter',
+            'PCS'  => 'Pieces', 'PRS' => 'Porsi', 'SHT' => 'Sachet', 'PAI' => 'Pail',
+            'SLC'  => 'Slice', 'CC' => 'Sentimeter Kubik', 'LBR' => 'Lembar', 'ROL' => 'Roll',
+            'PCK'  => 'Pack', 'BTL' => 'Botol', 'PSG' => 'Porsi', 'GALON' => 'Galon',
+            'BUAH' => 'Buah', 'BAL' => 'Bal',
+        ] as $code => $name) {
+            WasteUnit::query()->updateOrCreate(['code' => $code], [
                 'name'      => $name,
                 'is_active' => true,
             ]);
@@ -29,8 +35,8 @@ class DatabaseSeeder extends Seeder
         ];
 
         $categories = [
-            'JCHICKEN' => ['Waste', 'Spoil', 'Training', 'Discontinued', 'Test food/Kalibrasi'],
-            'LUUCA'    => ['Waste', 'Spoil', 'Training', 'Discontinued', 'Test food/Kalibrasi'],
+            'JCHICKEN' => ['Waste', 'Spoil', 'Training', 'Test food/Kalibrasi'],
+            'LUUCA'    => ['Waste', 'Spoil', 'Training', 'Test food/Kalibrasi'],
             'MOMOYO'   => ['Waste', 'Spoil', 'Training/Trial', 'Pemotretan/Event/Talent'],
         ];
 

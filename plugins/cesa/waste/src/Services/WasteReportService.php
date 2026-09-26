@@ -588,7 +588,7 @@ class WasteReportService
                     'sequence'      => $sequence,
                     'section'       => $section,
                     'category_id'   => $category?->getKey(),
-                    'category_name' => $category?->name ?? trim((string) ($event['category_name'] ?? 'Adjustment')),
+                    'category_name' => $category?->name ?? WasteCategory::normalizedName($event['category_name'] ?? 'Adjustment'),
                     'reason'        => $reason,
                     'pip_item_id'   => $pipItem?->getKey(),
                     'pip_item_code' => $pipItem?->code,

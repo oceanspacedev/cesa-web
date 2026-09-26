@@ -32,6 +32,9 @@ class WasteUnit extends Model
             'ML', 'MILLILITER', 'MILLILITRE', 'MILILITER' => 'ML',
             'L', 'LITER', 'LITRE' => 'L',
             'PCS', 'PC', 'PIECE', 'PIECES', 'PCE' => 'PCS',
+            'PORSI' => 'PRS',
+            'ROLL'  => 'ROL',
+            'PACK'  => 'PCK',
             default => $unit,
         };
     }

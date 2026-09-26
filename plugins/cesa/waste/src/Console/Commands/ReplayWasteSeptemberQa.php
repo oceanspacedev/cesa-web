@@ -4,6 +4,7 @@ namespace Cesa\Waste\Console\Commands;
 
 use Cesa\Waste\Livewire\PublicWasteReportForm;
 use Cesa\Waste\Models\WasteBrand;
+use Cesa\Waste\Models\WasteCategory;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Services\WasteNotificationService;
 use Cesa\Waste\Services\WasteQaSilentNotificationService;
@@ -218,7 +219,7 @@ class ReplayWasteSeptemberQa extends Command
                 'brand'      => $brand,
                 'outlet'     => $outlet,
                 'items'      => $brand->items()->with('alternateUnits')->get()->keyBy('code'),
-                'categories' => $brand->categories()->get()->keyBy('name'),
+                'categories' => $brand->categories()->get()->keyBy(fn (WasteCategory $category): string => WasteCategory::normalizedName($category->name)),
                 'sections'   => $brand->sections()->where('is_active', true)->pluck('name')->all(),
             ];
         }

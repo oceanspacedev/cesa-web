@@ -57,6 +57,7 @@ class WasteServiceProvider extends PackageServiceProvider
                 '2026_09_24_091231_create_waste_item_alternate_units_table',
                 '2026_09_24_094016_add_source_unit_labels_to_waste_items_and_event_lines',
                 '2026_09_24_103013_create_waste_item_unit_candidates_table',
+                '2026_09_26_000000_canonicalize_waste_units_and_category_names',
             ])
             ->hasCommand(ImportWasteMaster::class)
             ->hasCommand(QaReviewSeptember::class)

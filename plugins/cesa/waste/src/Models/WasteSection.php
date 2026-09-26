@@ -38,7 +38,7 @@ class WasteSection extends Model
     public static function defaultNames(): array
     {
         return [
-            'JCHICKEN' => ['BAR', 'COOK', 'ASSEMBLY', 'MP', 'DINING'],
+            'JCHICKEN' => ['BAR', 'COOK', 'ASSEMBLY', 'MP'],
         ];
     }
 
