@@ -9,13 +9,14 @@ use Webkul\Support\Models\Company;
 
 class PublicManPowerVueFormTest extends RekrutmenTestCase
 {
-    public function test_can_render_public_man_power_vue_form_page(): void
+    public function test_can_render_public_man_power_form_page(): void
     {
         $response = $this->get('/man-power');
 
         $response->assertOk()
-            ->assertSee('manpower-public-form', false)
-            ->assertSee('window.__MANPOWER_CONFIG__', false);
+            ->assertSee('pf-header-card', false)
+            ->assertSee('wire:model', false)
+            ->assertDontSee('window.__MANPOWER_CONFIG__', false);
     }
 
     public function test_can_submit_public_man_power_via_api_and_persist_record(): void

@@ -7,14 +7,12 @@ use Cesa\Lead\Http\Requests\SubmitPublicLeadRequest;
 use Cesa\Lead\Models\Lead;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\View\View;
 use Throwable;
 use Webkul\PluginManager\Package;
 
@@ -29,106 +27,6 @@ class PublicLeadController extends Controller
     protected const WHATSAPP_VALIDATION_STATUS_RATE_LIMITED = 'rate_limited';
 
     protected const WHATSAPP_VALIDATION_STATUS_FAILED = 'failed';
-
-    public function index(Request $request): View
-    {
-        if (! Package::isPluginInstalled('lead')) {
-            abort(404);
-        }
-
-        $whatsappConfig = config('lead.whatsapp_validation', []);
-        $whatsappEnabled = (bool) Arr::get($whatsappConfig, 'enabled', false)
-            && filled(config('lead.whatsapp_validation.endpoint'))
-            && filled(Arr::get($whatsappConfig, 'token'));
-
-        $recaptchaConfig = config('lead.security.recaptcha', []);
-        $recaptchaEnabled = (bool) Arr::get($recaptchaConfig, 'enabled', false)
-            && filled(Arr::get($recaptchaConfig, 'site_key'))
-            && filled(Arr::get($recaptchaConfig, 'secret_key'));
-
-        $storeBranches = array_values(config('lead.store_branches', []));
-
-        $storeTeamPositions = [
-            ['value' => 'Kepala Toko', 'label' => __('lead::filament/resources/lead.options.store_team_position.kepala_toko')],
-            ['value' => 'Promotor', 'label' => __('lead::filament/resources/lead.options.store_team_position.promotor')],
-            ['value' => 'Kasir', 'label' => __('lead::filament/resources/lead.options.store_team_position.kasir')],
-            ['value' => 'Frontliner', 'label' => __('lead::filament/resources/lead.options.store_team_position.frontliner')],
-        ];
-
-        $phoneTransactionRanges = [
-            ['value' => 'Harga di bawah 2 juta', 'label' => __('lead::filament/resources/lead.options.phone_transaction_range.below_2m')],
-            ['value' => 'Harga 2 - 3 juta', 'label' => __('lead::filament/resources/lead.options.phone_transaction_range.2m_3m')],
-            ['value' => 'Harga 3 - 4 juta', 'label' => __('lead::filament/resources/lead.options.phone_transaction_range.3m_4m')],
-            ['value' => 'Harga 4 - 7 juta', 'label' => __('lead::filament/resources/lead.options.phone_transaction_range.4m_7m')],
-            ['value' => 'Harga di atas 7 juta', 'label' => __('lead::filament/resources/lead.options.phone_transaction_range.above_7m')],
-        ];
-
-        $config = [
-            'storeBranches'          => $storeBranches,
-            'storeTeamPositions'     => $storeTeamPositions,
-            'phoneTransactionRanges' => $phoneTransactionRanges,
-            'whatsapp'               => [
-                'enabled'     => $whatsappEnabled,
-                'countryCode' => (string) Arr::get($whatsappConfig, 'country_code', '62'),
-            ],
-            'recaptcha'              => [
-                'enabled' => $recaptchaEnabled,
-                'siteKey' => Arr::get($recaptchaConfig, 'site_key'),
-                'action'  => Arr::get($recaptchaConfig, 'action', 'lead_request'),
-            ],
-            'i18n'                   => [
-                'title'                  => __('lead::views/public-lead-form.title'),
-                'description'            => __('lead::views/public-lead-form.description'),
-                'requiredNote'           => __('lead::views/public-lead-form.required'),
-                'pageInfo'               => __('lead::views/public-lead-form.pagination.single_page', ['current' => 1, 'total' => 1]),
-                'submit'                 => __('lead::views/public-lead-form.actions.submit'),
-                'submitting'             => 'Mengirim...',
-                'fields'                 => [
-                    'name'                   => __('lead::filament/resources/lead.fields.name'),
-                    'phone'                  => __('lead::filament/resources/lead.fields.phone'),
-                    'address'                => __('lead::filament/resources/lead.fields.address'),
-                    'sales_person'           => __('lead::filament/resources/lead.fields.sales_person'),
-                    'store_team_position'    => __('lead::filament/resources/lead.fields.store_team_position'),
-                    'store_branch'           => __('lead::filament/resources/lead.fields.store_branch'),
-                    'phone_transaction_range'=> __('lead::filament/resources/lead.fields.phone_transaction_range'),
-                ],
-                'placeholders'           => [
-                    'name'                   => __('lead::filament/resources/lead.form.placeholders.name'),
-                    'phone'                  => __('lead::filament/resources/lead.form.placeholders.phone'),
-                    'address'                => __('lead::filament/resources/lead.form.placeholders.address'),
-                    'sales_person'           => __('lead::filament/resources/lead.form.placeholders.sales_person'),
-                    'store_team_position'    => __('lead::filament/resources/lead.form.placeholders.choose'),
-                    'store_branch'           => __('lead::filament/resources/lead.form.placeholders.store_branch'),
-                    'phone_transaction_range'=> __('lead::filament/resources/lead.form.placeholders.phone_transaction_range'),
-                ],
-                'whatsapp'               => [
-                    'action'          => __('lead::views/public-lead-form.whatsapp_validation.action'),
-                    'hint'            => __('lead::views/public-lead-form.whatsapp_validation.hint'),
-                    'success'         => __('lead::views/public-lead-form.whatsapp_validation.success'),
-                    'not_registered'  => __('lead::views/public-lead-form.whatsapp_validation.not_registered'),
-                    'invalid'         => __('lead::views/public-lead-form.whatsapp_validation.invalid'),
-                    'rate_limited'    => __('lead::views/public-lead-form.whatsapp_validation.rate_limited'),
-                    'failed'          => __('lead::views/public-lead-form.whatsapp_validation.failed'),
-                    'requiredSuccess' => __('lead::views/public-lead-form.whatsapp_validation.required_success'),
-                ],
-                'validation'             => [
-                    'required'     => 'Pertanyaan ini wajib diisi.',
-                    'phone_format' => __('lead::filament/resources/lead.validation.phone_format'),
-                    'phone_unique' => __('lead::filament/resources/lead.validation.phone_unique'),
-                ],
-                'messages'               => [
-                    'success' => __('lead::views/public-lead-form.messages.success'),
-                    'generic' => __('lead::views/public-lead-form.messages.generic'),
-                ],
-            ],
-            'routes'                 => [
-                'submit'        => route('lead.public.api.submit'),
-                'checkWhatsapp' => route('lead.public.api.check-whatsapp'),
-            ],
-        ];
-
-        return view('lead::public-form', compact('config'));
-    }
 
     public function submit(SubmitPublicLeadRequest $request): JsonResponse
     {

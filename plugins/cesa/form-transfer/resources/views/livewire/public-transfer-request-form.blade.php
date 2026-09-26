@@ -1,5 +1,5 @@
-<div class="min-h-screen bg-[#EFF6FF] py-8 px-4 sm:px-6 lg:px-8 font-sans antialiased">
-    <div class="mx-auto max-w-2xl">
+<div class="pf-page">
+    <div class="mx-auto max-w-xl">
         @php
             $recaptchaEnabled = $this->isRecaptchaEnabled();
             $recaptchaSiteKey = $recaptchaEnabled ? $this->getRecaptchaSiteKey() : null;
@@ -9,7 +9,7 @@
         @endphp
 
         @if ($recentSubmission)
-            <div class="mb-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div class="pf-card mb-4 p-6">
                 <h2 class="text-xl font-medium text-gray-900 mb-2">{{ __('form-transfer::public.submission.success_title') }}</h2>
                 <p class="text-sm text-gray-600">
                     {{ __('form-transfer::public.submission.success_description', ['reference_label' => __('form-transfer::public.submission.reference_id_label'), 'uid' => $recentSubmission['uid'] ?? '']) }}.
@@ -66,17 +66,17 @@
                 x-on:form-processing-finished="isProcessing = false"
                 x-on:form-errors-presented.window="handleErrorsPresented"
             >
-                <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+                <div class="pf-header-card mb-4">
                     <div class="px-6 pt-6 pb-5">
-                        <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                        <h1 class="pf-title">
                             {{ $heading }}
                         </h1>
-                        <p class="mt-3 text-sm leading-relaxed text-gray-600">
+                        <p class="pf-hint mt-3">
                             {{ $subheading }}
                         </p>
                     </div>
                     <div class="border-t border-gray-200 px-6 py-3">
-                        <p class="text-xs text-[#D93025]">{{ __('form-transfer::public.submission.required_hint') }}</p>
+                        <p class="pf-required-note">{{ __('form-transfer::public.submission.required_hint') }}</p>
                     </div>
                 </div>
 
@@ -87,7 +87,7 @@
                 ])
 
                 <div class="space-y-4">
-                    <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                    <div class="pf-card p-6">
                         {{ $this->form }}
                     </div>
                 </div>

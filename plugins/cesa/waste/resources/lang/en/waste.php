@@ -52,6 +52,7 @@ return [
     'summary_category'        => 'Category',
     'summary_photos'          => 'Photos',
     'event_title'             => 'Event :number',
+    'line_title'              => 'Item :number',
     'approval_timeline'       => 'Review steps',
     'pip_section'             => 'PIP context (MOMOYO)',
     'pip_optional'            => 'Optional. Enter raw components below.',

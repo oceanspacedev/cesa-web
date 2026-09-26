@@ -1,5 +1,5 @@
-<div class="min-h-screen bg-[#EFF6FF] px-4 py-8 font-sans antialiased sm:px-6 lg:px-8">
-    <div class="mx-auto max-w-2xl">
+<div class="pf-page">
+    <div class="mx-auto max-w-xl">
         @php
             $recaptchaEnabled = $this->isRecaptchaEnabled();
             $recaptchaSiteKey = $recaptchaEnabled ? $this->getRecaptchaSiteKey() : null;
@@ -14,13 +14,13 @@
             })"
             x-on:submit.prevent="handleSubmit"
         >
-            <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+            <div class="pf-header-card mb-4">
                 <div class="px-6 pt-6 pb-5">
-                    <h1 class="text-[32px] font-normal leading-tight text-gray-900">{{ __('lead::views/public-lead-form.title') }}</h1>
-                    <p class="mt-3 text-sm leading-relaxed text-gray-600">{{ __('lead::views/public-lead-form.description') }}</p>
+                    <h1 class="pf-title">{{ __('lead::views/public-lead-form.title') }}</h1>
+                    <p class="pf-hint mt-3">{{ __('lead::views/public-lead-form.description') }}</p>
                 </div>
                 <div class="border-t border-gray-200 px-6 py-3">
-                    <p class="text-xs text-[#D93025]">{{ __('lead::views/public-lead-form.required') }}</p>
+                    <p class="pf-required-note">{{ __('lead::views/public-lead-form.required') }}</p>
                 </div>
             </div>
 
@@ -37,7 +37,10 @@
             @enderror
 
             <div class="space-y-4">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div class="pf-card p-6">
+                    <div class="pf-section-bar -mx-6 -mt-6 mb-6 px-6 py-3">
+                        <h2 class="text-lg font-medium">{{ __('Data pemohon') }}</h2>
+                    </div>
                     {{ $this->form }}
                 </div>
             </div>

@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-[#EFF6FF] px-4 py-8 font-sans antialiased sm:px-6 lg:px-8">
+<div class="pf-page">
     <div class="mx-auto max-w-2xl">
         @php
             $statusBadgeClass = match ($summary['status'] ?? 'pending') {
@@ -8,9 +8,9 @@
             };
         @endphp
 
-        <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+        <div class="pf-header-card mb-4">
             <div class="px-6 pt-5 pb-6">
-                <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                <h1 class="pf-title-display">
                     {{ __('waste::waste.approval_title') }}
                 </h1>
                 <p class="mt-2 break-words text-sm text-gray-600">
@@ -33,7 +33,7 @@
         </div>
 
         <div class="space-y-4">
-            <section x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <section x-data="{ expanded: true }" class="overflow-hidden pf-card">
                 <button
                     type="button"
                     @click="expanded = ! expanded"

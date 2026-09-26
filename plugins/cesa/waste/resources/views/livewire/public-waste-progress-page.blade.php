@@ -1,4 +1,4 @@
-<div class="waste-square min-h-screen bg-[#EFF6FF] px-4 py-8 font-sans antialiased sm:px-6">
+<div class="pf-page">
     <div class="mx-auto max-w-xl space-y-4">
         @php
             $statusBadgeClass = match ($summary['status'] ?? 'pending') {
@@ -8,10 +8,10 @@
             };
         @endphp
 
-        <header class="mb-4 border-t-[10px] cesa-primary-border bg-white shadow-sm">
+        <header class="pf-header-card mb-4">
             <div class="px-6 pb-5 pt-6">
-                <h1 class="text-2xl font-normal leading-tight text-gray-900">{{ __('waste::waste.progress_title') }}</h1>
-                <p class="mt-3 text-sm leading-relaxed text-gray-600">{{ $summary['brand'] }} / {{ $summary['outlet'] }} · {{ $summary['event_date'] }} · {{ $summary['reporter_name'] }}</p>
+                <h1 class="pf-title">{{ __('waste::waste.progress_title') }}</h1>
+                <p class="pf-hint mt-3">{{ $summary['brand'] }} / {{ $summary['outlet'] }} · {{ $summary['event_date'] }} · {{ $summary['reporter_name'] }}</p>
             </div>
             <div class="border-t border-gray-200 px-6 py-3">
                 <x-waste::ui component="Badge" :props="['label' => $summary['status_label'], 'theme' => match ($summary['status']) { 'approved' => 'green', 'rejected' => 'red', default => 'orange' }, 'size' => 'lg']">
@@ -35,7 +35,7 @@
         @endif
 
         <section class="border border-gray-200 bg-white p-6 shadow-sm">
-            <div class="-mx-6 -mt-6 mb-6 cesa-primary-bg px-6 py-3 text-white">
+            <div class="pf-section-bar -mx-6 -mt-6 mb-6 px-6 py-3">
                 <h2 class="text-lg font-medium">{{ __('waste::waste.steps.report') }}</h2>
             </div>
             <div class="space-y-8">

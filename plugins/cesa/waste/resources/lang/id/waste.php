@@ -52,6 +52,7 @@ return [
     'summary_category'        => 'Kategori',
     'summary_photos'          => 'Foto',
     'event_title'             => 'Kejadian :number',
+    'line_title'              => 'Barang :number',
     'approval_timeline'       => 'Tahapan pemeriksaan',
     'pip_section'             => 'Konteks PIP (MOMOYO)',
     'pip_optional'            => 'Opsional. Isi bahan turunannya di bawah.',

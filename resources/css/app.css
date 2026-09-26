@@ -430,3 +430,117 @@
     direction: ltr;
     text-align: left;
 }
+
+/* ==========================================================================
+   STANDAR FORM PUBLIK (pf-*) — dipakai bersama oleh semua form publik:
+   waste, form-transfer, lead, man-power. theme.css meng-import app.css,
+   jadi kelas di bawah tersedia di semua build. Ubah di sini, berlaku global.
+   ========================================================================== */
+:root {
+    --pf-primary: #2563eb;
+    --pf-primary-dark: #1d4ed8;
+    --pf-primary-darker: #1e40af;
+    --pf-danger: #d93025;
+}
+
+@layer components {
+    /* Halaman: latar biru muda, padding, font, dan sudut kotak untuk seluruh isi */
+    .pf-page {
+        min-height: 100vh;
+        background-color: #eff6ff;
+        padding-block: 2rem;
+        padding-inline: 1rem;
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    @media (min-width: 640px) {
+        .pf-page {
+            padding-inline: 1.5rem;
+        }
+    }
+
+    .pf-page--affiliate {
+        background-color: #f0ebf8;
+    }
+
+    .pf-page,
+    .pf-page * {
+        border-radius: 0 !important;
+    }
+
+    /* Kartu header dengan garis tebal warna utama di sisi atas */
+    .pf-header-card {
+        background-color: #fff;
+        border: 1px solid #e5e7eb;
+        border-top: 10px solid var(--pf-primary);
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
+
+    .pf-header-card--affiliate {
+        border-top-color: #673ab7;
+    }
+
+    /* Judul halaman */
+    .pf-title {
+        font-size: 1.5rem;
+        line-height: 1.25;
+        font-weight: 400;
+        color: #111827;
+    }
+
+    .pf-title-display {
+        font-size: 2rem;
+        line-height: 1.25;
+        font-weight: 400;
+        color: #111827;
+        text-transform: uppercase;
+    }
+
+    /* Teks penjelasan di bawah judul */
+    .pf-hint {
+        font-size: 0.875rem;
+        line-height: 1.625;
+        color: #4b5563;
+    }
+
+    /* Catatan wajib diisi */
+    .pf-required-note {
+        font-size: 0.75rem;
+        color: var(--pf-danger);
+    }
+
+    /* Kartu isian / konten */
+    .pf-card {
+        background-color: #fff;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
+
+    /* Bar biru judul bagian di dalam kartu isian */
+    .pf-section-bar {
+        background-color: var(--pf-primary);
+        color: #fff;
+    }
+
+    .pf-section-bar h2 {
+        font-size: 1.125rem;
+        font-weight: 500;
+    }
+
+    /* Tombol utama */
+    .pf-button-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--pf-primary-dark);
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
+
+    .pf-button-primary:hover {
+        background-color: var(--pf-primary-darker);
+    }
+}

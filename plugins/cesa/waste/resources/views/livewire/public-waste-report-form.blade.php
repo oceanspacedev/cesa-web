@@ -1,4 +1,4 @@
-<div class="waste-square min-h-screen bg-[#EFF6FF] px-4 py-8 font-sans antialiased sm:px-6">
+<div class="pf-page">
     <div class="mx-auto max-w-xl">
             @php
                 $page = $this->currentPage();
@@ -6,19 +6,19 @@
                 $firstEvent = $data['events'][0] ?? null;
             @endphp
             <form id="form" x-on:submit.prevent="$wire.currentStep < {{ $totalSteps }} ? $wire.nextStep() : $wire.submit()">
-                <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+                <div class="pf-header-card mb-4">
                     <div class="px-6 pb-5 pt-6">
-                        <h1 class="text-2xl font-normal leading-tight text-gray-900">{{ __('waste::waste.form_heading') }} - {{ $brandData['name'] ?? '' }} / {{ $outletData['name'] ?? '' }}</h1>
-                        <p class="mt-3 text-sm leading-relaxed text-gray-600">{{ $this->stepHint() }}</p>
-                        <p class="mt-2 text-sm leading-relaxed text-gray-600">{{ __('waste::waste.monthly_flow_hint') }}</p>
+                        <h1 class="pf-title">{{ __('waste::waste.form_heading') }} - {{ $brandData['name'] ?? '' }} / {{ $outletData['name'] ?? '' }}</h1>
+                        <p class="pf-hint mt-3">{{ $this->stepHint() }}</p>
+                        <p class="pf-hint">{{ __('waste::waste.monthly_flow_hint') }}</p>
                     </div>
                     <div class="border-t border-gray-200 px-6 py-3">
-                        <p class="text-xs text-[#D93025]">{{ __('waste::waste.required_hint') }}</p>
+                        <p class="pf-required-note">{{ __('waste::waste.required_hint') }}</p>
                     </div>
                 </div>
 
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <div class="-mx-6 -mt-6 mb-6 rounded-t-lg cesa-primary-bg px-6 py-3 text-white">
+                <div class="pf-card p-6">
+                    <div class="pf-section-bar -mx-6 -mt-6 mb-6 px-6 py-3">
                         <h2 class="text-lg font-medium">{{ $this->stepTitle() }}</h2>
                     </div>
 
@@ -28,7 +28,7 @@
                                 <input type="date" wire:model="data.event_date" class="fi-input" required>
                             </x-waste::public-field>
 
-                            <div class="grid gap-6 sm:grid-cols-2">
+                            <div class="space-y-6">
                                 <x-waste::public-field :label="__('waste::waste.fields.reporter_name')" :required="true" :error="$errors->first('data.reporter_name')">
                                     <input type="text" wire:model="data.reporter_name" data-waste-reporter="name" x-on:input="remember()" class="fi-input" placeholder="{{ __('waste::waste.placeholders.reporter_name') }}" required>
                                 </x-waste::public-field>
@@ -55,7 +55,7 @@
                                         </div>
                                     @endif
 
-                                    <div class="flex flex-col" style="gap: 1.5rem;">
+                                    <div class="space-y-4">
                                         @foreach (($event['lines'] ?? []) as $lineIndex => $line)
                                             @php
                                                 $lineItemModel = 'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id';
@@ -65,8 +65,17 @@
                                                 wire:key="line-{{ $this->structureVersion }}-{{ $eventIndex }}-{{ $lineIndex }}"
                                                 x-data="wasteLineUnits(@js($this->itemUnitOptions), @js($line['item_id'] ?? ''), @js($line['unit'] ?? ''), @js($lineUnitModel))"
                                                 x-on:waste-item-selected="if ($event.detail.model === @js($lineItemModel)) selectItem($event.detail.id)"
-                                                class="grid grid-cols-1 gap-4 sm:items-end sm:gap-6 {{ count($event['lines']) > 1 ? 'sm:grid-cols-[minmax(0,1fr)_11rem_auto]' : 'sm:grid-cols-[minmax(0,1fr)_11rem]' }}"
+                                                class="space-y-4 pf-card p-4"
                                             >
+                                                <div class="flex items-center justify-between gap-3">
+                                                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('waste::waste.line_title', ['number' => $lineIndex + 1]) }}</span>
+                                                    @if (count($event['lines']) > 1)
+                                                        <button type="button" wire:click="removeLine({{ $eventIndex }}, {{ $lineIndex }})" class="text-sm font-medium text-red-600 hover:text-red-700 hover:underline">
+                                                            {{ __('waste::waste.remove') }}
+                                                        </button>
+                                                    @endif
+                                                </div>
+
                                                 <x-waste::public-select
                                                     :label="__('waste::waste.choose_item')"
                                                     :options="$items"
@@ -88,19 +97,15 @@
                                                         </select>
                                                     </div>
                                                 </x-waste::public-field>
-                                                @if (count($event['lines']) > 1)
-                                                    <button type="button" wire:click="removeLine({{ $eventIndex }}, {{ $lineIndex }})" class="mb-2 text-sm font-medium text-red-600 hover:text-red-700 hover:underline">
-                                                        {{ __('waste::waste.remove') }}
-                                                    </button>
-                                                @endif
-                                                <p x-show="availableUnits.length > 1" x-cloak class="text-xs text-gray-600 sm:col-start-2">{{ __('waste::waste.alternate_unit_hint') }}</p>
+
+                                                <p x-show="availableUnits.length > 1" x-cloak class="text-xs text-gray-600">{{ __('waste::waste.alternate_unit_hint') }}</p>
                                             </div>
                                         @endforeach
-                                    </div>
 
-                                    <button type="button" wire:click="addLine({{ $eventIndex }})" class="text-sm font-medium text-primary-600 hover:text-primary-700 hover:underline">
-                                        {{ __('waste::waste.add_line') }}
-                                    </button>
+                                        <button type="button" wire:click="addLine({{ $eventIndex }})" class="w-full rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm font-medium text-primary-600 hover:border-primary-300 hover:bg-primary-50">
+                                            + {{ __('waste::waste.add_line') }}
+                                        </button>
+                                    </div>
 
                                     @include('waste::livewire.partials.event-details', ['eventIndex' => $eventIndex, 'event' => $event])
 
@@ -123,7 +128,7 @@
                                                 <sup class="text-[#D93025]">*</sup>
                                             </p>
                                             <p class="text-base font-medium text-gray-950">{{ __('waste::waste.camera_progress', ['count' => $photoCount, 'max' => $photoMax]) }}</p>
-                                            <p class="text-sm leading-relaxed text-gray-600">
+                                            <p class="pf-hint">
                                                 @if ($photoCount >= $photoMax)
                                                     {{ __('waste::waste.camera_full', ['max' => $photoMax]) }}
                                                 @elseif ($photoCount > 0)
@@ -134,9 +139,9 @@
                                                     {{ __('waste::waste.camera_need_more') }}
                                                 @endif
                                             </p>
-                                            <p class="text-sm leading-relaxed text-gray-600">{{ __('waste::waste.camera_hint') }}</p>
+                                            <p class="pf-hint">{{ __('waste::waste.camera_hint') }}</p>
                                             @if ($existingPhotoIds !== [] && $photoCount > 0)
-                                                <p class="text-sm leading-relaxed text-gray-600">{{ __('waste::waste.camera_revision_replace') }}</p>
+                                                <p class="pf-hint">{{ __('waste::waste.camera_revision_replace') }}</p>
                                             @endif
                                         </div>
 

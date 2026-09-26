@@ -1,20 +1,20 @@
-<div class="min-h-screen bg-[#EFF6FF] py-8 px-4 sm:px-6 lg:px-8 font-sans antialiased">
+<div class="pf-page">
     <div class="mx-auto max-w-2xl">
         @if (empty($summary))
             <form wire:submit="lookup">
-                <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+                <div class="pf-header-card mb-4">
                     <div class="px-6 pt-5 pb-6">
-                        <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                        <h1 class="pf-title-display">
                             {{ __('form-transfer::public.progress.lookup.heading') }}
                         </h1>
-                        <p class="mt-2 text-sm text-gray-600">
+                        <p class="pf-hint mt-2">
                             {{ __('form-transfer::public.progress.lookup.description') }}
                         </p>
                     </div>
                 </div>
 
                 <div class="space-y-4">
-                    <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                         <button
                             type="button"
                             @click="expanded = ! expanded"
@@ -54,7 +54,7 @@
                 </div>
 
                 @if ($lookupSearched)
-                    <div x-data="{ expanded: true }" class="mt-8 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div x-data="{ expanded: true }" class="mt-8 overflow-hidden pf-card">
                         <button
                             type="button"
                             @click="expanded = ! expanded"
@@ -204,12 +204,12 @@
                 ];
             @endphp
 
-            <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+            <div class="pf-header-card mb-4">
                 <div class="px-6 pt-5 pb-6">
-                    <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                    <h1 class="pf-title-display">
                         {{ __('form-transfer::public.progress.heading') }}
                     </h1>
-                    <p class="mt-2 text-sm text-gray-600">
+                    <p class="pf-hint mt-2">
                         {{ __('form-transfer::public.progress.attn') }} <span class="font-medium text-gray-900">{{ $requesterName }}</span>
                         @if (!empty($division) && $division !== '-')
                             ({{ $division }})
@@ -238,7 +238,7 @@
             </div>
 
             <div class="space-y-4">
-                <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                     <button
                         type="button"
                         @click="expanded = ! expanded"
@@ -293,7 +293,7 @@
                 </div>
 
                 @if (!empty($summary['realizations']))
-                    <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                         <button
                             type="button"
                             @click="expanded = ! expanded"
@@ -334,7 +334,7 @@
                     </div>
                 @endif
 
-                <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                     <button
                         type="button"
                         @click="expanded = ! expanded"

@@ -36,13 +36,12 @@ it('presents the public waste launcher with the same card chrome as form transfe
 
     $this->get(route('waste.public.index'))
         ->assertSuccessful()
-        ->assertSee('bg-[#EFF6FF]', false)
-        ->assertSee('border-t-[10px]', false)
-        ->assertSee('cesa-primary-border', false)
-        ->assertSee('waste-square', false)
+        ->assertSee('pf-page', false)
+        ->assertSee('pf-header-card', false)
+        ->assertSee('pf-title-display', false)
         ->assertSee('hover:border-primary-600', false)
         ->assertDontSee('aria-label="CESA"', false)
-        ->assertSee('text-transform: uppercase', false)
+
         ->assertSeeText($brand->name)
         ->assertSeeText($outlet->name)
         ->assertDontSeeText(__('waste::waste.entry.start'));

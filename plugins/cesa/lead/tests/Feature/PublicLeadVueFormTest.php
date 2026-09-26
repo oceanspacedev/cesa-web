@@ -16,13 +16,14 @@ class PublicLeadVueFormTest extends TestCase
         $this->withoutVite();
     }
 
-    public function test_can_render_public_lead_vue_form_page(): void
+    public function test_can_render_public_lead_form_page(): void
     {
         $response = $this->get('/lead');
 
         $response->assertOk()
-            ->assertSee('lead-public-form', false)
-            ->assertSee('window.__LEAD_CONFIG__', false);
+            ->assertSee('pf-header-card', false)
+            ->assertSee('wire:model', false)
+            ->assertDontSee('window.__LEAD_CONFIG__', false);
     }
 
     public function test_can_submit_public_lead_via_api_and_persist_lead(): void

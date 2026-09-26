@@ -2,6 +2,7 @@
 
 use Cesa\Rekrutmen\Http\Controllers\JobApplicationAttachmentDownloadController;
 use Cesa\Rekrutmen\Http\Controllers\PublicRequestManPowerController;
+use Cesa\Rekrutmen\Livewire\PublicRequestManPowerForm;
 use Cesa\Rekrutmen\Http\Controllers\RekrutmenCommunicationSettingsController;
 use Cesa\Rekrutmen\Http\Controllers\RekrutmenSpaController;
 use Cesa\Rekrutmen\Livewire\PublicRequestManPowerApprovalPage;
@@ -14,7 +15,7 @@ use Illuminate\Http\Middleware\SetCacheHeaders;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
-    Route::get('man-power', [PublicRequestManPowerController::class, 'index'])
+    Route::get('man-power', PublicRequestManPowerForm::class)
         ->middleware([
             SetCacheHeaders::using([
                 'no_store'        => true,

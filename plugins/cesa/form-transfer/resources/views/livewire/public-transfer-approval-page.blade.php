@@ -1,4 +1,4 @@
-<div class="min-h-screen bg-[#EFF6FF] py-8 px-4 sm:px-6 lg:px-8 font-sans antialiased">
+<div class="pf-page">
     <div class="mx-auto max-w-2xl">
             @php
                 $statusColor = $summary['status_color'] ?? 'gray';
@@ -65,12 +65,12 @@
                 ];
             @endphp
 
-	            <div class="mb-4 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+	            <div class="pf-header-card mb-4">
                 <div class="px-6 pt-5 pb-6">
                     <h1 class="text-[32px] font-normal text-gray-900 leading-tight">
                         {{ __('form-transfer::public.form.actions.heading', ['form' => $formTitle]) }}
                     </h1>
-                    <p class="mt-2 text-sm text-gray-600">
+                    <p class="pf-hint mt-2">
                         {{ __('form-transfer::public.form.actions.subheading', ['requester' => $requesterName]) }}
                     </p>
                 </div>
@@ -112,7 +112,7 @@
             </div>
 
             <div class="space-y-4">
-                <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                     <button
                         type="button"
                         @click="expanded = ! expanded"
@@ -166,7 +166,7 @@
                     </div>
                 </div>
 
-                <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                     <button
                         type="button"
                         @click="expanded = ! expanded"
@@ -238,7 +238,7 @@
                 </div>
 
                 @if ($this->isPendingApproval() && ! $actionTaken)
-                    <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                         <button
                             type="button"
                             @click="expanded = ! expanded"
@@ -265,7 +265,7 @@
                         </div>
                     </div>
                 @else
-                    <div x-data="{ expanded: true }" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                    <div x-data="{ expanded: true }" class="overflow-hidden pf-card">
                         <button
                             type="button"
                             @click="expanded = ! expanded"

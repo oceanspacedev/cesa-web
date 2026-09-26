@@ -1,11 +1,11 @@
-<div class="min-h-screen bg-[#EFF6FF] px-4 py-8 font-sans antialiased sm:px-6 lg:px-8">
+<div class="pf-page">
     <div class="mx-auto max-w-4xl">
-        <div class="mb-6 rounded-lg border-t-[10px] cesa-primary-border bg-white shadow-sm">
+        <div class="pf-header-card mb-6">
             <div class="px-6 pb-6 pt-5">
-                <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                <h1 class="pf-title-display">
                     {{ $heading }}
                 </h1>
-                <p class="mt-2 text-sm text-gray-600">
+                <p class="pf-hint mt-2">
                     {{ $description }}
                 </p>
             </div>
@@ -16,7 +16,7 @@
                 @foreach ($categories as $category)
                     <a
                         href="{{ route('form-transfer.public.dynamic-index', ['publicIndexSlug' => $category->slug]) }}"
-                        class="group rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition hover:border-primary-600 hover:shadow-md"
+                        class="group pf-card p-6 transition hover:border-primary-600 hover:shadow-md"
                     >
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -26,7 +26,7 @@
                                 <h2 class="mt-2 text-lg font-semibold text-gray-900 group-hover:text-primary-600">
                                     {{ $category->name }}
                                 </h2>
-                                <p class="mt-2 text-sm text-gray-600">
+                                <p class="mt-2 pf-hint">
                                     {{ filled($category->description) ? $category->description : $defaultDescription }}
                                 </p>
                             </div>
@@ -39,7 +39,7 @@
                 @endforeach
             </div>
         @else
-            <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div class="pf-card p-6">
                 <p class="text-sm text-gray-600">
                     {{ $emptyState }}
                 </p>

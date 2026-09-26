@@ -1,11 +1,11 @@
-<div class="min-h-screen {{ $affiliateMode ? 'bg-[#F0EBF8]' : 'bg-[#EFF6FF]' }} px-4 py-8 font-sans antialiased sm:px-6 lg:px-8">
+<div class="pf-page {{ $affiliateMode ? 'pf-page--affiliate' : '' }}">
     <div class="mx-auto max-w-4xl">
-        <div class="mb-6 rounded-lg border-t-[10px] {{ $affiliateMode ? 'border-[#673AB7]' : 'cesa-primary-border' }} bg-white shadow-sm">
+        <div class="pf-header-card mb-6 {{ $affiliateMode ? 'pf-header-card--affiliate' : '' }}">
             <div class="px-6 pb-6 pt-5">
-                <h1 class="text-[32px] font-normal leading-tight text-gray-900">
+                <h1 class="pf-title-display">
                     {{ $heading }}
                 </h1>
-                <p class="mt-2 text-sm text-gray-600">
+                <p class="pf-hint mt-2">
                     {{ $description }}
                 </p>
             </div>
@@ -17,7 +17,7 @@
                     <a
                         href="{{ $formTransfer->public_destination_url }}"
                         @if ($formTransfer->usesExternalPublicEntry()) target="_blank" rel="noopener noreferrer" @endif
-                        class="group rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition {{ $affiliateMode ? 'hover:border-[#673AB7]' : 'hover:border-primary-600' }} hover:shadow-md"
+                        class="group pf-card p-6 transition {{ $affiliateMode ? 'hover:border-[#673AB7]' : 'hover:border-primary-600' }} hover:shadow-md"
                     >
                         <div class="flex items-start justify-between gap-4">
                             <div>
@@ -27,7 +27,7 @@
                                 <h2 class="mt-2 text-lg font-semibold text-gray-900 {{ $affiliateMode ? 'group-hover:text-[#673AB7]' : 'group-hover:text-primary-600' }}">
                                     {{ $formTransfer->name }}
                                 </h2>
-                                <p class="mt-2 text-sm text-gray-600">
+                                <p class="pf-hint mt-2">
                                     {{ filled($formTransfer->description) ? $formTransfer->description : $defaultDescription }}
                                 </p>
                             </div>
@@ -40,7 +40,7 @@
                 @endforeach
             </div>
         @else
-            <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div class="pf-card p-6">
                 <p class="text-sm text-gray-600">
                     {{ $emptyState }}
                 </p>

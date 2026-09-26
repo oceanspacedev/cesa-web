@@ -379,7 +379,7 @@ function publicExcelWorkbook(WasteReportExport $export): Spreadsheet
 
 function publicExcelTemplateSheet(Spreadsheet $workbook): Worksheet
 {
-    expect($workbook->getSheetCount())->toBe(1);
+    expect($workbook->getSheetCount())->toBe(2);
 
     return $workbook->getSheet(0);
 }

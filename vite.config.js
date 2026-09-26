@@ -16,8 +16,6 @@ export default defineConfig({
                 'resources/css/filament/admin/theme.css',
                 'resources/css/filament/public/theme.css',
                 'plugins/cesa/rekrutmen/resources/js/app.js',
-                'plugins/cesa/lead/resources/js/public-lead.js',
-                'plugins/cesa/rekrutmen/resources/js/public-man-power.js',
                 'plugins/cesa/waste/resources/js/public-waste.js',
             ],
             refresh: true,
