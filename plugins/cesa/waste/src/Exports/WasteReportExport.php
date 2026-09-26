@@ -86,7 +86,7 @@ class WasteReportExport implements WithMultipleSheets
     }
 
     /**
-     * @return array<int, WasteTemplateSheet>
+     * @return array<int, WasteTemplateSheet|WasteMasterSheet>
      */
     protected function templateSheets(): array
     {
@@ -102,6 +102,7 @@ class WasteReportExport implements WithMultipleSheets
 
         $usedTitles = [];
         $sheets = [];
+        $masterBrands = [];
         foreach ($groups as $reports) {
             $first = $reports->first();
             $month = strtoupper($first->event_date->locale('id')->translatedFormat('F'));
@@ -116,6 +117,11 @@ class WasteReportExport implements WithMultipleSheets
                 ]));
 
             $sheets[] = new WasteTemplateSheet($reports, $this->uniqueSheetTitle($title, $usedTitles));
+
+            if (! in_array($brandCode, $masterBrands, true)) {
+                $masterBrands[] = $brandCode;
+                $sheets[] = new WasteMasterSheet($first->brand, $this->uniqueSheetTitle('Master data '.$brandCode, $usedTitles));
+            }
         }
 
         return $sheets;

@@ -137,7 +137,7 @@ it('combines thirty days of incidents from three brands into isolated monthly to
     try {
         file_put_contents($workbookPath, Excel::raw($september, ExcelFormat::XLSX));
         $workbook = IOFactory::load($workbookPath);
-        expect($workbook->getSheetCount())->toBe(4)
+        expect($workbook->getSheetCount())->toBe(7)
             ->and($workbook->getSheetByName('Detail'))->toBeNull()
             ->and($workbook->getSheetByName('Ringkasan'))->toBeNull();
     } finally {

@@ -46,7 +46,8 @@ it('exports Jchicken and Luuca in their own monthly template layouts with saved 
     $sheets = wasteTemplateSheets($workbook);
     $byReason = collect($sheets)->keyBy(fn (Worksheet $sheet): string => (string) $sheet->getCell('G7')->getValue());
 
-    expect($workbook->getSheetCount())->toBe(4)
+    expect($workbook->getSheetCount())->toBe(6)
+        ->and($workbook->getSheetNames())->toContain('Master data JCHICKEN', 'Master data LUUCA')
         ->and($sheets)->toHaveCount(4)
         ->and(collect($sheets)->every(fn (Worksheet $sheet): bool => ! str_contains($sheet->getTitle(), 'APPROVED')))->toBeTrue()
         ->and($byReason->keys()->sort()->values()->all())->toBe(['J Oct Ciledug', 'J Sep Ciledug', 'J Sep Kemang', 'L Sep Ciledug']);
@@ -79,6 +80,31 @@ it('exports Jchicken and Luuca in their own monthly template layouts with saved 
         ->and($luucaSheet->getCell('F7')->getValue())->toBe('PCS')
         ->and($luucaSheet->getCell('I7')->getValue())->toBe('Waste')
         ->and($luucaSheet->getCell('A4')->getValue())->toBe('BULAN, TAHUN: SEPTEMBER 2026');
+});
+
+it('ships a master data sheet for every exported brand next to the monthly sheets', function (): void {
+    $user = UserFactory::new()->create();
+    [$brand, $outlet, $item, $category] = wasteTemplateCatalog('JCHICKEN', 'Jchicken', 'Chicken', 'J-001');
+    $brand->users()->attach($user);
+    WasteItem::query()->create([
+        'brand_id' => $brand->id, 'code' => '0007', 'name' => 'Sauce Sachet',
+        'unit'     => 'SHT', 'source_unit_label' => 'SHT', 'item_type' => 'others', 'is_active' => true,
+    ]);
+    wasteTemplateApprovedReport(wasteTemplatePayload($brand, $outlet, $item, $category, '2026-09-23', 'Sep report'), $user);
+
+    $workbook = wasteTemplateWorkbook(new WasteReportExport(status: 'approved', user: $user));
+    $master = $workbook->getSheetByName('Master data JCHICKEN');
+
+    expect($workbook->getSheetCount())->toBe(2)
+        ->and($master)->not->toBeNull()
+        ->and(wasteTemplateHeader($master, 1, 4))->toBe(['Nama Item', 'Kode Item', 'Satuan', 'JENIS'])
+        ->and($master->getHighestRow())->toBe(3)
+        ->and($master->getCell('A2')->getValue())->toBe('Chicken')
+        ->and($master->getCell('C2')->getValue())->toBe('PCS')
+        ->and($master->getCell('B3')->getDataType())->toBe(DataType::TYPE_STRING)
+        ->and($master->getCell('B3')->getValue())->toBe('0007')
+        ->and($master->getCell('C3')->getValue())->toBe('SHT')
+        ->and($master->getCell('D3')->getValue())->toBe('others');
 });
 
 it('formats whole quantities without a trailing decimal separator', function (string $brandCode, string $quantityColumn, int $firstDataRow): void {
@@ -246,7 +272,7 @@ it('writes Momoyo PIP quantity once for multiple components and reads only the l
         ->and($sheet->getCell('E6')->getDataType())->toBe(DataType::TYPE_NUMERIC)
         ->and($sheet->getCell('F6')->getDataType())->toBe(DataType::TYPE_NUMERIC)
         ->and($sheet->getCell('A4')->getValue())->toBeNull()
-        ->and($workbook->getSheetCount())->toBe(1)
+        ->and($workbook->getSheetCount())->toBe(2)
         ->and($export->detailRows()->pluck(11)->all())->toBe([2.0, null, null]);
 });
 
@@ -388,7 +414,7 @@ it('keeps text that looks like an Excel formula as text while quantities stay nu
         ->and($sheet->getCell('G7')->getValue())->toBe('=HYPERLINK("https://example.test","open")')
         ->and($sheet->getCell('H7')->getValue())->toBe('=SUM(1,2)')
         ->and($sheet->getCell('E7')->getDataType())->toBe(DataType::TYPE_NUMERIC)
-        ->and($workbook->getSheetCount())->toBe(1)
+        ->and($workbook->getSheetCount())->toBe(2)
         ->and($export->detailRows()->first()[9])->toBe('=HYPERLINK("https://example.test","open")');
 });
 
