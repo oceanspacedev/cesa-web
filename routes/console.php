@@ -16,3 +16,7 @@ Schedule::command('rekrutmen:process-scheduled-notifications')
     ->withoutOverlapping();
 
 Schedule::command('wag:reconcile')->everyMinute()->withoutOverlapping();
+
+Schedule::command('approvals:send-pending-reminders')
+    ->dailyAt('08:00')
+    ->withoutOverlapping();

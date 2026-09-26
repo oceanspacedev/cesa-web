@@ -33,6 +33,20 @@ class WasteNotificationService
         $this->queueApproval($report, $version, $approval, $token);
     }
 
+    public function queueApprovalReminder(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
+    {
+        $message = "Pengingat: approval waste {$report->uid} masih menunggu tindakan.\n"
+            .route('waste.public.approval', ['token' => $token]);
+
+        if (filled($approval->approver_phone)) {
+            $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order.'_reminder', $approval->approver_phone, $message);
+        }
+
+        if (config('waste.notifications.email_enabled', true) && filled($approval->approver_email)) {
+            $this->queueDelivery($report, $version, 'email', 'approval_'.$approval->step_order.'_reminder', $approval->approver_email, $message, 'Pengingat approval waste '.$report->uid);
+        }
+    }
+
     public function queueRequester(WasteReport $report, string $type, ?string $progressToken = null, ?string $manageToken = null): void
     {
         $links = [];

@@ -39,6 +39,65 @@ class WasteApprovalService
     }
 
     /**
+     * Re-notify the currently pending approval step with a fresh access token.
+     */
+    public function remind(WasteReport $report): bool
+    {
+        $result = DB::transaction(function () use ($report): ?array {
+            $report = WasteReport::query()
+                ->whereKey($report->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            $version = $report?->latestVersion()->lockForUpdate()->first();
+
+            $approval = $version?->approvals()
+                ->where('status', WasteApprovalStatus::Pending)
+                ->orderBy('step_order')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $report || ! $version || ! $approval || $report->status !== WasteReportStatus::Pending) {
+                return null;
+            }
+
+            $token = Str::random(64);
+
+            $approval->forceFill([
+                'token_hash'  => $this->reportService->tokenHash($token),
+                'notified_at' => now(),
+            ])->save();
+
+            $report->activityLogs()->create([
+                'version_id' => $version->getKey(),
+                'event'      => 'reminder_sent',
+                'actor_type' => 'system',
+                'metadata'   => ['step_order' => $approval->step_order],
+            ]);
+
+            return [
+                'report'   => $report->fresh(['brand', 'outlet', 'latestVersion.approvals']),
+                'version'  => $version->fresh('approvals'),
+                'approval' => $approval->fresh(),
+                'token'    => $token,
+            ];
+        });
+
+        if ($result === null) {
+            return false;
+        }
+
+        $this->notificationService->queueApprovalReminder(
+            $result['report'],
+            $result['version'],
+            $result['approval'],
+            $result['token'],
+        );
+
+        return true;
+    }
+
+    /**
      * @return array{report: WasteReport, next_token: ?string, next_approval: ?WasteApproval, progress_token: ?string, manage_token: ?string}
      */
     protected function decide(string $token, WasteApprovalStatus $decision, ?string $note): array
