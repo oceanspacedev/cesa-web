@@ -38,13 +38,14 @@ it('grants global waste access through the permission generated during installat
         ->and(app(WasteReportPolicy::class)->viewAny($user))->toBeTrue();
 });
 
-it('seeds brand references without activating invented items or approvers', function (): void {
+it('seeds the standard brand and master item references', function (): void {
     config(['waste.master_sources' => []]);
 
     $this->seed(DatabaseSeeder::class);
 
     expect(WasteBrand::query()->count())->toBe(3)
-        ->and(WasteItem::query()->count())->toBe(0)
+        ->and(WasteItem::query()->count())->toBe(834)
+        ->and(WasteItem::query()->where('is_active', false)->count())->toBe(43)
         ->and(WasteWorkflow::query()->count())->toBe(0);
 });
 

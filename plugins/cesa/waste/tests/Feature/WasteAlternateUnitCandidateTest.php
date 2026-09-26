@@ -1,5 +1,6 @@
 <?php
 
+use Cesa\Waste\Database\Seeders\DatabaseSeeder;
 use Cesa\Waste\Enums\WasteAlternateUnitCandidateStatus;
 use Cesa\Waste\Filament\Resources\WasteItemResource\Pages\ManageWasteItems;
 use Cesa\Waste\Filament\Resources\WasteItemUnitCandidateResource;
@@ -11,7 +12,6 @@ use Cesa\Waste\Models\WasteItemUnitCandidate;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteUnit;
 use Cesa\Waste\Services\WasteAlternateUnitCandidateService;
-use Cesa\Waste\Services\WasteMasterImportService;
 use Cesa\Waste\WastePlugin;
 use Database\Factories\UserFactory;
 use Filament\Actions\EditAction;
@@ -96,8 +96,7 @@ it('matches the real Jchicken September workbook when the local reference is ava
         $this->markTestSkipped('Workbook contoh Jchicken tidak tersedia di mesin ini.');
     }
 
-    WasteBrand::query()->create(['code' => 'JCHICKEN', 'name' => 'Jchicken', 'is_active' => true]);
-    app(WasteMasterImportService::class)->import('JCHICKEN', $path);
+    $this->seed(DatabaseSeeder::class);
     $result = app(WasteAlternateUnitCandidateService::class)->stageJchickenWorkbook($path);
 
     expect($result)->toMatchArray(['found' => 11, 'created' => 11, 'source_rows' => 20])

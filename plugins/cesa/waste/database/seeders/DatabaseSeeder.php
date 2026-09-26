@@ -7,7 +7,6 @@ use Cesa\Waste\Models\WasteCategory;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteUnit;
-use Cesa\Waste\Services\WasteMasterImportService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -69,12 +68,6 @@ class DatabaseSeeder extends Seeder
 
         WasteSection::seedDefaults();
 
-        foreach (config('waste.master_sources', []) as $brandCode => $path) {
-            if (! is_string($path) || $path === '' || ! is_file($path)) {
-                continue;
-            }
-
-            app(WasteMasterImportService::class)->import($brandCode, $path);
-        }
+        $this->call(WasteItemSeeder::class);
     }
 }

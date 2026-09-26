@@ -10,15 +10,12 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteAccessService;
 use Cesa\Waste\Services\WasteApprovalService;
-use Cesa\Waste\Services\WasteMasterImportService;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Cesa\Waste\Tests\WasteTestCase;
 use Database\Factories\UserFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class WasteReportingTest extends WasteTestCase
 {
@@ -49,39 +46,6 @@ class WasteReportingTest extends WasteTestCase
         $this->assertSame([$firstOutlet->id], $access->scopeOutlets(WasteOutlet::query(), $user)->pluck('id')->all());
         $this->assertTrue($access->canManageBrand($user, $firstBrand));
         $this->assertFalse($access->canManageOutlet($user, $secondOutlet));
-    }
-
-    public function test_master_import_uses_brand_code_and_deactivates_invalid_rows(): void
-    {
-        $brand = WasteBrand::query()->create(['name' => 'Jchicken', 'code' => 'JCHICKEN', 'is_active' => true]);
-        $path = tempnam(sys_get_temp_dir(), 'waste-master-');
-        $spreadsheet = new Spreadsheet;
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Master data');
-        $sheet->fromArray([
-            ['Nama Item', 'Kode Item', 'Unit', 'Harga pokok', 'KELOMPOK', 'JENIS'],
-            ['Same name', 'B001', 'GR', null, 'B001', 'bahan baku'],
-            ['Same name', 'S001', 'PCS', null, 'S001', 'produk'],
-            ['No unit', 'B002', null, null, 'B002', 'bahan baku'],
-            ['Wrong row SALAH', 'B003', 'GR', null, 'B003', 'bahan baku'],
-            ['WIP PREP. VANILLA ICE CREAM', 'P004-031', 'PRS', null, 'P004', 'produk'],
-            ['WIP SPAGHETTI', 'P004-021', 'PRS', null, 'P004', 'produk'],
-        ]);
-        (new Xlsx($spreadsheet))->save($path);
-
-        $result = app(WasteMasterImportService::class)->import('JCHICKEN', $path);
-        @unlink($path);
-
-        $this->assertSame(6, $result['imported']);
-        $this->assertSame(2, $result['inactive']);
-        $this->assertSame('GR', WasteItem::query()->where('brand_id', $brand->id)->where('code', 'B001')->value('unit'));
-        $this->assertSame('GR', WasteItem::query()->where('brand_id', $brand->id)->where('code', 'P004-031')->value('unit'));
-        $this->assertSame('corrected_unit', WasteItem::query()->where('brand_id', $brand->id)->where('code', 'P004-031')->value('source_status'));
-        $this->assertSame('Satuan adjustment diperbaiki dari PRS menjadi GR berdasarkan riwayat form.', WasteItem::query()->where('brand_id', $brand->id)->where('code', 'P004-031')->value('notes'));
-        $this->assertSame('PRS', WasteItem::query()->where('brand_id', $brand->id)->where('code', 'P004-021')->value('unit'));
-        $this->assertTrue((bool) WasteItem::query()->where('brand_id', $brand->id)->where('code', 'S001')->value('is_active'));
-        $this->assertFalse((bool) WasteItem::query()->where('brand_id', $brand->id)->where('code', 'B002')->value('is_active'));
-        $this->assertFalse((bool) WasteItem::query()->where('brand_id', $brand->id)->where('code', 'B003')->value('is_active'));
     }
 
     public function test_summary_only_counts_approved_component_lines_once(): void

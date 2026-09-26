@@ -20,9 +20,4 @@ return [
         'max_width' => (int) env('WASTE_CAMERA_MAX_WIDTH', 1600),
         'quality'   => (float) env('WASTE_CAMERA_QUALITY', 0.82),
     ],
-    'master_sources' => [
-        'JCHICKEN' => env('WASTE_MASTER_JCHICKEN'),
-        'LUUCA'    => env('WASTE_MASTER_LUUCA'),
-        'MOMOYO'   => env('WASTE_MASTER_MOMOYO'),
-    ],
 ];

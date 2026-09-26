@@ -2,7 +2,6 @@
 
 namespace Cesa\Waste;
 
-use Cesa\Waste\Console\Commands\ImportWasteMaster;
 use Cesa\Waste\Console\Commands\QaReviewSeptember;
 use Cesa\Waste\Console\Commands\ReplayWasteSeptemberQa;
 use Cesa\Waste\Console\Commands\StageWasteAlternateUnits;
@@ -59,7 +58,6 @@ class WasteServiceProvider extends PackageServiceProvider
                 '2026_09_24_103013_create_waste_item_unit_candidates_table',
                 '2026_09_26_000000_canonicalize_waste_units_and_category_names',
             ])
-            ->hasCommand(ImportWasteMaster::class)
             ->hasCommand(QaReviewSeptember::class)
             ->hasCommand(ReplayWasteSeptemberQa::class)
             ->hasCommand(StageWasteAlternateUnits::class)
