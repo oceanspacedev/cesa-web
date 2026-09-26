@@ -60,16 +60,16 @@ class WasteCategoryResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('brand_id')->label('Brand')->helperText('Kategori hanya muncul di form brand ini.')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->nullable()->required(fn (): bool => ! (filament()->auth()->user()?->can('view_any_waste_waste::report') ?? false))->searchable(),
-            DerivedWasteFields::name(codeMax: 100)->helperText('Teks di dropdown Kategori adjustment. Kode mengikuti nama ini.'),
-            DerivedWasteFields::code(100),
-            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menghilangkannya dari form.')->default(true),
-        ])->columns(2);
+            Select::make('brand_id')->label('Brand')->helperText('Kategori hanya muncul di form brand ini.')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->nullable()->required(fn (): bool => ! (filament()->auth()->user()?->can('view_any_waste_waste::report') ?? false))->searchable()->columnSpanFull(),
+            DerivedWasteFields::name(codeMax: 100)->helperText('Teks di dropdown Kategori adjustment. Kode mengikuti nama ini.')->columnSpanFull(),
+            DerivedWasteFields::code(100)->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menghilangkannya dari form.')->default(true)->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('brand.name')->label('Brand')->placeholder('Global'), TextColumn::make('code')->searchable(), TextColumn::make('name')->searchable()->sortable(), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        return $table->columns([TextColumn::make('brand.name')->label('Brand')->placeholder('Global'), TextColumn::make('code')->searchable(), TextColumn::make('name')->searchable()->sortable(), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

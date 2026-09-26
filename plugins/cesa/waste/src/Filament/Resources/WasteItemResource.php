@@ -25,6 +25,8 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rule;
@@ -66,9 +68,9 @@ class WasteItemResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('brand_id')->label('Brand')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->required()->searchable(),
-            DerivedWasteFields::name(codeMax: 100)->helperText('Kode barang mengikuti nama ini. Isi kode sendiri jika memakai kode stok.'),
-            DerivedWasteFields::code(100)->helperText('Terisi otomatis dari nama. Ganti dengan kode stok jika sudah ada.'),
+            Select::make('brand_id')->label('Brand')->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())->required()->searchable()->columnSpanFull(),
+            DerivedWasteFields::name(codeMax: 100)->helperText('Kode barang mengikuti nama ini. Isi kode sendiri jika memakai kode stok.')->columnSpanFull(),
+            DerivedWasteFields::code(100)->helperText('Terisi otomatis dari nama. Ganti dengan kode stok jika sudah ada.')->columnSpanFull(),
             Select::make('unit')
                 ->label('Satuan')
                 ->helperText('Pilih dari Master Satuan di Pengaturan Waste.')
@@ -93,6 +95,7 @@ class WasteItemResource extends Resource
                 ->searchable()
                 ->preload()
                 ->live()
+                ->columnSpanFull()
                 ->afterStateUpdated(function (Set $set): void {
                     $set('alternateUnits', []);
                 }),
@@ -118,10 +121,11 @@ class WasteItemResource extends Resource
                     $blockedUnitIds = static::blockedAlternateUnitIds($record);
 
                     return $blockedUnitIds === [] ? $rule : $rule->whereNotIn('id', $blockedUnitIds);
-                }),
-            TextInput::make('item_type')->label('Jenis')->helperText('Khusus Momoyo, gunakan PIP hanya untuk barang PIP.'),
-            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif tidak bisa dipilih di laporan baru.')->default(true),
-        ])->columns(2);
+                })
+                ->columnSpanFull(),
+            TextInput::make('item_type')->label('Jenis')->helperText('Khusus Momoyo, gunakan PIP hanya untuk barang PIP.')->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif tidak bisa dipilih di laporan baru.')->default(true)->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -130,6 +134,7 @@ class WasteItemResource extends Resource
             TextColumn::make('brand.name')->label('Brand')->sortable(),
             TextColumn::make('code')->searchable(),
             TextColumn::make('name')->searchable()->sortable(),
+            TextColumn::make('item_type')->label('Jenis')->sortable()->placeholder('—'),
             TextColumn::make('unit')->label('Satuan utama')->sortable(),
             TextColumn::make('alternate_unit_codes')
                 ->label('Satuan alternatif')
@@ -137,8 +142,43 @@ class WasteItemResource extends Resource
                     ->map(fn (WasteUnit $unit): string => $unit->is_active ? $unit->code : "{$unit->code} (nonaktif)")
                     ->implode(', '))
                 ->placeholder('—'),
+            TextColumn::make('notes')
+                ->label('Catatan')
+                ->limit(50)
+                ->tooltip(fn (WasteItem $record): ?string => $record->notes)
+                ->placeholder('—'),
             WasteActiveColumn::make(),
-        ])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        ])
+            ->filters([
+                TernaryFilter::make('is_active')->label('Aktif'),
+                SelectFilter::make('brand')->relationship(
+                    'brand',
+                    'name',
+                    fn (Builder $query): Builder => app(WasteAccessService::class)->scopeBrands($query, filament()->auth()->user()),
+                ),
+                SelectFilter::make('item_type')
+                    ->label('Jenis')
+                    ->options(fn (): array => WasteItem::query()
+                        ->whereNotNull('item_type')
+                        ->where('item_type', '!=', '')
+                        ->distinct()
+                        ->orderBy('item_type')
+                        ->pluck('item_type', 'item_type')
+                        ->prepend('(Tanpa jenis)', '')
+                        ->all())
+                    ->modifyQueryUsing(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null) {
+                            return $query;
+                        }
+
+                        return $value === ''
+                            ? $query->where(fn (Builder $query): Builder => $query->whereNull('item_type')->orWhere('item_type', ''))
+                            : $query->where('item_type', $value);
+                    }),
+            ])
+            ->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

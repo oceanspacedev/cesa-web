@@ -60,16 +60,19 @@ class WasteUnitResource extends Resource
         return $schema->components([
             DerivedWasteFields::name(codeMax: 32, normalizeUnit: true)
                 ->helperText('Nama satuan untuk admin, contoh Gram atau Pieces. Kode mengikuti nama ini.')
-                ->maxLength(100),
+                ->maxLength(100)
+                ->columnSpanFull(),
             DerivedWasteFields::code(32)
                 ->helperText('Terisi otomatis, contoh GRAM menjadi GR. Tidak bisa diubah setelah disimpan.')
                 ->unique(ignoreRecord: true)
-                ->disabled(fn (?WasteUnit $record): bool => $record?->exists ?? false),
+                ->disabled(fn (?WasteUnit $record): bool => $record?->exists ?? false)
+                ->columnSpanFull(),
             Toggle::make('is_active')
                 ->label('Aktif')
                 ->helperText('Nonaktif menyembunyikan satuan dari pilihan barang baru; barang lama tetap memakai satuan ini.')
-                ->default(true),
-        ])->columns(2);
+                ->default(true)
+                ->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -79,7 +82,7 @@ class WasteUnitResource extends Resource
             TextColumn::make('name')->label('Nama')->searchable()->sortable(),
             WasteActiveColumn::make(),
         ])->recordActions([
-            EditAction::make()->slideOver(),
+            EditAction::make()->slideOver()->modalWidth('md'),
         ]);
     }
 

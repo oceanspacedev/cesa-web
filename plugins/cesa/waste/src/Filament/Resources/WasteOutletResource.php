@@ -69,21 +69,22 @@ class WasteOutletResource extends Resource
                 ->required()
                 ->searchable()
                 ->live()
+                ->columnSpanFull()
                 ->afterStateUpdated(function (mixed $state, mixed $old, Get $get, Set $set): void {
                     DerivedWasteFields::outletSlugFromBrand($state, $old, $get, $set);
                 }),
-            DerivedWasteFields::name(slug: true)->helperText('Nama outlet di kartu pilihan form. Kode dan tautan mengikuti nama ini.'),
-            DerivedWasteFields::code(50)->helperText('Terisi otomatis dari nama, contoh CILEDUG.'),
-            TextInput::make('slug')->label('Tautan')->helperText('Terisi otomatis, contoh momoyo-ciledug. Alamat form: /waste/tautan-ini.')->maxLength(100),
-            TextInput::make('timezone')->label('Zona waktu')->helperText('Menentukan tanggal bawaan di form.')->default('Asia/Jakarta')->required(),
-            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menutup tautan form outlet ini.')->default(true),
+            DerivedWasteFields::name(slug: true)->helperText('Nama outlet di kartu pilihan form. Kode dan tautan mengikuti nama ini.')->columnSpanFull(),
+            DerivedWasteFields::code(50)->helperText('Terisi otomatis dari nama, contoh CILEDUG.')->columnSpanFull(),
+            TextInput::make('slug')->label('Tautan')->helperText('Terisi otomatis, contoh momoyo-ciledug. Alamat form: /waste/tautan-ini.')->maxLength(100)->columnSpanFull(),
+            TextInput::make('timezone')->label('Zona waktu')->helperText('Menentukan tanggal bawaan di form.')->default('Asia/Jakarta')->required()->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menutup tautan form outlet ini.')->default(true)->columnSpanFull(),
             Select::make('users')->label('Pengelola outlet')->helperText('Hanya melihat laporan outlet ini, tanpa mengubah data brand.')->relationship('users', 'name')->multiple()->preload()->searchable()->columnSpanFull(),
-        ])->columns(2);
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('name')->searchable()->sortable(), TextColumn::make('code')->searchable(), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('name')->searchable()->sortable(), TextColumn::make('code')->searchable(), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

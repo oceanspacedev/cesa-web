@@ -73,11 +73,12 @@ class WasteWorkflowResource extends Resource
                     if (blank($get('name')) || (string) $get('name') === $previous) {
                         $set('name', $next);
                     }
-                }),
+                })
+                ->columnSpanFull(),
             Select::make('outlet_id')->label('Outlet')->helperText('Kosongkan agar berlaku untuk semua outlet dalam brand ini.')->options(fn (Get $get): array => app(WasteAccessService::class)
                 ->scopeOutlets(WasteOutlet::query()->when($get('brand_id'), fn (Builder $query, mixed $brandId): Builder => $query->where('brand_id', (int) $brandId))->orderBy('name'), filament()->auth()->user())
                 ->pluck('name', 'id')
-                ->all())->nullable()->searchable()->live()
+                ->all())->nullable()->searchable()->live()->columnSpanFull()
                 ->afterStateUpdated(function (mixed $state, mixed $old, Get $get, Set $set): void {
                     $brandId = is_numeric($get('brand_id')) ? (int) $get('brand_id') : null;
                     $previous = WasteConfigurationKeys::approvalName($brandId, is_numeric($old) ? (int) $old : null);
@@ -85,21 +86,22 @@ class WasteWorkflowResource extends Resource
                     if (blank($get('name')) || (string) $get('name') === $previous) {
                         $set('name', $next);
                     }
-                }),
-            TextInput::make('name')->label('Nama')->helperText('Terisi otomatis dari brand atau outlet, contoh Persetujuan Ciledug.')->required(),
+                })
+                ->columnSpanFull(),
+            TextInput::make('name')->label('Nama')->helperText('Terisi otomatis dari brand atau outlet, contoh Persetujuan Ciledug.')->required()->columnSpanFull(),
             Repeater::make('steps')->label('Urutan persetujuan')->helperText('Orang pertama di atas menerima pemberitahuan lebih dulu. Setiap langkah memerlukan nama serta WhatsApp atau email.')->schema([
                 TextInput::make('label')->label('Jabatan')->helperText('Contoh Supervisor.')->required(),
                 TextInput::make('name')->label('Nama pemeriksa')->required(),
                 TextInput::make('phone')->label('WhatsApp')->tel(),
                 TextInput::make('email')->label('Email')->email(),
-            ])->columns(2)->minItems(1)->required()->columnSpanFull(),
-            Toggle::make('is_active')->label('Aktif')->helperText('Jika nonaktif, laporan memakai alur persetujuan lain atau menunggu tinjauan MIS.')->default(true),
-        ])->columns(2);
+            ])->minItems(1)->required()->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Jika nonaktif, laporan memakai alur persetujuan lain atau menunggu tinjauan MIS.')->default(true)->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->formatStateUsing(fn ($state): string => (string) count($state ?? []))->label('Langkah'), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('xl'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->formatStateUsing(fn ($state): string => (string) count($state ?? []))->label('Langkah'), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

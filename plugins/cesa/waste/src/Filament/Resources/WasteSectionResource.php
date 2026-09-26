@@ -64,11 +64,12 @@ class WasteSectionResource extends Resource
                 ->label('Brand')
                 ->options(fn (): array => app(WasteAccessService::class)->scopeBrands(WasteBrand::query()->orderBy('name'), filament()->auth()->user())->pluck('name', 'id')->all())
                 ->required()
-                ->searchable(),
-            DerivedWasteFields::name(codeMax: 100)->helperText('Teks di dropdown Section. Kode mengikuti nama ini.'),
-            DerivedWasteFields::code(100),
-            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menghilangkannya dari form.')->default(true),
-        ])->columns(2);
+                ->searchable()
+                ->columnSpanFull(),
+            DerivedWasteFields::name(codeMax: 100)->helperText('Teks di dropdown Section. Kode mengikuti nama ini.')->columnSpanFull(),
+            DerivedWasteFields::code(100)->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menghilangkannya dari form.')->default(true)->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -79,7 +80,7 @@ class WasteSectionResource extends Resource
             TextColumn::make('name')->searchable()->sortable(),
             WasteActiveColumn::make(),
         ])->recordActions([
-            EditAction::make()->slideOver(),
+            EditAction::make()->slideOver()->modalWidth('md'),
             DeleteAction::make(),
         ])->toolbarActions([
             BulkActionGroup::make([

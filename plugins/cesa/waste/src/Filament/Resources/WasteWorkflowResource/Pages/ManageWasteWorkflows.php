@@ -12,6 +12,6 @@ class ManageWasteWorkflows extends ManageRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()->slideOver()->modalWidth('xl')];
+        return [CreateAction::make()->slideOver()->modalWidth('md')];
     }
 }

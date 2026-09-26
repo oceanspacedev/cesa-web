@@ -12,6 +12,6 @@ class ManageWasteUnits extends ManageRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()->slideOver()];
+        return [CreateAction::make()->slideOver()->modalWidth('md')];
     }
 }

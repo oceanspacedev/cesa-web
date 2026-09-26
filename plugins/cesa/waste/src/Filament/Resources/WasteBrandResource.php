@@ -59,11 +59,11 @@ class WasteBrandResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            DerivedWasteFields::name()->helperText('Nama yang tampil untuk admin.'),
-            DerivedWasteFields::code(50)->helperText('Terisi otomatis dari nama, contoh MOMOYO. Ubah hanya jika perlu, dan jangan diubah setelah outlet dipakai.'),
+            DerivedWasteFields::name()->helperText('Nama yang tampil untuk admin.')->columnSpanFull(),
+            DerivedWasteFields::code(50)->helperText('Terisi otomatis dari nama, contoh MOMOYO. Ubah hanya jika perlu, dan jangan diubah setelah outlet dipakai.')->columnSpanFull(),
             Select::make('users')->label('Pengelola brand')->helperText('Bisa mengelola data form dan laporan brand ini.')->relationship('users', 'name')->multiple()->preload()->searchable()->columnSpanFull(),
-            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menyembunyikan brand dari form publik.')->default(true),
-        ])->columns(2);
+            Toggle::make('is_active')->label('Aktif')->helperText('Nonaktif menyembunyikan brand dari form publik.')->default(true)->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -73,7 +73,7 @@ class WasteBrandResource extends Resource
             TextColumn::make('code')->searchable()->sortable(),
             TextColumn::make('outlets_count')->counts('outlets')->label('Outlets'),
             WasteActiveColumn::make(),
-        ])->recordActions([EditAction::make()->slideOver(), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        ])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array
