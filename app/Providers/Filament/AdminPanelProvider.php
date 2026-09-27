@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Admin\Auth\Login;
+use App\Filament\Admin\Auth\PhoneLogin;
 use App\Http\Middleware\SetLocale;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Actions\Action;
@@ -22,6 +23,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Webkul\Support\Filament\Pages\Profile;
 use Webkul\Support\GlobalSearchProvider;
@@ -38,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->login(Login::class)
+            ->routes(fn (Panel $panel): \Illuminate\Routing\Route => Route::get('phone-login', PhoneLogin::class)->name('phone-login'))
             ->favicon(asset('images/favicon.ico'))
             ->brandLogo(asset('images/logo.png'))
             ->brandLogoHeight('2rem')

@@ -104,6 +104,12 @@ class UserResource extends Resource
                                             ->required()
                                             ->unique(ignoreRecord: true)
                                             ->maxLength(255),
+                                        TextInput::make('phone')
+                                            ->label(__('security::filament/resources/user.form.sections.general-information.fields.phone'))
+                                            ->tel()
+                                            ->maxLength(20)
+                                            ->regex('/^\+?[0-9\s().-]+$/')
+                                            ->helperText('Nomor WhatsApp untuk login (format 08... atau 628...).'),
                                         TextInput::make('password')
                                             ->label(__('security::filament/resources/user.form.sections.general-information.fields.password'))
                                             ->password()
@@ -460,6 +466,10 @@ class UserResource extends Resource
                                             ->icon('heroicon-o-envelope')
                                             ->placeholder('—')
                                             ->label(__('security::filament/resources/user.infolist.sections.general-information.entries.email')),
+                                        TextEntry::make('phone')
+                                            ->icon('heroicon-o-phone')
+                                            ->placeholder('—')
+                                            ->label(__('security::filament/resources/user.infolist.sections.general-information.entries.phone')),
                                         TextEntry::make('language')
                                             ->icon('heroicon-o-language')
                                             ->placeholder('—')

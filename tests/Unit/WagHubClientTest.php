@@ -56,6 +56,15 @@ it('refuses requests with incomplete credentials', function (): void {
     Http::assertNothingSent();
 });
 
+it('reports hub readiness from app config for gateway gating', function (): void {
+    config(['wag.url' => '', 'wag.token' => '']);
+    expect((new WagHubClient)->isHubConfigured())->toBeFalse();
+
+    config(['wag.url' => 'https://hub.test', 'wag.token' => 'app-token']);
+    expect((new WagHubClient)->isHubConfigured())->toBeTrue();
+    expect((new WagHubClient)->isConfigured())->toBeTrue();
+});
+
 it('keeps unknown sends uncertain and exposes missing journal entries without resending', function (): void {
     Http::fake([
         '*/send'       => Http::response('Bad gateway', 502),
@@ -77,5 +86,70 @@ it('checks remote readiness with the generic status command', function (): void 
 it('reports an unavailable service without starting a local engine', function (): void {
     Http::fake(['*/health' => Http::response(['ok' => false], 503)]);
     $this->artisan('wag:status')->assertFailed();
+    Http::assertSentCount(1);
+});
+
+it('uploads private bytes and sends an image through the hub even when v2 is configured', function (): void {
+    config(['wag.engine_url' => 'https://hub.test/api/v2']);
+    $attachmentId = '11111111-1111-4111-8111-111111111111';
+    Http::fake([
+        'https://hub.test/api/v1/attachments' => Http::response(['data' => ['id' => $attachmentId, 'kind' => 'image']], 201),
+        'https://hub.test/api/v1/messages'    => Http::response(['data' => ['id' => '22222222-2222-4222-8222-222222222222', 'status' => 'queued']], 202),
+    ]);
+
+    $client = app(WagHubClient::class);
+    $uploadedId = $client->uploadAttachment('private-photo-contents', 'bukti.jpg', 'image/jpeg');
+    $response = $client->sendMessage('081234567890', 'Bukti foto Waste', [
+        'force_hub'        => true,
+        'attachment_type'  => 'image',
+        'attachment'       => ['id' => $uploadedId],
+        'purpose'          => 'transactional',
+        'idempotency_key'  => 'waste-report-1-photo-1',
+        'client_reference' => 'waste-report-1',
+    ]);
+
+    expect($uploadedId)->toBe($attachmentId)
+        ->and(data_get($response, 'data.status'))->toBe('queued');
+    Http::assertSentCount(2);
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://hub.test/api/v1/attachments'
+        && $request->method() === 'POST'
+        && $request->hasHeader('Authorization', 'Bearer app-token')
+        && str_starts_with((string) ($request->header('Content-Type')[0] ?? ''), 'multipart/form-data; boundary=')
+        && str_contains($request->body(), 'private-photo-contents')
+        && str_contains($request->body(), 'bukti.jpg'));
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://hub.test/api/v1/messages'
+        && $request->hasHeader('Idempotency-Key', 'waste-report-1-photo-1')
+        && $request['recipient']['value'] === '081234567890'
+        && $request['message'] === [
+            'type'       => 'image',
+            'text'       => 'Bukti foto Waste',
+            'attachment' => ['id' => $attachmentId],
+        ]
+        && $request['purpose'] === 'transactional'
+        && $request['mode'] === 'async'
+        && $request['route_key'] === 'default'
+        && $request['client_reference'] === 'waste-report-1');
+});
+
+it('rejects hub message and upload errors instead of treating them as sent', function (): void {
+    config(['wag.engine_url' => 'https://hub.test/api/v2']);
+    Http::fake([
+        'https://hub.test/api/v1/attachments' => Http::response(['message' => 'Lampiran ditolak.'], 422),
+        'https://hub.test/api/v1/messages'    => Http::response(['message' => 'The given data was invalid.', 'error' => ['code' => 'validation_failed']], 422),
+    ]);
+
+    $client = app(WagHubClient::class);
+    expect(fn (): string => $client->uploadAttachment('private-photo-contents', 'bukti.jpg', 'image/jpeg'))
+        ->toThrow(RuntimeException::class, 'Lampiran ditolak.');
+    expect(fn (): array => $client->sendMessage('081234567890', 'Waste', ['force_hub' => true, 'purpose' => 'transactional']))
+        ->toThrow(RuntimeException::class, 'The given data was invalid.');
+    Http::assertSentCount(2);
+});
+
+it('rejects an attachment response without an id before attempting a message', function (): void {
+    Http::fake(['https://hub.test/api/v1/attachments' => Http::response(['data' => ['kind' => 'image']], 201)]);
+
+    expect(fn (): string => app(WagHubClient::class)->uploadAttachment('private-photo-contents', 'bukti.jpg', 'image/jpeg'))
+        ->toThrow(RuntimeException::class, 'WAG Hub tidak mengembalikan ID lampiran yang valid.');
     Http::assertSentCount(1);
 });

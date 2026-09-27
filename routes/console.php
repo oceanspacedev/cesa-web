@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\WhatsappOtp;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -19,4 +20,8 @@ Schedule::command('wag:reconcile')->everyMinute()->withoutOverlapping();
 
 Schedule::command('approvals:send-pending-reminders')
     ->dailyAt('08:00')
+    ->withoutOverlapping();
+
+Schedule::command('model:prune', ['--model' => WhatsappOtp::class])
+    ->daily()
     ->withoutOverlapping();

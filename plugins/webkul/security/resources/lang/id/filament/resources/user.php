@@ -20,6 +20,7 @@ return [
                 'fields' => [
                     'name'                  => 'Nama',
                     'email'                 => 'Email',
+                    'phone'                 => 'Nomor HP',
                     'password'              => 'Kata sandi',
                     'password-confirmation' => 'Konfirmasi Kata Sandi',
                 ],
@@ -136,6 +137,7 @@ return [
                 'entries' => [
                     'name'                  => 'Nama',
                     'email'                 => 'Email',
+                    'phone'                 => 'Nomor HP',
                     'password'              => 'Kata sandi',
                     'password-confirmation' => 'Konfirmasi Kata Sandi',
                 ],

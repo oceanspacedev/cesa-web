@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\WhatsAppNumber;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -21,6 +23,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'phone',
         'password',
     ];
 
@@ -50,5 +53,18 @@ class User extends Authenticatable
     protected static function newFactory(): UserFactory
     {
         return UserFactory::new();
+    }
+
+    /**
+     * Simpan nomor HP dalam format lokal 08... agar lookup login WhatsApp konsisten,
+     * apa pun format yang diketik admin (628..., +62..., 08...).
+     */
+    protected function phone(): Attribute
+    {
+        return Attribute::set(
+            fn (mixed $value): ?string => filled($value)
+                ? (WhatsAppNumber::toLocal(trim((string) $value)) ?? trim((string) $value))
+                : null,
+        );
     }
 }

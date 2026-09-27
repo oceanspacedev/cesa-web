@@ -3,6 +3,7 @@
 namespace App\Services\WhatsApp;
 
 use App\Models\WagIntegration;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -42,6 +43,16 @@ class WagHubClient
         return $this->url !== '' && $this->token !== '';
     }
 
+    /**
+     * Apakah kredensial Hub tersedia untuk mengirim pesan, termasuk override dari tabel wag_integrations.
+     */
+    public function isHubConfigured(): bool
+    {
+        [$url, $token] = $this->hubCredentials();
+
+        return $url !== '' && $token !== '';
+    }
+
     public function isEngineConfigured(): bool
     {
         return $this->engineUrl !== '' && $this->engineToken !== '';
@@ -72,21 +83,24 @@ class WagHubClient
      *
      * @param  string  $phone  Nomor WhatsApp tujuan (format lokal 08... atau internasional 628...)
      * @param  string  $text  Isi pesan teks
-     * @param  array<string, mixed>  $options  Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose, client_reference, timeout
+     * @param  array<string, mixed>  $options  Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose, client_reference, timeout, force_hub, attachment_type, attachment
      * @return array<string, mixed>
      */
     public function sendMessage(string $phone, string $text, array $options = []): array
     {
-        $engine = $this->engine();
-        if ($engine->isV2()) {
-            if (empty($options['session_id'])) {
-                throw new RuntimeException('Pilih akun WhatsApp sebelum menjadwalkan pesan.');
-            }
+        if (! ($options['force_hub'] ?? false)) {
+            $engine = $this->engine();
+            if ($engine->isV2()) {
+                if (empty($options['session_id'])) {
+                    throw new RuntimeException('Pilih akun WhatsApp sebelum menjadwalkan pesan.');
+                }
 
-            return $engine->sendText($options['session_id'], $phone, $text, (string) ($options['idempotency_key'] ?? Str::uuid()));
+                return $engine->sendText($options['session_id'], $phone, $text, (string) ($options['idempotency_key'] ?? Str::uuid()));
+            }
         }
 
-        if (! $this->isConfigured()) {
+        [$url, $token] = $this->hubCredentials();
+        if ($url === '' || $token === '') {
             throw new RuntimeException('WAG Hub URL atau Token belum dikonfigurasi di file .env (WAG_URL, WAG_TOKEN).');
         }
 
@@ -122,12 +136,37 @@ class WagHubClient
         $response = Http::withoutRedirecting()->connectTimeout(2)->timeout($timeout)
             ->acceptJson()
             ->withHeaders([
-                'Authorization'   => 'Bearer '.$this->token,
+                'Authorization'   => 'Bearer '.$token,
                 'Idempotency-Key' => $idempotencyKey,
             ])
-            ->post($this->url.'/api/v1/messages', $payload);
+            ->post($url.'/api/v1/messages', $payload);
 
-        return $response->json() ?? ['ok' => $response->successful(), 'status' => $response->status()];
+        return $this->hubResponse($response);
+    }
+
+    public function uploadAttachment(string $contents, string $filename, string $mimeType): string
+    {
+        [$url, $token] = $this->hubCredentials();
+        if ($url === '' || $token === '') {
+            throw new RuntimeException('WAG Hub URL atau Token belum dikonfigurasi di file .env (WAG_URL, WAG_TOKEN).');
+        }
+
+        if ($contents === '') {
+            throw new RuntimeException('Lampiran WhatsApp tidak boleh kosong.');
+        }
+
+        $response = Http::withoutRedirecting()->connectTimeout(2)->timeout((int) config('wag.timeout', 20))
+            ->acceptJson()
+            ->withToken($token)
+            ->attach('file', $contents, $filename, ['Content-Type' => $mimeType])
+            ->post($url.'/api/v1/attachments');
+
+        $attachmentId = data_get($this->hubResponse($response), 'data.id');
+        if (! is_string($attachmentId) || ! Str::isUuid($attachmentId)) {
+            throw new RuntimeException('WAG Hub tidak mengembalikan ID lampiran yang valid.');
+        }
+
+        return $attachmentId;
     }
 
     /**
@@ -161,5 +200,37 @@ class WagHubClient
         }
 
         return new WagHubEngineClient($this->engineUrl, $this->engineToken);
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    protected function hubCredentials(): array
+    {
+        if (Schema::hasTable('wag_integrations') && ($stored = WagIntegration::query()->find(1)) && filled($stored->url) && filled($stored->token)) {
+            return [rtrim((string) $stored->url, '/'), trim((string) $stored->token)];
+        }
+
+        return [$this->url, $this->token];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function hubResponse(Response $response): array
+    {
+        $payload = $response->json();
+
+        if (! $response->successful()) {
+            $message = is_array($payload) ? ($payload['message'] ?? data_get($payload, 'error.message')) : null;
+
+            throw new RuntimeException(is_string($message) && $message !== '' ? $message : 'WAG Hub mengembalikan HTTP '.$response->status().'.', $response->status());
+        }
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('Respons WAG Hub tidak valid.');
+        }
+
+        return $payload;
     }
 }

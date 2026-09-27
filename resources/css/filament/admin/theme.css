@@ -582,6 +582,53 @@ html.dark .fi-sidebar::-webkit-scrollbar-thumb:hover {
     @apply hidden;
 }
 
+.cesa-auth-panel__whatsapp-subheading {
+    @apply text-sm text-slate-500;
+}
+
+.dark .cesa-auth-panel__whatsapp-subheading {
+    @apply text-slate-400;
+}
+
+.cesa-auth-whatsapp {
+    @apply mt-6;
+}
+
+.cesa-auth-whatsapp__divider {
+    @apply flex items-center justify-center;
+}
+
+.cesa-auth-whatsapp__divider::before,
+.cesa-auth-whatsapp__divider::after {
+    content: '';
+    @apply h-px flex-grow bg-slate-200;
+}
+
+.dark .cesa-auth-whatsapp__divider::before,
+.dark .cesa-auth-whatsapp__divider::after {
+    @apply bg-slate-700;
+}
+
+.cesa-auth-whatsapp__divider-label {
+    @apply flex-shrink-0 px-4 text-xs font-semibold uppercase tracking-wider text-slate-400;
+}
+
+.dark .cesa-auth-whatsapp__divider-label {
+    @apply text-slate-500;
+}
+
+.cesa-auth-whatsapp__button {
+    @apply mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50;
+}
+
+.dark .cesa-auth-whatsapp__button {
+    @apply border-white/10 text-white hover:bg-white/5;
+}
+
+.cesa-auth-whatsapp__icon {
+    @apply size-5 shrink-0;
+}
+
 @media (max-width: 1023px) {
     .cesa-auth-media {
         @apply hidden;

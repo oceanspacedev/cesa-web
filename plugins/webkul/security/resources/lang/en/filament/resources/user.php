@@ -24,6 +24,7 @@ return [
                 'fields' => [
                     'name'                  => 'Name',
                     'email'                 => 'Email',
+                    'phone'                 => 'Phone Number',
                     'password'              => 'Password',
                     'password-confirmation' => 'Password Confirmation',
                 ],
@@ -154,6 +155,7 @@ return [
                 'entries' => [
                     'name'                  => 'Name',
                     'email'                 => 'Email',
+                    'phone'                 => 'Phone Number',
                     'password'              => 'Password',
                     'password-confirmation' => 'Password Confirmation',
                 ],
