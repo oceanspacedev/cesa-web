@@ -10,10 +10,8 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteAccessService;
 use Cesa\Waste\Services\WasteApprovalService;
-use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Cesa\Waste\Tests\WasteTestCase;
-use Database\Factories\UserFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -54,9 +52,6 @@ class WasteReportingTest extends WasteTestCase
         $service = app(WasteReportService::class);
         $approved = $service->submit($brand, $outlet, $this->reportData($pip, $component, $category, '1.25'), [0 => [UploadedFile::fake()->image('approved.jpg')]]);
         app(WasteApprovalService::class)->approve($approved['approval_tokens'][0]);
-        $reviewer = UserFactory::new()->createQuietly();
-        $brand->users()->attach($reviewer);
-        app(WasteMisReviewService::class)->approve($approved['report'], $reviewer);
 
         $rejected = $service->submit($brand, $outlet, $this->reportData($pip, $component, $category, '9.00'), [0 => [UploadedFile::fake()->image('rejected.jpg')]]);
         app(WasteApprovalService::class)->reject($rejected['approval_tokens'][0], 'Perlu koreksi.');

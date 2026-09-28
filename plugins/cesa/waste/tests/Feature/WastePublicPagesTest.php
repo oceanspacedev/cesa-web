@@ -376,7 +376,7 @@ it('renders approval details with explicit decision confirmations without decidi
     $this->get(route('waste.public.approval', ['token' => $result['approval_tokens'][0]]))
         ->assertSuccessful()
         ->assertSeeText($report->uid)
-        ->assertSeeText('Supervisor')
+        ->assertSeeText('Private Approver')
         ->assertSeeText(__('waste::waste.approval_status.pending'))
         ->assertSeeText('Black Tea')
         ->assertSeeText('Spilled during preparation')

@@ -129,11 +129,11 @@ it('gives an admin report the same approval steps as a public report when a flow
         ->and($adminReport->notifications()->where('type', 'approval_1')->exists())->toBeTrue()
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeFalse();
 
-    expect(fn () => app(WasteMisReviewService::class)->approve($adminReport, $user))->toThrow(ValidationException::class);
+    $approvedFromDashboard = app(WasteMisReviewService::class)->approve($adminReport, $user);
 
-    $adminReport->latestVersion->approvals()->update(['status' => WasteApprovalStatus::Approved]);
-
-    expect(app(WasteMisReviewService::class)->approve($adminReport->fresh(), $user)->status)->toBe(WasteReportStatus::Approved);
+    expect($approvedFromDashboard->status)->toBe(WasteReportStatus::Approved)
+        ->and($approvedFromDashboard->latestVersion->approvals->first()->status)->toBe(WasteApprovalStatus::Approved)
+        ->and(fn () => app(WasteMisReviewService::class)->approve($approvedFromDashboard, $user))->toThrow(ValidationException::class);
 });
 
 it('keeps the surviving event photo when an admin deletes the first event', function (): void {

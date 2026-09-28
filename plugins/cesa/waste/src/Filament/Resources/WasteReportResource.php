@@ -14,7 +14,9 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Services\WasteAccessService;
+use Cesa\Waste\Services\WasteMisReviewService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -27,6 +29,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -40,7 +43,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\HtmlString;
 use Webkul\PluginManager\Package;
 
@@ -431,6 +436,32 @@ class WasteReportResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('approve')
+                        ->label('Setujui')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading('Setujui laporan yang dipilih?')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records): void {
+                            $service = app(WasteMisReviewService::class);
+                            $user = filament()->auth()->user();
+                            $approved = 0;
+
+                            foreach ($records as $record) {
+                                if ($record->status !== WasteReportStatus::Pending || ! Gate::forUser($user)->allows('review', $record)) {
+                                    continue;
+                                }
+
+                                $service->approve($record, $user);
+                                $approved++;
+                            }
+
+                            Notification::make()
+                                ->title($approved > 0 ? "{$approved} laporan disetujui." : 'Tidak ada laporan yang bisa disetujui.')
+                                ->success()
+                                ->send();
+                        }),
                     DeleteBulkAction::make(),
                 ]),
             ]);

@@ -4,10 +4,8 @@ namespace Cesa\Waste\Services;
 
 use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
-use Cesa\Waste\Models\WasteApproval;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteReportVersion;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -56,11 +54,7 @@ class WasteMisReviewService
 
             $this->ensurePending($lockedReport, $version);
             $approvals = $version->approvals()->lockForUpdate()->get();
-            if ($approvals->isNotEmpty() && ! $this->allExternalApprovalsApproved($approvals)) {
-                throw ValidationException::withMessages([
-                    'report' => 'Semua langkah approval harus disetujui sebelum laporan ini disetujui.',
-                ]);
-            }
+            $now = now();
 
             if ($decision === WasteReportStatus::Approved) {
                 if ($version->events()->doesntExist() || $version->events()->whereDoesntHave('lines')->exists()) {
@@ -68,9 +62,32 @@ class WasteMisReviewService
                         'report' => 'Setiap kejadian harus memiliki barang sebelum disetujui.',
                     ]);
                 }
-            }
 
-            $now = now();
+                foreach ($approvals as $approval) {
+                    if ($approval->status === WasteApprovalStatus::Approved) {
+                        continue;
+                    }
+
+                    $approval->forceFill([
+                        'status'     => WasteApprovalStatus::Approved,
+                        'decided_at' => $approval->decided_at ?? $now,
+                        'token_hash' => null,
+                    ])->save();
+                }
+            } else {
+                foreach ($approvals as $approval) {
+                    if ($approval->status === WasteApprovalStatus::Approved) {
+                        continue;
+                    }
+
+                    $approval->forceFill([
+                        'status'        => WasteApprovalStatus::Rejected,
+                        'decision_note' => $reason,
+                        'decided_at'    => $now,
+                        'token_hash'    => null,
+                    ])->save();
+                }
+            }
             $newManageToken = $decision === WasteReportStatus::Rejected && $approvals->isNotEmpty()
                 ? Str::random(64)
                 : null;
@@ -119,13 +136,5 @@ class WasteMisReviewService
         if ((int) $version->report_id !== (int) $report->getKey() || $version->status !== WasteReportStatus::Pending) {
             throw ValidationException::withMessages(['report' => 'Versi laporan ini sudah diproses.']);
         }
-    }
-
-    /**
-     * @param  Collection<int, WasteApproval>  $approvals
-     */
-    protected function allExternalApprovalsApproved(Collection $approvals): bool
-    {
-        return $approvals->every(fn (WasteApproval $approval): bool => $approval->status === WasteApprovalStatus::Approved);
     }
 }

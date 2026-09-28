@@ -42,7 +42,7 @@ class WasteNotificationService
 
     public function queueApprovalReminder(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
-        $message = $this->approvalMessage($report, $approval->label, route('waste.public.approval', ['token' => $token]), true);
+        $message = $this->approvalMessage($report, $approval->displayName(), route('waste.public.approval', ['token' => $token]), true);
 
         if (filled($approval->approver_phone)) {
             $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order.'_reminder', $approval->approver_phone, $message);
@@ -88,11 +88,11 @@ class WasteNotificationService
     protected function queueApproval(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
         $url = route('waste.public.approval', ['token' => $token]);
-        $message = $this->approvalMessage($report, $approval->label, $url);
+        $message = $this->approvalMessage($report, $approval->displayName(), $url);
 
         if (filled($approval->approver_phone)) {
             $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order, $approval->approver_phone, $message);
-            $this->queueEvidence($report, $version, 'approval_'.$approval->step_order.'_evidence', $approval->approver_phone, $url, $approval->label);
+            $this->queueEvidence($report, $version, 'approval_'.$approval->step_order.'_evidence', $approval->approver_phone, $url, $approval->displayName());
         }
 
         if (config('waste.notifications.email_enabled', true) && filled($approval->approver_email)) {

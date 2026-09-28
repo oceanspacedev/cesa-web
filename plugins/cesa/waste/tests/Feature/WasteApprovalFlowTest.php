@@ -9,7 +9,6 @@ use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteApprovalService;
-use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteNotificationService;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
@@ -72,13 +71,14 @@ it('walks one report from submission through each whatsapp step into the monthly
             WasteApprovalStatus::Waiting,
         ])
         ->and($result['approval_tokens'])->toHaveCount(1)
-        ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain("Store Manager\nJchicken / Ciledug")
+        ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain("Sari\nJchicken / Ciledug")
         ->and($export()->hasReports())->toBeFalse();
 
     $this->get(route('waste.public.approval', ['token' => $result['approval_tokens'][0]]))
         ->assertSuccessful()
-        ->assertSeeText('Store Manager')
-        ->assertSeeText('Audit')
+        ->assertSeeText('Sari')
+        ->assertSeeText('Bima')
+        ->assertDontSeeText('Store Manager')
         ->assertSeeText(__('waste::waste.approval_status.pending'))
         ->assertSeeText(__('waste::waste.approval_status.waiting'))
         ->assertSeeText(__('waste::waste.approve'))
@@ -92,18 +92,17 @@ it('walks one report from submission through each whatsapp step into the monthly
             WasteApprovalStatus::Approved,
             WasteApprovalStatus::Pending,
         ])
-        ->and($first['report']->notifications()->where('type', 'approval_2')->first()->payload['message'])->toContain("Audit\nJchicken / Ciledug");
+        ->and($first['report']->notifications()->where('type', 'approval_2')->first()->payload['message'])->toContain("Bima\nJchicken / Ciledug");
 
     $second = app(WasteApprovalService::class)->approve($first['next_token']);
 
-    expect($second['report']->status)->toBe(WasteReportStatus::Pending)
+    expect($second['report']->status)->toBe(WasteReportStatus::Approved)
         ->and($second['next_token'])->toBeNull()
-        ->and($export()->hasReports())->toBeFalse();
+        ->and($second['report']->notifications()->where('type', 'requester_approved')->exists())->toBeTrue();
 
-    $approved = app(WasteMisReviewService::class)->approve($second['report'], $reviewer);
     $sheet = $export()->sheets()[0]->collection();
 
-    expect($approved->status)->toBe(WasteReportStatus::Approved)
+    expect($second['report']->status)->toBe(WasteReportStatus::Approved)
         ->and($sheet->get(5))->toContain('Store Manager', 'Audit')
         ->and($sheet->get(6)[10])->toBe('Disetujui')
         ->and($sheet->get(6)[11])->toBe('Disetujui');

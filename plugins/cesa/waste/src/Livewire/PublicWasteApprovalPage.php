@@ -69,7 +69,7 @@ class PublicWasteApprovalPage extends SimplePage
             'reporter_name' => $report->reporterNameForDisplay(),
             'status'        => $report->status?->value,
             'status_label'  => __('waste::waste.status.'.($report->status?->value ?? 'pending')),
-            'current_step'  => $approval->label,
+            'current_step'  => $approval->displayName(),
             'approver_name' => $approval->approver_name,
         ];
         $this->events = $approval->version->events->map(fn ($event): array => [
@@ -101,7 +101,7 @@ class PublicWasteApprovalPage extends SimplePage
     protected function approvalSteps($version): array
     {
         return $version->approvals->map(fn ($step): array => [
-            'label'        => $step->label,
+            'label'        => $step->displayName(),
             'status'       => $step->status?->value,
             'status_label' => __('waste::waste.approval_status.'.($step->status?->value ?? 'waiting')),
         ])->all();

@@ -140,9 +140,11 @@ it('blocks unauthorized reviewers and does not override external approval workfl
         'token_hash'     => hash('sha256', 'external-approval-token'),
     ]);
 
-    expect(fn () => $service->reject($report, $outsider, 'Perlu koreksi.'))->toThrow(ValidationException::class)
-        ->and($report->fresh()->status)->toBe(WasteReportStatus::Pending)
-        ->and($version->approvals()->first()->token_hash)->toBe(hash('sha256', 'external-approval-token'));
+    $rejected = $service->reject($report, $outsider, 'Perlu koreksi.');
+
+    expect($rejected->status)->toBe(WasteReportStatus::Rejected)
+        ->and($version->approvals()->first()->fresh()->status)->toBe(WasteApprovalStatus::Rejected)
+        ->and($version->approvals()->first()->token_hash)->toBeNull();
 });
 
 it('keeps internal MIS decisions with the brand manager even when outlet staff can edit reports', function (): void {
@@ -190,7 +192,7 @@ it('shows evidence only to admins allowed to view the current report version', f
     $this->get($url)->assertNotFound();
 });
 
-it('waits for every external approval then lets MIS release the monthly export', function (): void {
+it('lets the dashboard approve a report before whatsapp finishes the steps', function (): void {
     [$brand, $outlet, $report] = misReviewReport('JCHICKEN');
     $reviewer = UserFactory::new()->createQuietly();
     $brand->users()->attach($reviewer);
@@ -198,55 +200,31 @@ it('waits for every external approval then lets MIS release the monthly export',
     filament()->setCurrentPanel(filament()->getPanel('admin'));
 
     $version = $report->latestVersion;
-    $firstToken = 'first-external-approval';
     $first = $version->approvals()->create([
-        'step_order'     => 1, 'label' => 'TPS', 'approver_name' => 'Supervisor TPS',
-        'approver_email' => 'supervisor@example.test', 'status' => WasteApprovalStatus::Pending,
-        'token_hash'     => hash('sha256', $firstToken),
+        'step_order'     => 1, 'label' => 'Store Manager', 'approver_name' => 'Sari',
+        'approver_phone' => '081111111111', 'status' => WasteApprovalStatus::Pending,
+        'token_hash'     => hash('sha256', 'first-external-approval'),
     ]);
     $second = $version->approvals()->create([
-        'step_order'     => 2, 'label' => 'Manager', 'approver_name' => 'Manager',
-        'approver_email' => 'manager@example.test', 'status' => WasteApprovalStatus::Waiting,
+        'step_order'     => 2, 'label' => 'Audit', 'approver_name' => 'Bima',
+        'approver_phone' => '082222222222', 'status' => WasteApprovalStatus::Waiting,
     ]);
 
-    $mis = app(WasteMisReviewService::class);
-    expect(fn () => $mis->approve($report, $reviewer))->toThrow(ValidationException::class);
-    Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
-        ->assertActionHidden('misApprove');
-
-    $firstDecision = app(WasteApprovalService::class)->approve($firstToken);
-    expect($firstDecision['report']->status)->toBe(WasteReportStatus::Pending)
-        ->and($firstDecision['next_token'])->not->toBeNull()
-        ->and(fn () => $mis->approve($report, $reviewer))->toThrow(ValidationException::class);
-
-    $lastDecision = app(WasteApprovalService::class)->approve($firstDecision['next_token']);
-    expect($lastDecision['report']->status)->toBe(WasteReportStatus::Pending)
-        ->and($lastDecision['report']->latestVersion->status)->toBe(WasteReportStatus::Pending)
-        ->and($lastDecision['report']->approved_at)->toBeNull()
-        ->and($lastDecision['report']->notifications()->where('type', 'requester_approved')->exists())->toBeFalse()
-        ->and($lastDecision['report']->activityLogs()->where('event', 'external_approved')->exists())->toBeTrue()
-        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeFalse();
-
-    Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
-        ->mountAction('viewEvidence')
-        ->assertActionMounted('viewEvidence');
-
-    Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
-        ->assertActionVisible('viewEvidence')
-        ->assertDontSee('Tandai SM / AUDIT (MIS)')
+    $approved = Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->assertActionVisible('misApprove')
         ->callAction('misApprove')
         ->assertNotified('Laporan disetujui.')
         ->assertActionHidden('misApprove');
 
-    expect($report->fresh()->status)->toBe(WasteReportStatus::Approved)
+    expect($approved)->not->toBeNull()
+        ->and($report->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and($first->fresh()->status)->toBe(WasteApprovalStatus::Approved)
         ->and($second->fresh()->status)->toBe(WasteApprovalStatus::Approved)
-        ->and($report->notifications()->where('type', 'requester_approved')->exists())->toBeTrue()
+        ->and($first->fresh()->token_hash)->toBeNull()
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeTrue();
 });
 
-it('sends a usable revision link only after MIS rejects an externally approved report', function (): void {
+it('sends a usable revision link when the dashboard rejects a report still waiting on whatsapp', function (): void {
     [$brand, , $report, , $progressToken] = misReviewReport('MOMOYO');
     $reviewer = UserFactory::new()->createQuietly();
     $brand->users()->attach($reviewer);
@@ -257,9 +235,6 @@ it('sends a usable revision link only after MIS rejects an externally approved r
         'token_hash'     => hash('sha256', $approvalToken),
     ]);
 
-    app(WasteApprovalService::class)->approve($approvalToken);
-    expect($report->notifications()->where('type', 'requester_approved')->exists())->toBeFalse();
-
     $rejected = app(WasteMisReviewService::class)->reject($report, $reviewer, 'Barang perlu difoto ulang.');
     $delivery = $report->notifications()->where('type', 'requester_rejected')->firstOrFail();
     $message = (string) $delivery->payload['message'];
@@ -267,7 +242,8 @@ it('sends a usable revision link only after MIS rejects an externally approved r
     $manageToken = basename((string) parse_url($revisionUrl, PHP_URL_PATH));
 
     expect($rejected->status)->toBe(WasteReportStatus::Rejected)
-        ->and($approval->fresh()->status)->toBe(WasteApprovalStatus::Approved)
+        ->and($approval->fresh()->status)->toBe(WasteApprovalStatus::Rejected)
+        ->and($approval->fresh()->token_hash)->toBeNull()
         ->and($rejected->progress_token_hash)->toBe(hash('sha256', $progressToken))
         ->and($rejected->manage_token_hash)->toBe(hash('sha256', $manageToken))
         ->and($rejected->manage_token_hash)->not->toBe($rejected->progress_token_hash)

@@ -140,6 +140,7 @@ class WasteApprovalService
             $nextApproval = null;
             $progressToken = null;
             $manageToken = null;
+            $released = false;
 
             if ($decision === WasteApprovalStatus::Rejected) {
                 $progressToken = Str::random(64);
@@ -172,7 +173,14 @@ class WasteApprovalService
                     $nextApproval = $next->fresh();
                     $eventName = 'approved_step';
                 } else {
+                    $version->forceFill(['status' => WasteReportStatus::Approved])->save();
+                    $report->forceFill([
+                        'status'            => WasteReportStatus::Approved,
+                        'approved_at'       => now(),
+                        'manage_token_hash' => null,
+                    ])->save();
                     $eventName = 'external_approved';
+                    $released = true;
                 }
             }
 
@@ -189,6 +197,7 @@ class WasteApprovalService
                 'next_approval'  => $nextApproval,
                 'progress_token' => $progressToken,
                 'manage_token'   => $manageToken,
+                'released'       => $released,
             ];
         });
 
@@ -199,6 +208,10 @@ class WasteApprovalService
                 $result['next_approval'],
                 $result['next_token'],
             );
+        }
+
+        if ($result['released']) {
+            $this->notificationService->queueRequester($result['report'], 'approved');
         }
 
         if ($decision === WasteApprovalStatus::Rejected) {

@@ -12,10 +12,8 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteApprovalService;
-use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Cesa\Waste\Tests\WasteTestCase;
-use Database\Factories\UserFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 
@@ -49,13 +47,7 @@ class WastePluginLifecycleTest extends WasteTestCase
         $this->assertSame(WasteReportStatus::Pending, $firstDecision['report']->status);
 
         $secondDecision = app(WasteApprovalService::class)->approve($firstDecision['next_token']);
-        $this->assertSame(WasteReportStatus::Pending, $secondDecision['report']->status);
-        $this->assertDatabaseMissing('waste_notification_deliveries', ['report_id' => $report->getKey(), 'type' => 'requester_approved']);
-
-        $reviewer = UserFactory::new()->createQuietly();
-        $brand->users()->attach($reviewer);
-        $report->latestVersion->events->first()->lines->first()->update(['sm_checked' => false, 'audit_checked' => true]);
-        app(WasteMisReviewService::class)->approve($report, $reviewer);
+        $this->assertSame(WasteReportStatus::Approved, $secondDecision['report']->status);
 
         $this->assertDatabaseHas('waste_reports', ['id' => $report->getKey(), 'status' => 'approved']);
         $this->assertDatabaseHas('waste_notification_deliveries', ['report_id' => $report->getKey(), 'type' => 'requester_approved']);

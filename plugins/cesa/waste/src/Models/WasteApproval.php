@@ -27,6 +27,13 @@ class WasteApproval extends Model
         ];
     }
 
+    public function displayName(): string
+    {
+        $name = trim((string) $this->approver_name);
+
+        return $name !== '' ? $name : (string) $this->label;
+    }
+
     public function version(): BelongsTo
     {
         return $this->belongsTo(WasteReportVersion::class, 'version_id');

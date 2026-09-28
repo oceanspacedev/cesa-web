@@ -2,7 +2,6 @@
 
 namespace Cesa\Waste\Filament\Resources\WasteReportResource\Pages;
 
-use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Filament\Resources\WasteReportResource;
 use Cesa\Waste\Services\WasteAccessService;
@@ -116,7 +115,6 @@ class ViewWasteReport extends ViewRecord
 
         return $report->status === WasteReportStatus::Pending
             && $version?->status === WasteReportStatus::Pending
-            && $version->approvals()->get()->every(fn ($approval): bool => $approval->status === WasteApprovalStatus::Approved)
             && Gate::forUser(filament()->auth()->user())->allows('review', $report);
     }
 }
