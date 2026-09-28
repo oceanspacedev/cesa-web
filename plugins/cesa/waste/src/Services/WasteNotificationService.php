@@ -106,13 +106,13 @@ class WasteNotificationService
             return;
         }
 
-        $version->loadMissing('events.evidences');
+        $version->loadMissing('events.evidences', 'events.lines');
 
         foreach ($version->events as $event) {
-            foreach ($event->evidences as $index => $evidence) {
+            foreach ($event->evidences as $evidence) {
                 $lines = [
                     $this->placeLine($report),
-                    'Kejadian '.((int) $event->sequence + 1).' · Foto '.($index + 1),
+                    $this->materialLines($event),
                 ];
                 if (filled($heading)) {
                     $lines[] = '';
@@ -165,6 +165,19 @@ class WasteNotificationService
         }
 
         return implode("\n", $lines);
+    }
+
+    protected function materialLines(object $event): string
+    {
+        return $event->lines
+            ->map(function (object $line): string {
+                $quantity = rtrim(rtrim(number_format((float) $line->quantity, 4, '.', ''), '0'), '.');
+                $unit = filled($line->unit_label) ? $line->unit_label : $line->unit;
+
+                return trim($line->item_name.' '.($quantity === '' ? '0' : $quantity).' '.$unit);
+            })
+            ->filter()
+            ->implode("\n");
     }
 
     protected function placeLine(WasteReport $report): string

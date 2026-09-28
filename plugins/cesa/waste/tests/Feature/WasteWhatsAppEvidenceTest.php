@@ -49,7 +49,7 @@ it('queues every evidence photo for the requester and active external approver o
         ->and($approverPhotos->pluck('recipient')->unique()->all())->toBe(['089876543210'])
         ->and($requesterPhotos->pluck('payload')->pluck('evidence_id')->sort()->values()->all())->toBe($evidenceIds)
         ->and($approverPhotos->pluck('payload')->pluck('evidence_id')->sort()->values()->all())->toBe($evidenceIds)
-        ->and($approverPhotos->first()->payload['message'])->toContain("Jchicken / Ciledug\n22 September 2026\nKejadian 1 · Foto 1\n\nSupervisor")
+        ->and($approverPhotos->first()->payload['message'])->toContain("Jchicken / Ciledug\n22 September 2026\nChicken Popcorn 1.25 GR\n\nSupervisor")
         ->and($report->notifications()->where('type', 'requester_submitted')->count())->toBe(1)
         ->and($report->notifications()->where('type', 'approval_1')->count())->toBe(1)
         ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain("Supervisor\nJchicken / Ciledug\n22 September 2026");
