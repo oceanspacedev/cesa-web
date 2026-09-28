@@ -263,7 +263,7 @@ it('sends a usable revision link only after MIS rejects an externally approved r
     $rejected = app(WasteMisReviewService::class)->reject($report, $reviewer, 'Barang perlu difoto ulang.');
     $delivery = $report->notifications()->where('type', 'requester_rejected')->firstOrFail();
     $message = (string) $delivery->payload['message'];
-    $revisionUrl = trim(Str::after($message, 'Revisi: '));
+    $revisionUrl = trim(Str::after($message, "Perbaiki laporan\n"));
     $manageToken = basename((string) parse_url($revisionUrl, PHP_URL_PATH));
 
     expect($rejected->status)->toBe(WasteReportStatus::Rejected)

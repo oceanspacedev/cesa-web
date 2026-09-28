@@ -30,8 +30,7 @@ it('reminds the active pending approver with a fresh token', function (): void {
         ->and($activeApproval->fresh()->token_hash)->not->toBe($oldTokenHash)
         ->and($activeApproval->fresh()->notified_at)->not->toBeNull()
         ->and($report->activityLogs()->where('event', 'reminder_sent')->count())->toBe(1)
-        ->and($reminderDeliveries->first()->payload['message'])->toContain('Pengingat')
-        ->and($reminderDeliveries->first()->payload['message'])->toContain($report->uid);
+        ->and($reminderDeliveries->first()->payload['message'])->toContain("Pengingat\nManager\nJchicken / Ciledug");
 });
 
 it('does not remind waste reports that are no longer pending', function (): void {

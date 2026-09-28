@@ -42,8 +42,7 @@ class WasteNotificationService
 
     public function queueApprovalReminder(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
-        $message = "Pengingat {$approval->label}: laporan waste {$report->uid} masih menunggu persetujuan.\n"
-            .route('waste.public.approval', ['token' => $token]);
+        $message = $this->approvalMessage($report, $approval->label, route('waste.public.approval', ['token' => $token]), true);
 
         if (filled($approval->approver_phone)) {
             $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order.'_reminder', $approval->approver_phone, $message);
@@ -56,22 +55,12 @@ class WasteNotificationService
 
     public function queueRequester(WasteReport $report, string $type, ?string $progressToken = null, ?string $manageToken = null): void
     {
-        $links = [];
-        if ($progressToken) {
-            $links[] = 'Status: '.route('waste.public.progress', ['token' => $progressToken]);
-        }
-        if ($manageToken && $type === 'rejected') {
-            $links[] = 'Revisi: '.route('waste.public.manage', ['token' => $manageToken]);
-        } elseif ($type === 'rejected') {
-            $links[] = 'Buka tautan status yang dikirim saat pengajuan untuk merevisi laporan.';
-        }
-
-        $message = "Laporan waste {$report->uid} berstatus {$type}.\n".implode("\n", $links);
+        $message = $this->requesterMessage($report, $type, $progressToken, $manageToken);
         $version = $report->latestVersion;
         $this->queueDelivery($report, $version, 'whatsapp', 'requester_'.$type, $report->reporter_phone, $message);
 
-        if ($type === 'submitted' && $version) {
-            $this->queueEvidence($report, $version, 'requester_submitted_evidence', $report->reporter_phone, implode("\n", $links));
+        if ($type === 'submitted' && $version && $progressToken) {
+            $this->queueEvidence($report, $version, 'requester_submitted_evidence', $report->reporter_phone, route('waste.public.progress', ['token' => $progressToken]));
         }
 
         if (config('waste.notifications.email_enabled', true) && filled($report->reporter_email)) {
@@ -98,12 +87,12 @@ class WasteNotificationService
 
     protected function queueApproval(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
-        $message = "{$approval->label}: laporan waste {$report->uid} menunggu persetujuan.\n"
-            .route('waste.public.approval', ['token' => $token]);
+        $url = route('waste.public.approval', ['token' => $token]);
+        $message = $this->approvalMessage($report, $approval->label, $url);
 
         if (filled($approval->approver_phone)) {
             $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order, $approval->approver_phone, $message);
-            $this->queueEvidence($report, $version, 'approval_'.$approval->step_order.'_evidence', $approval->approver_phone, route('waste.public.approval', ['token' => $token]));
+            $this->queueEvidence($report, $version, 'approval_'.$approval->step_order.'_evidence', $approval->approver_phone, $url, $approval->label);
         }
 
         if (config('waste.notifications.email_enabled', true) && filled($approval->approver_email)) {
@@ -111,26 +100,79 @@ class WasteNotificationService
         }
     }
 
-    protected function queueEvidence(WasteReport $report, WasteReportVersion $version, string $type, string $recipient, string $actionLink): void
+    protected function queueEvidence(WasteReport $report, WasteReportVersion $version, string $type, string $recipient, string $actionLink, ?string $heading = null): void
     {
         if (trim($recipient) === '') {
             return;
         }
 
         $version->loadMissing('events.evidences');
-        $report->loadMissing('brand', 'outlet');
 
         foreach ($version->events as $event) {
             foreach ($event->evidences as $index => $evidence) {
-                $caption = 'Bukti foto waste '.$report->brand->name.' / '.$report->outlet->name
-                    .', '.($report->event_date?->format('d/m/Y') ?? '-')
-                    .', kejadian '.((int) $event->sequence + 1).', foto '.($index + 1)
-                    .".\nLaporan: {$report->uid}\n".$actionLink;
-                $this->queueDelivery($report, $version, 'whatsapp', $type, $recipient, $caption, additionalPayload: [
+                $lines = [
+                    $this->placeLine($report),
+                    'Kejadian '.((int) $event->sequence + 1).' · Foto '.($index + 1),
+                ];
+                if (filled($heading)) {
+                    $lines[] = '';
+                    $lines[] = $heading;
+                }
+                if (filled($actionLink)) {
+                    $lines[] = $actionLink;
+                }
+
+                $this->queueDelivery($report, $version, 'whatsapp', $type, $recipient, implode("\n", $lines), additionalPayload: [
                     'evidence_id' => $evidence->getKey(),
                 ]);
             }
         }
+    }
+
+    protected function approvalMessage(WasteReport $report, string $label, string $url, bool $reminder = false): string
+    {
+        $lines = $reminder ? ['Pengingat'] : [];
+        $lines[] = $label;
+        $lines[] = $this->placeLine($report);
+        $lines[] = '';
+        $lines[] = $url;
+
+        return implode("\n", $lines);
+    }
+
+    protected function requesterMessage(WasteReport $report, string $type, ?string $progressToken, ?string $manageToken): string
+    {
+        $lines = [
+            $this->placeLine($report),
+            '',
+            match ($type) {
+                'approved' => 'Laporan disetujui.',
+                'rejected' => 'Laporan ditolak.',
+                default    => 'Laporan terkirim.',
+            },
+        ];
+
+        if ($progressToken) {
+            $lines[] = route('waste.public.progress', ['token' => $progressToken]);
+        }
+
+        if ($manageToken && $type === 'rejected') {
+            $lines[] = '';
+            $lines[] = 'Perbaiki laporan';
+            $lines[] = route('waste.public.manage', ['token' => $manageToken]);
+        } elseif ($type === 'rejected') {
+            $lines[] = 'Buka tautan status yang dikirim saat pengajuan untuk merevisi laporan.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    protected function placeLine(WasteReport $report): string
+    {
+        $report->loadMissing('brand', 'outlet');
+        $date = $report->event_date?->locale('id')->translatedFormat('j F Y') ?? '-';
+
+        return $report->brand->name.' / '.$report->outlet->name."\n".$date;
     }
 
     protected function queueDelivery(

@@ -72,7 +72,7 @@ it('walks one report from submission through each whatsapp step into the monthly
             WasteApprovalStatus::Waiting,
         ])
         ->and($result['approval_tokens'])->toHaveCount(1)
-        ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain('Store Manager:')
+        ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain("Store Manager\nJchicken / Ciledug")
         ->and($export()->hasReports())->toBeFalse();
 
     $this->get(route('waste.public.approval', ['token' => $result['approval_tokens'][0]]))
@@ -92,7 +92,7 @@ it('walks one report from submission through each whatsapp step into the monthly
             WasteApprovalStatus::Approved,
             WasteApprovalStatus::Pending,
         ])
-        ->and($first['report']->notifications()->where('type', 'approval_2')->first()->payload['message'])->toContain('Audit:');
+        ->and($first['report']->notifications()->where('type', 'approval_2')->first()->payload['message'])->toContain("Audit\nJchicken / Ciledug");
 
     $second = app(WasteApprovalService::class)->approve($first['next_token']);
 
