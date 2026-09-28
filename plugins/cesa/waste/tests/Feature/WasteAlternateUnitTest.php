@@ -10,7 +10,6 @@ use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteUnit;
-use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
 use Filament\Actions\CreateAction;
@@ -121,7 +120,7 @@ it('keeps the same item in separate monthly totals when its selected units diffe
         ['item_id' => $item->id, 'quantity' => '75', 'unit' => 'ML', 'sm_checked' => '0', 'audit_checked' => '1'],
     ];
     $report = app(WasteReportService::class)->saveByAdmin($payload, null, $reviewer);
-    app(WasteMisReviewService::class)->approve($report, $reviewer);
+    expect($report->status)->toBe(WasteReportStatus::Approved);
 
     $summaryRows = (new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))
         ->summaryRows()->mapWithKeys(fn (array $row): array => [$row[5] => $row[6]])->all();

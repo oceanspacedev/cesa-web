@@ -13,6 +13,7 @@ use Cesa\Waste\Models\WasteEvidence;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
+use Cesa\Waste\Models\WasteReportVersion;
 use Cesa\Waste\Models\WasteUnit;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -22,7 +23,10 @@ use Illuminate\Validation\ValidationException;
 
 class WasteReportService
 {
-    public function __construct(protected WasteWorkflowService $workflowService) {}
+    public function __construct(
+        protected WasteWorkflowService $workflowService,
+        protected WasteNotificationService $notificationService,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -76,8 +80,6 @@ class WasteReportService
             ]);
         }
 
-        $canMarkReviewFlags = ! $user || app(WasteAccessService::class)->canManageBrand($user, $brand);
-
         $eventDate = $data['event_date'] ?? null;
         if ($eventDate instanceof \DateTimeInterface) {
             $eventDate = $eventDate->format('Y-m-d');
@@ -99,8 +101,10 @@ class WasteReportService
 
         $eventData = $this->validateEventData($brand, $data['events']);
         $creating = ! $report?->exists;
+        $workflowSnapshot = $this->workflowService->snapshotOrEmpty($this->workflowService->resolve($brand, $outlet));
+        $approvalToken = null;
 
-        return DB::transaction(function () use ($brand, $outlet, $data, $report, $user, $eventDate, $eventData, $creating, $canMarkReviewFlags): WasteReport {
+        $report = DB::transaction(function () use ($brand, $outlet, $data, $report, $user, $eventDate, $eventData, $creating, $workflowSnapshot, &$approvalToken): WasteReport {
             $report = $report?->exists
                 ? WasteReport::query()->whereKey($report->getKey())->lockForUpdate()->firstOrFail()
                 : new WasteReport;
@@ -124,15 +128,9 @@ class WasteReportService
                 ]);
             }
 
-            $reopening = $report->exists && $report->status !== WasteReportStatus::Pending;
-            $reportContextChanged = $report->exists && (
-                (int) $report->outlet_id !== (int) $outlet->getKey()
-                || $report->event_date?->format('Y-m-d') !== $eventDate
-                || $report->reporter_name !== trim((string) $data['reporter_name'])
-                || $report->reporter_phone !== trim((string) $data['reporter_phone'])
-                || (string) $report->reporter_email !== trim((string) ($data['reporter_email'] ?? ''))
-            );
-            $status = WasteReportStatus::Pending;
+            $autoApprove = $workflowSnapshot === [];
+            $reopening = $report->exists && ! $autoApprove && $report->status !== WasteReportStatus::Pending;
+            $status = $autoApprove ? WasteReportStatus::Approved : WasteReportStatus::Pending;
 
             $report->fill([
                 'brand_id'          => $brand->getKey(),
@@ -143,7 +141,7 @@ class WasteReportService
                 'reporter_email'    => filled($data['reporter_email'] ?? null) ? trim((string) $data['reporter_email']) : null,
                 'status'            => $status,
                 'submitted_at'      => $report->submitted_at ?? now(),
-                'approved_at'       => null,
+                'approved_at'       => $autoApprove ? ($report->approved_at ?? now()) : null,
                 'rejected_at'       => null,
                 'manage_token_hash' => $reopening ? null : $report->manage_token_hash,
             ]);
@@ -160,7 +158,7 @@ class WasteReportService
                 $version = $report->versions()->create([
                     'version_number'    => ((int) $report->versions()->max('version_number')) + 1,
                     'status'            => $status,
-                    'workflow_snapshot' => [],
+                    'workflow_snapshot' => $workflowSnapshot,
                 ]);
                 $report->forceFill(['latest_version_id' => $version->getKey()])->save();
             } else {
@@ -198,16 +196,6 @@ class WasteReportService
             foreach ($eventData as $sequence => $event) {
                 $sourceEvent = $matchedEvents[$sequence];
                 $eventModel = $reopening ? null : $sourceEvent;
-                $eventContextChanged = false;
-                if ($sourceEvent) {
-                    foreach (['section', 'category_id', 'category_name', 'reason', 'pip_item_id', 'pip_item_code', 'pip_item_name', 'pip_unit', 'pip_quantity'] as $field) {
-                        if ((string) $sourceEvent->{$field} !== (string) ($event['event'][$field] ?? null)) {
-                            $eventContextChanged = true;
-
-                            break;
-                        }
-                    }
-                }
 
                 if ($eventModel) {
                     $eventModel->update($event['event']);
@@ -225,31 +213,10 @@ class WasteReportService
 
                 $keptLineIds = [];
                 foreach ($event['lines'] as $lineIndex => $line) {
-                    $submittedLine = array_values($submittedEvents[$sequence]['lines'] ?? [])[$lineIndex] ?? [];
                     $existingLine = $matchedLines[$sequence][$lineIndex];
                     $sameItem = $existingLine && (int) $existingLine->item_id === (int) $line['item_id'];
-                    $sameLine = $sameItem
-                        && $existingLine->unit === $line['unit']
-                        && (string) $existingLine->quantity === $line['quantity'];
-                    $requiresNewReview = $reopening || $reportContextChanged || $eventContextChanged || ($existingLine && ! $sameLine);
 
-                    if (! $canMarkReviewFlags && (array_key_exists('sm_checked', $submittedLine) || array_key_exists('audit_checked', $submittedLine))) {
-                        throw ValidationException::withMessages([
-                            "events.{$sequence}.lines.{$lineIndex}" => 'Hanya pengelola brand yang dapat menandai pemeriksaan MIS.',
-                        ]);
-                    }
-
-                    if (strtoupper($brand->code) === 'JCHICKEN') {
-                        $line['sm_checked'] = $requiresNewReview ? null : (array_key_exists('sm_checked', $submittedLine)
-                            ? $this->reviewFlag($submittedLine['sm_checked'], "events.{$sequence}.lines.{$lineIndex}.sm_checked")
-                            : ($sameItem ? $existingLine->sm_checked : null));
-                    }
-
-                    if (in_array(strtoupper($brand->code), ['JCHICKEN', 'LUUCA'], true)) {
-                        $line['audit_checked'] = $requiresNewReview ? null : (array_key_exists('audit_checked', $submittedLine)
-                            ? $this->reviewFlag($submittedLine['audit_checked'], "events.{$sequence}.lines.{$lineIndex}.audit_checked")
-                            : ($sameItem ? $existingLine->audit_checked : null));
-                    }
+                    unset($line['sm_checked'], $line['audit_checked']);
 
                     if ($sameItem && $existingLine->unit === $line['unit'] && filled($existingLine->unit_label)) {
                         $line['unit_label'] = $existingLine->unit_label;
@@ -290,8 +257,49 @@ class WasteReportService
                 'actor_id'   => $user?->getKey(),
             ]);
 
+            if ((! $previousVersion || $reopening) && $workflowSnapshot !== []) {
+                $approvalToken = $this->openApprovalFlow($version, $workflowSnapshot);
+            }
+
             return $report->fresh(['latestVersion.events.lines']);
         });
+
+        if (is_string($approvalToken)) {
+            $version = $report->latestVersion()->with('approvals')->first();
+            $approval = $version?->approvals->sortBy('step_order')->first();
+            if ($version && $approval) {
+                $this->notificationService->queueNextApproval($report, $version, $approval, $approvalToken);
+            }
+        }
+
+        return $report;
+    }
+
+    /**
+     * @param  array<int, array{label: string, name: string, email: ?string, phone: ?string, sort_order: int}>  $workflowSnapshot
+     */
+    protected function openApprovalFlow(WasteReportVersion $version, array $workflowSnapshot): ?string
+    {
+        $firstToken = null;
+
+        foreach ($workflowSnapshot as $index => $step) {
+            $approvalToken = $index === 0 ? Str::random(64) : null;
+            if (is_string($approvalToken)) {
+                $firstToken = $approvalToken;
+            }
+
+            $version->approvals()->create([
+                'step_order'     => $step['sort_order'],
+                'label'          => $step['label'],
+                'approver_name'  => $step['name'],
+                'approver_email' => $step['email'],
+                'approver_phone' => $step['phone'],
+                'token_hash'     => $approvalToken ? $this->tokenHash($approvalToken) : null,
+                'status'         => $index === 0 ? WasteApprovalStatus::Pending : WasteApprovalStatus::Waiting,
+            ]);
+        }
+
+        return $firstToken;
     }
 
     /**
@@ -323,7 +331,7 @@ class WasteReportService
         $workflowSnapshot = $this->workflowService->snapshotOrEmpty(
             $this->workflowService->resolve($brand, $outlet),
         );
-        $requiresApproval = true;
+        $requiresApproval = $workflowSnapshot !== [];
         $progressToken = Str::random(64);
         $manageToken = Str::random(64);
         $approvalTokens = [];
@@ -639,23 +647,6 @@ class WasteReportService
         }
 
         return $category;
-    }
-
-    protected function reviewFlag(mixed $value, string $field): ?bool
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        if (in_array($value, [true, 1, '1'], true)) {
-            return true;
-        }
-
-        if (in_array($value, [false, 0, '0'], true)) {
-            return false;
-        }
-
-        throw ValidationException::withMessages([$field => 'Pilih TRUE, FALSE, atau biarkan kosong.']);
     }
 
     /**

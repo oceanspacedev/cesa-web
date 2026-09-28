@@ -89,7 +89,7 @@ class ReplayWasteSeptemberQa extends Command
             }
 
             $this->components->info(sprintf(
-                'Selesai: %d laporan TPS baru, %d laporan QA dilewati. Laporan baru menunggu review MIS.',
+                'Selesai: %d laporan baru, %d laporan QA dilewati. Laporan baru langsung disetujui.',
                 count($new), count($existing),
             ));
 
@@ -211,7 +211,7 @@ class ReplayWasteSeptemberQa extends Command
                 continue;
             }
             if (app(WasteWorkflowService::class)->resolve($brand, $outlet)) {
-                $blocked[] = "{$brandCode}: workflow eksternal aktif; replay QA hanya untuk alur TPS ke MIS.";
+                $blocked[] = "{$brandCode}: approval flow aktif; replay QA hanya untuk laporan tanpa approval flow.";
 
                 continue;
             }
@@ -450,7 +450,7 @@ class ReplayWasteSeptemberQa extends Command
         imagestring($image, 5, 60, 90, 'QA SIMULASI', $red);
         imagestring($image, 5, 60, 170, 'BUKAN FOTO BUKTI ASLI', $red);
         imagestring($image, 5, 60, 260, "{$brandCode} / BARIS EXCEL {$sourceRow}", $black);
-        imagestring($image, 4, 60, 335, 'Dibuat otomatis untuk menguji alur TPS ke MIS ke Excel.', $black);
+        imagestring($image, 4, 60, 335, 'Dibuat otomatis untuk uji laporan waste.', $black);
         imagepng($image, $path);
         imagedestroy($image);
 

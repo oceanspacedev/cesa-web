@@ -34,7 +34,7 @@ return [
         'no_outlets'         => 'No active outlets yet. Contact your brand administrator.',
         'no_results'         => 'No matching brand or outlet. Try another search.',
         'empty'              => 'No active brands yet. Contact an administrator to set up your outlet.',
-        'no_approval'        => 'MIS will review this report.',
+        'no_approval'        => 'This report is approved immediately.',
     ],
     'progress_title'          => 'Waste report status',
     'needs_revision'          => 'Report needs a correction',

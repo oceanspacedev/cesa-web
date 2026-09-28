@@ -8,7 +8,6 @@ use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteNotificationService;
 use Cesa\Waste\Services\WasteQaReviewerService;
 use Cesa\Waste\Services\WasteQaSilentNotificationService;
-use Cesa\Waste\Services\WasteReportService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -22,9 +21,9 @@ class QaReviewSeptember extends Command
         {--limit= : Batasi jumlah baris sumber untuk uji coba}
         {--dry-run : Periksa kesiapan tanpa menulis data}';
 
-    protected $description = 'Tandai SM/AUDIT dan setujui laporan TPS QA September melalui alur MIS aplikasi.';
+    protected $description = 'Setujui laporan QA September yang masih menunggu persetujuan.';
 
-    public function handle(WasteQaReviewerService $reviewers, WasteReportService $reports): int
+    public function handle(WasteQaReviewerService $reviewers): int
     {
         if (! app()->environment('local', 'testing')) {
             $this->components->error('Perintah QA hanya boleh dijalankan di lingkungan lokal atau pengujian.');
@@ -110,11 +109,7 @@ class QaReviewSeptember extends Command
             }
 
             if ($report->status === WasteReportStatus::Approved) {
-                if (! $this->flagsMatch($report, $brandCode, $row)) {
-                    $errors[] = "{$brandCode} baris {$row['source_row']}: laporan disetujui dengan penanda MIS berbeda dari sumber.";
-                } else {
-                    $approved++;
-                }
+                $approved++;
 
                 continue;
             }
@@ -138,7 +133,7 @@ class QaReviewSeptember extends Command
         }
 
         if ($this->option('dry-run')) {
-            $this->components->info(sprintf('Simulasi MIS: %d siap disetujui, %d sudah disetujui, 0 perubahan.', count($ready), $approved));
+            $this->components->info(sprintf('Simulasi: %d siap disetujui, %d sudah disetujui, 0 perubahan.', count($ready), $approved));
 
             return self::SUCCESS;
         }
@@ -159,7 +154,7 @@ class QaReviewSeptember extends Command
             $mis = app(WasteMisReviewService::class);
 
             foreach ($ready as [$report, $brandCode, $sourceFile, $row]) {
-                DB::transaction(function () use ($report, $brandCode, $sourceFile, $row, $reviewer, $reports, $mis): void {
+                DB::transaction(function () use ($report, $brandCode, $sourceFile, $row, $reviewer, $mis): void {
                     $report = WasteReport::query()
                         ->whereKey($report->getKey())
                         ->lockForUpdate()
@@ -171,23 +166,19 @@ class QaReviewSeptember extends Command
                         throw new \RuntimeException("Laporan {$brandCode} baris {$row['source_row']} berubah setelah pemeriksaan awal.");
                     }
 
-                    if ($brandCode !== 'MOMOYO') {
-                        $report = $reports->saveByAdmin($this->reviewPayload($report, $brandCode, $row), $report, $reviewer);
-                    }
-
                     $mis->approve($report, $reviewer);
                 });
                 $completed++;
             }
         } catch (Throwable $exception) {
-            $this->components->error("Review MIS QA berhenti setelah {$completed} laporan: ".$exception->getMessage());
+            $this->components->error("Peninjauan QA berhenti setelah {$completed} laporan: ".$exception->getMessage());
 
             return self::FAILURE;
         } finally {
             app()->instance(WasteNotificationService::class, $originalNotifications);
         }
 
-        $this->components->info(sprintf('%d laporan disetujui MIS, %d sudah disetujui sebelumnya. Notifikasi keluar tidak dikirim.', $completed, $approved));
+        $this->components->info(sprintf('%d laporan disetujui, %d sudah disetujui sebelumnya. Notifikasi keluar tidak dikirim.', $completed, $approved));
 
         return self::SUCCESS;
     }
@@ -253,55 +244,5 @@ class QaReviewSeptember extends Command
         }
 
         return null;
-    }
-
-    /** @param array<string, mixed> $row */
-    protected function flagsMatch(WasteReport $report, string $brandCode, array $row): bool
-    {
-        $line = $report->latestVersion->events->sole()->lines->sole();
-
-        return match ($brandCode) {
-            'JCHICKEN' => $line->sm_checked === $row['sm'] && $line->audit_checked === $row['audit'],
-            'LUUCA'    => $line->audit_checked === $row['audit'],
-            default    => true,
-        };
-    }
-
-    /** @param array<string, mixed> $row
-     * @return array<string, mixed>
-     */
-    protected function reviewPayload(WasteReport $report, string $brandCode, array $row): array
-    {
-        $event = $report->latestVersion->events->sole();
-        $line = $event->lines->sole();
-        $lineData = [
-            'id'            => $line->getKey(),
-            'item_id'       => $line->item_id,
-            'quantity'      => $line->quantity,
-            'unit'          => $line->unit,
-            'audit_checked' => $row['audit'],
-        ];
-
-        if ($brandCode === 'JCHICKEN') {
-            $lineData['sm_checked'] = $row['sm'];
-        }
-
-        return [
-            'brand_id'       => $report->brand_id,
-            'outlet_id'      => $report->outlet_id,
-            'event_date'     => $report->event_date->format('Y-m-d'),
-            'reporter_name'  => $report->reporter_name,
-            'reporter_phone' => $report->reporter_phone,
-            'reporter_email' => $report->reporter_email,
-            'events'         => [[
-                'id'           => $event->getKey(),
-                'section'      => $event->section,
-                'category_id'  => $event->category_id,
-                'reason'       => $event->reason,
-                'pip_item_id'  => $event->pip_item_id,
-                'pip_quantity' => $event->pip_quantity,
-                'lines'        => [$lineData],
-            ]],
-        ];
     }
 }

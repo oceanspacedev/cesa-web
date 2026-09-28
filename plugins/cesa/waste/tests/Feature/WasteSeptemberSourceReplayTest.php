@@ -12,7 +12,6 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteUnit;
-use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
 use Filament\Actions\EditAction;
@@ -138,9 +137,9 @@ it('replays all September source lines through public input, MIS review, and mon
     }
 
     expect(WasteReport::query()->count())->toBe($expectedLines)
-        ->and(WasteReport::query()->where('status', WasteReportStatus::Pending)->count())->toBe($expectedLines)
+        ->and(WasteReport::query()->where('status', WasteReportStatus::Approved)->count())->toBe($expectedLines)
         ->and(WasteEvidence::query()->count())->toBe($expectedLines)
-        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeFalse();
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeTrue();
 
     foreach (WasteReport::query()->with('latestVersion.events.lines')->orderBy('id')->get() as $index => $report) {
         $row = $rows[$index];
@@ -166,7 +165,7 @@ it('replays all September source lines through public input, MIS review, and mon
                 ]],
             ], $report, $reviewer);
         }
-        expect(app(WasteMisReviewService::class)->approve($report, $reviewer)->status)->toBe(WasteReportStatus::Approved);
+        expect($report->fresh()->status)->toBe(WasteReportStatus::Approved);
     }
 
     $export = new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer);
@@ -223,11 +222,12 @@ it('replays all September source lines through public input, MIS review, and mon
             if ($brandCode === 'JCHICKEN') {
                 $this->assertSame($row['section'], $sheet->getCell("I{$excelRow}")->getValue(), $context.' section');
                 $this->assertSame($row['category'], $sheet->getCell("J{$excelRow}")->getValue(), $context.' kategori');
-                $this->assertSame($row['sm'], $sheet->getCell("K{$excelRow}")->getValue(), $context.' SM');
-                $this->assertSame($row['audit'], $sheet->getCell("L{$excelRow}")->getValue(), $context.' AUDIT');
+                $this->assertNull($sheet->getCell("K{$excelRow}")->getValue(), $context.' STORE MANAGER');
+                $this->assertNull($sheet->getCell("L{$excelRow}")->getValue(), $context.' AUDIT');
             } else {
                 $this->assertSame($row['category'], $sheet->getCell("I{$excelRow}")->getValue(), $context.' kategori');
-                $this->assertSame($row['audit'], $sheet->getCell("J{$excelRow}")->getValue(), $context.' AUDIT');
+                $this->assertNull($sheet->getCell("J{$excelRow}")->getValue(), $context.' STORE MANAGER');
+                $this->assertNull($sheet->getCell("K{$excelRow}")->getValue(), $context.' AUDIT');
             }
         }
     }

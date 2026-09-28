@@ -20,38 +20,36 @@ beforeEach(function (): void {
     config(['waste.attachments.disk' => 'local']);
 });
 
-it('previews, approves through MIS, and reruns without duplicate checks or notifications', function (): void {
-    [$report, $row] = qaReviewSourceReport('JCHICKEN');
+it('treats a QA report without an approval flow as already approved', function (): void {
+    [$report] = qaReviewSourceReport('JCHICKEN');
     $originalDeliveries = $report->notifications()->count();
 
     $this->artisan('waste:qa-review-september', ['--brand' => 'JCHICKEN', '--limit' => '1', '--dry-run' => true])
-        ->expectsOutputToContain('1 siap disetujui, 0 sudah disetujui, 0 perubahan')
+        ->expectsOutputToContain('0 siap disetujui, 1 sudah disetujui, 0 perubahan')
         ->assertSuccessful();
 
     expect(User::query()->where('email', WasteQaReviewerService::EMAIL)->exists())->toBeFalse()
-        ->and($report->fresh()->status)->toBe(WasteReportStatus::Pending);
+        ->and($report->fresh()->status)->toBe(WasteReportStatus::Approved);
 
     $this->artisan('waste:qa-review-september', ['--brand' => 'JCHICKEN', '--limit' => '1'])
-        ->expectsOutputToContain('1 laporan disetujui MIS')
+        ->expectsOutputToContain('1 sudah disetujui')
         ->assertSuccessful();
 
-    $reviewer = User::query()->where('email', WasteQaReviewerService::EMAIL)->firstOrFail();
     $approved = $report->fresh('latestVersion.events.lines');
     $line = $approved->latestVersion->events->sole()->lines->sole();
 
-    expect($reviewer->name)->toBe(WasteQaReviewerService::NAME)
-        ->and($reviewer->is_active)->toBeFalse()
+    expect(User::query()->where('email', WasteQaReviewerService::EMAIL)->exists())->toBeFalse()
         ->and($approved->status)->toBe(WasteReportStatus::Approved)
-        ->and($line->sm_checked)->toBe($row['sm'])
-        ->and($line->audit_checked)->toBe($row['audit'])
-        ->and($approved->activityLogs()->where('event', 'mis_approved')->where('actor_id', $reviewer->id)->count())->toBe(1)
+        ->and($line->sm_checked)->toBeNull()
+        ->and($line->audit_checked)->toBeNull()
+        ->and($approved->activityLogs()->where('event', 'mis_approved')->count())->toBe(0)
         ->and($approved->notifications()->count())->toBe($originalDeliveries);
 
     $this->artisan('waste:qa-review-september', ['--brand' => 'JCHICKEN', '--limit' => '1'])
         ->expectsOutputToContain('1 sudah disetujui')
         ->assertSuccessful();
 
-    expect($approved->activityLogs()->where('event', 'mis_approved')->count())->toBe(1);
+    expect($approved->activityLogs()->where('event', 'mis_approved')->count())->toBe(0);
 });
 
 it('requires the exact QA source log and source fields before writing any review', function (): void {
@@ -63,7 +61,7 @@ it('requires the exact QA source log and source fields before writing any review
         ->expectsOutputToContain('1 baris bermasalah. Tidak ada laporan yang disetujui.')
         ->assertFailed();
 
-    expect($valid->fresh()->status)->toBe(WasteReportStatus::Pending)
+    expect($valid->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and(User::query()->where('email', WasteQaReviewerService::EMAIL)->exists())->toBeFalse();
 
     $wrong->latestVersion->events->sole()->lines->sole()->forceFill(['quantity' => $wrongRow['quantity']])->save();
@@ -73,7 +71,7 @@ it('requires the exact QA source log and source fields before writing any review
         ->expectsOutputToContain('penanda asal TPS QA tidak lengkap')
         ->assertFailed();
 
-    expect($valid->fresh()->status)->toBe(WasteReportStatus::Pending);
+    expect($valid->fresh()->status)->toBe(WasteReportStatus::Approved);
 });
 
 it('refuses to approve a QA report whose TPS evidence file is missing', function (): void {
@@ -85,12 +83,12 @@ it('refuses to approve a QA report whose TPS evidence file is missing', function
         ->expectsOutputToContain('foto bukti TPS QA tidak tersedia')
         ->assertFailed();
 
-    expect($report->fresh()->status)->toBe(WasteReportStatus::Pending)
+    expect($report->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and(User::query()->where('email', WasteQaReviewerService::EMAIL)->exists())->toBeFalse();
 });
 
 it('handles Luuca AUDIT and Momoyo without MIS line flags', function (): void {
-    [$luuca, $luucaRow] = qaReviewSourceReport('LUUCA');
+    [$luuca] = qaReviewSourceReport('LUUCA');
     [$momoyo] = qaReviewSourceReport('MOMOYO');
 
     $this->artisan('waste:qa-review-september', ['--brand' => 'LUUCA', '--limit' => '1'])
@@ -101,7 +99,8 @@ it('handles Luuca AUDIT and Momoyo without MIS line flags', function (): void {
     $luucaLine = $luuca->fresh('latestVersion.events.lines')->latestVersion->events->sole()->lines->sole();
     $momoyoLine = $momoyo->fresh('latestVersion.events.lines')->latestVersion->events->sole()->lines->sole();
     expect($luuca->fresh()->status)->toBe(WasteReportStatus::Approved)
-        ->and($luucaLine->audit_checked)->toBe($luucaRow['audit'])
+        ->and($luucaLine->audit_checked)->toBeNull()
+        ->and($luucaLine->sm_checked)->toBeNull()
         ->and($momoyo->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and($momoyoLine->audit_checked)->toBeNull()
         ->and($momoyoLine->sm_checked)->toBeNull();

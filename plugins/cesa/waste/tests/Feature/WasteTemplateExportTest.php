@@ -1,5 +1,6 @@
 <?php
 
+use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Exports\WasteReportExport;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
@@ -8,6 +9,7 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteUnit;
+use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
@@ -71,9 +73,9 @@ it('exports Jchicken and Luuca in their own monthly template layouts with saved 
     }
 
     $luucaSheet = $byReason->get('L Sep Ciledug');
-    expect(wasteTemplateHeader($luucaSheet, 6, 10))->toBe([
+    expect(wasteTemplateHeader($luucaSheet, 6, 11))->toBe([
         'TANGGAL', 'NAMA PRODUK', 'KODE CSA', 'JENIS', 'JUMLAH', 'SATUAN CSA',
-        'ALASAN WASTE', 'USER', 'KATEGORI', 'AUDIT',
+        'ALASAN WASTE', 'USER', 'KATEGORI', 'STORE MANAGER', 'AUDIT',
     ])
         ->and($luucaSheet->getCell('B7')->getValue())->toBe('Milk')
         ->and($luucaSheet->getCell('C7')->getValue())->toBe('L-001')
@@ -249,8 +251,9 @@ it('writes Momoyo PIP quantity once for multiple components and reads only the l
     expect($sheets)->toHaveCount(1);
     $sheet = $sheets[0];
 
-    expect(wasteTemplateHeader($sheet, 5, 8))->toBe([
+    expect(wasteTemplateHeader($sheet, 5, 10))->toBe([
         'TGL', 'NAMA PIP', 'NAMA BARANG', 'KODE ITEM', 'QTY PIP', 'QTY', 'UNIT', 'KETERANGAN',
+        'STORE MANAGER', 'AUDIT',
     ])
         ->and($sheet->getCell('B6')->getValue())->toBe('Milk Tea PIP')
         ->and($sheet->getCell('C6')->getValue())->toBe('Black tea')
@@ -370,7 +373,19 @@ it('respects status, date, brand, outlet and user access when selecting related 
     wasteTemplateApprovedReport(wasteTemplatePayload($brand, $outlet, $item, $category, '2026-09-23', 'Included'), $user);
     wasteTemplateApprovedReport(wasteTemplatePayload($brand, $outlet, $item, $category, '2026-08-23', 'Outside date'), $user);
     $pending = wasteTemplatePayload($brand, $outlet, $item, $category, '2026-09-24', 'Pending');
+    WasteWorkflow::query()->create([
+        'brand_id'  => $brand->id,
+        'outlet_id' => $outlet->id,
+        'name'      => 'Menunggu',
+        'is_active' => true,
+        'steps'     => [[
+            'label' => 'Supervisor',
+            'name'  => 'Supervisor',
+            'phone' => '081234567890',
+        ]],
+    ]);
     app(WasteReportService::class)->saveByAdmin($pending, null, $user);
+    WasteWorkflow::query()->where('brand_id', $brand->id)->delete();
     wasteTemplateApprovedReport(wasteTemplatePayload($otherBrand, $otherOutlet, $otherItem, $otherCategory, '2026-09-25', 'Outside access'), $otherUser);
 
     $approved = wasteTemplateSheets(wasteTemplateWorkbook(new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user)));
@@ -501,6 +516,10 @@ function wasteTemplateApprovedReport(array $payload, User $reviewer): WasteRepor
                 $line->update(['audit_checked' => false]);
             }
         }
+    }
+
+    if ($report->status === WasteReportStatus::Approved) {
+        return $report->fresh();
     }
 
     return app(WasteMisReviewService::class)->approve($report, $reviewer);

@@ -62,12 +62,10 @@ class EditWasteReport extends EditRecord
             'pip_item_id'  => $event->pip_item_id,
             'pip_quantity' => $event->pip_quantity,
             'lines'        => $event->lines->map(fn ($line): array => [
-                'id'            => $line->getKey(),
-                'item_id'       => $line->item_id,
-                'quantity'      => $line->quantity,
-                'unit'          => $line->unit,
-                'sm_checked'    => $line->sm_checked === null ? null : ($line->sm_checked ? '1' : '0'),
-                'audit_checked' => $line->audit_checked === null ? null : ($line->audit_checked ? '1' : '0'),
+                'id'       => $line->getKey(),
+                'item_id'  => $line->item_id,
+                'quantity' => $line->quantity,
+                'unit'     => $line->unit,
             ])->all(),
         ])->all() ?? [];
 

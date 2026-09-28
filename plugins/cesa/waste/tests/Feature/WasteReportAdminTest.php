@@ -1,5 +1,6 @@
 <?php
 
+use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Exports\WasteReportExport;
 use Cesa\Waste\Filament\Resources\WasteReportResource;
@@ -12,6 +13,7 @@ use Cesa\Waste\Models\WasteEvent;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
+use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Policies\WasteReportPolicy;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
@@ -21,6 +23,7 @@ use Filament\Schemas\Components\Wizard;
 use Filament\Schemas\Schema;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -52,7 +55,7 @@ it('lets an admin create and correct a report without photos or a new approval r
     $service = app(WasteReportService::class);
     $report = $service->saveByAdmin(wasteAdminPayload($brand, $outlet, $item, $category), null, $user);
 
-    expect($report->status)->toBe(WasteReportStatus::Pending)
+    expect($report->status)->toBe(WasteReportStatus::Approved)
         ->and($report->latestVersion->events)->toHaveCount(1)
         ->and($report->latestVersion->events->first()->lines->first()->quantity)->toBe('2.5000')
         ->and($report->latestVersion->events->first()->evidences()->count())->toBe(0)
@@ -71,10 +74,66 @@ it('lets an admin create and correct a report without photos or a new approval r
     $correction['events'][0]['lines'][0]['id'] = $submitted['report']->latestVersion->events->first()->lines->first()->getKey();
     $corrected = $service->saveByAdmin($correction, $submitted['report'], $user);
 
-    expect($corrected->status)->toBe(WasteReportStatus::Pending)
+    expect($corrected->status)->toBe(WasteReportStatus::Approved)
         ->and($corrected->latest_version_id)->toBe($submitted['report']->latest_version_id)
         ->and($corrected->latestVersion->events->first()->lines->first()->quantity)->toBe('9.0000')
         ->and($corrected->latestVersion->events->first()->evidences()->value('id'))->toBe($evidenceId);
+});
+
+it('approves a report on save when the master has no approval flow', function (): void {
+    $user = UserFactory::new()->createQuietly();
+    [$brand, $outlet, $item, $category] = wasteAdminCatalog();
+    $brand->users()->attach($user);
+    $service = app(WasteReportService::class);
+    $report = $service->saveByAdmin(wasteAdminPayload($brand, $outlet, $item, $category), null, $user);
+
+    expect($report->status)->toBe(WasteReportStatus::Approved)
+        ->and($report->approved_at)->not->toBeNull()
+        ->and($report->latestVersion->status)->toBe(WasteReportStatus::Approved)
+        ->and($report->latestVersion->approvals)->toHaveCount(0)
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeTrue();
+
+    $payload = wasteAdminPayload($brand, $outlet, $item, $category, '9');
+    $payload['events'][0]['id'] = $report->latestVersion->events->first()->getKey();
+    $payload['events'][0]['lines'][0]['id'] = $report->latestVersion->events->first()->lines->first()->getKey();
+    $corrected = $service->saveByAdmin($payload, $report, $user);
+
+    expect($corrected->status)->toBe(WasteReportStatus::Approved)
+        ->and($corrected->latest_version_id)->toBe($report->latest_version_id)
+        ->and($corrected->latestVersion->events->first()->lines->first()->quantity)->toBe('9.0000')
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeTrue();
+});
+
+it('gives an admin report the same approval steps as a public report when a flow exists', function (): void {
+    Queue::fake();
+    $user = UserFactory::new()->createQuietly();
+    [$brand, $outlet, $item, $category] = wasteAdminCatalog();
+    $brand->users()->attach($user);
+    wasteAdminFlow($brand, $outlet);
+    $service = app(WasteReportService::class);
+    $payload = wasteAdminPayload($brand, $outlet, $item, $category);
+    $adminReport = $service->saveByAdmin($payload, null, $user);
+    $publicReport = $service->submit($brand, $outlet, $payload, [
+        0 => [UploadedFile::fake()->image('bukti.jpg')],
+    ])['report'];
+
+    $adminSteps = $adminReport->latestVersion->approvals->map->only(['step_order', 'label', 'approver_name', 'approver_phone', 'status'])->all();
+    $publicSteps = $publicReport->latestVersion->approvals->map->only(['step_order', 'label', 'approver_name', 'approver_phone', 'status'])->all();
+
+    expect($adminReport->status)->toBe(WasteReportStatus::Pending)
+        ->and($adminReport->approved_at)->toBeNull()
+        ->and($adminReport->latestVersion->workflow_snapshot)->toBe($publicReport->latestVersion->workflow_snapshot)
+        ->and($adminSteps)->toBe($publicSteps)
+        ->and($adminSteps[0]['label'])->toBe('Supervisor')
+        ->and($adminSteps[0]['status'])->toBe(WasteApprovalStatus::Pending)
+        ->and($adminReport->notifications()->where('type', 'approval_1')->exists())->toBeTrue()
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeFalse();
+
+    expect(fn () => app(WasteMisReviewService::class)->approve($adminReport, $user))->toThrow(ValidationException::class);
+
+    $adminReport->latestVersion->approvals()->update(['status' => WasteApprovalStatus::Approved]);
+
+    expect(app(WasteMisReviewService::class)->approve($adminReport->fresh(), $user)->status)->toBe(WasteReportStatus::Approved);
 });
 
 it('keeps the surviving event photo when an admin deletes the first event', function (): void {
@@ -186,8 +245,8 @@ it('keeps review marks on the surviving duplicate-item line', function (): void 
     $survivor = $updated->latestVersion->events->sole()->lines->sole();
 
     expect($survivor->getKey())->toBe($secondLine->getKey())
-        ->and($survivor->sm_checked)->toBeTrue()
-        ->and($survivor->audit_checked)->toBeFalse()
+        ->and($survivor->sm_checked)->toBeNull()
+        ->and($survivor->audit_checked)->toBeNull()
         ->and($firstLine->fresh())->toBeNull();
 });
 
@@ -244,51 +303,39 @@ it('rejects IDs from an older version of the same report', function (): void {
     [$brand, $outlet, $item, $category] = wasteAdminCatalog();
     $brand->users()->attach($user);
     $payload = wasteAdminPayload($brand, $outlet, $item, $category);
-    $payload['events'][0]['lines'][0]['sm_checked'] = '0';
-    $payload['events'][0]['lines'][0]['audit_checked'] = '0';
     $service = app(WasteReportService::class);
     $report = $service->saveByAdmin($payload, null, $user);
     $oldEvent = $report->latestVersion->events->sole();
-    app(WasteMisReviewService::class)->approve($report, $user);
+    wasteAdminFlow($brand, $outlet);
 
     $payload['events'][0]['id'] = $oldEvent->getKey();
     $payload['events'][0]['lines'][0]['id'] = $oldEvent->lines->sole()->getKey();
     $reopened = $service->saveByAdmin($payload, $report, $user);
 
     expect($reopened->latestVersion->events->sole()->getKey())->not->toBe($oldEvent->getKey())
+        ->and($reopened->latestVersion->approvals)->toHaveCount(1)
         ->and(fn () => $service->saveByAdmin($payload, $reopened, $user))->toThrow(ValidationException::class);
 });
 
-it('reopens an approved report as a new pending version before corrected values enter monthly export', function (): void {
+it('keeps an admin report with an approval flow out of the export until the steps are finished', function (): void {
     $user = UserFactory::new()->createQuietly();
     [$brand, $outlet, $item, $category] = wasteAdminCatalog();
     $brand->users()->attach($user);
+    wasteAdminFlow($brand, $outlet);
     $payload = wasteAdminPayload($brand, $outlet, $item, $category);
-    $payload['events'][0]['lines'][0]['sm_checked'] = '1';
-    $payload['events'][0]['lines'][0]['audit_checked'] = '0';
     $service = app(WasteReportService::class);
     $report = $service->saveByAdmin($payload, null, $user);
-    app(WasteMisReviewService::class)->approve($report, $user);
-    $approvedVersionId = $report->latest_version_id;
-    $export = new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user);
-    expect($export->hasReports())->toBeTrue();
-
     $payload['events'][0]['lines'][0]['quantity'] = '9';
-    $corrected = $service->saveByAdmin($payload, $report, $user);
-    $newLine = $corrected->latestVersion->events->first()->lines->first();
-    $approvedVersion = $corrected->versions()->findOrFail($approvedVersionId);
 
-    expect($corrected->status)->toBe(WasteReportStatus::Pending)
-        ->and($corrected->latest_version_id)->not->toBe($approvedVersionId)
-        ->and($corrected->approved_at)->toBeNull()
-        ->and($newLine->quantity)->toBe('9.0000')
-        ->and($newLine->sm_checked)->toBeNull()
-        ->and($newLine->audit_checked)->toBeNull()
-        ->and($approvedVersion->status)->toBe(WasteReportStatus::Approved)
-        ->and($approvedVersion->events->first()->lines->first()->quantity)->toBe('2.5000')
+    expect($report->status)->toBe(WasteReportStatus::Pending)
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeFalse()
-        ->and(fn () => app(WasteMisReviewService::class)->approve($corrected, $user))
-        ->toThrow(ValidationException::class);
+        ->and(fn () => $service->saveByAdmin($payload, $report, $user))->toThrow(ValidationException::class)
+        ->and($report->fresh()->latestVersion->events->first()->lines->first()->quantity)->toBe('2.5000');
+
+    $report->latestVersion->approvals()->update(['status' => WasteApprovalStatus::Approved]);
+
+    expect(app(WasteMisReviewService::class)->approve($report->fresh(), $user)->status)->toBe(WasteReportStatus::Approved)
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $user))->hasReports())->toBeTrue();
 });
 
 it('blocks edits to reports with external workflow approvals', function (): void {
@@ -325,7 +372,7 @@ it('follows the public report form on the admin create form', function (): void 
         ->and($steps[1]->getLabel())->toBe('Barang & foto')
         ->and($reporter)->toBe(['brand_id', 'outlet_id', 'event_date', 'reporter_name', 'reporter_phone', 'reporter_email'])
         ->and($eventFields)->toBe(['id', 'lines', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity'])
-        ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit', 'sm_checked', 'audit_checked']);
+        ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit']);
 });
 
 it('shows business report fields while keeping delivery diagnostics out of the report page', function (): void {
@@ -377,7 +424,7 @@ it('shows business report fields while keeping delivery diagnostics out of the r
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->assertSee($item->name)
         ->assertSee($pipItem->name)
-        ->assertActionVisible('misApprove')
+        ->assertActionHidden('misApprove')
         ->assertDontSee('INTERNAL_PROVIDER_TRACE')
         ->assertDontSee('081299988877')
         ->assertDontSee('Notifikasi')
@@ -454,6 +501,7 @@ it('deletes a report and its events from the admin list', function (): void {
     $user = UserFactory::new()->create();
     [$brand, $outlet, $item, $category] = wasteAdminCatalog();
     $brand->users()->attach($user);
+    wasteAdminFlow($brand, $outlet);
     $report = app(WasteReportService::class)->submit($brand, $outlet, wasteAdminPayload($brand, $outlet, $item, $category), [
         0 => [UploadedFile::fake()->image('report.jpg')],
     ])['report'];
@@ -520,6 +568,7 @@ it('protects reviewed reports from hard deletion by outlet staff and brand manag
     [$brand, $outlet, $item, $category] = wasteAdminCatalog();
     $brand->users()->attach($reviewer);
     $outlet->users()->attach($outletStaff);
+    wasteAdminFlow($brand, $outlet);
     $payload = wasteAdminPayload($brand, $outlet, $item, $category);
     $payload['events'][0]['lines'][0]['sm_checked'] = '1';
     $payload['events'][0]['lines'][0]['audit_checked'] = '0';
@@ -529,13 +578,12 @@ it('protects reviewed reports from hard deletion by outlet staff and brand manag
     expect($policy->delete($reviewer, $report))->toBeTrue()
         ->and($policy->delete($outletStaff, $report))->toBeFalse();
 
-    app(WasteMisReviewService::class)->approve($report, $reviewer);
-    expect($policy->delete($reviewer, $report->fresh()))->toBeFalse();
-
+    $report->latestVersion->approvals()->update(['status' => WasteApprovalStatus::Approved]);
+    app(WasteMisReviewService::class)->approve($report->fresh(), $reviewer);
     $payload['events'][0]['lines'][0]['quantity'] = '9';
-    $reopened = app(WasteReportService::class)->saveByAdmin($payload, $report, $reviewer);
-    expect($reopened->status)->toBe(WasteReportStatus::Pending)
-        ->and($policy->delete($reviewer, $reopened))->toBeFalse();
+
+    expect($policy->delete($reviewer, $report->fresh()))->toBeFalse()
+        ->and(fn () => app(WasteReportService::class)->saveByAdmin($payload, $report->fresh(), $reviewer))->toThrow(ValidationException::class);
 });
 
 /**
@@ -555,6 +603,21 @@ function wasteFormChildren(object $owner): array
         is_array($value) ? $value : [],
         fn (mixed $item): bool => $item instanceof Component,
     ));
+}
+
+function wasteAdminFlow(WasteBrand $brand, WasteOutlet $outlet): void
+{
+    WasteWorkflow::query()->create([
+        'brand_id'  => $brand->id,
+        'outlet_id' => $outlet->id,
+        'name'      => 'Supervisor',
+        'is_active' => true,
+        'steps'     => [[
+            'label' => 'Supervisor',
+            'name'  => 'Supervisor',
+            'phone' => '081234567890',
+        ]],
+    ]);
 }
 
 /**

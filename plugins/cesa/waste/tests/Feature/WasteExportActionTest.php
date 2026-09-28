@@ -7,15 +7,13 @@ use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
-use Cesa\Waste\Models\WasteReport;
-use Cesa\Waste\Services\WasteMisReviewService;
+use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
 use Filament\Forms\Components\Select;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Maatwebsite\Excel\Facades\Excel;
-use Webkul\Security\Models\User;
 
 beforeEach(function (): void {
     Route::get('/_test/waste-reports', fn (): string => '')->name('filament.admin.resources.waste-reports.index');
@@ -152,8 +150,7 @@ it('downloads only approved incidents inside the selected calendar month', funct
     ];
     $service = app(WasteReportService::class);
     $firstReport = $service->saveByAdmin($payload, null, $user);
-    expect($firstReport->status)->toBe(WasteReportStatus::Pending);
-    wasteExportActionApprove($firstReport, $user);
+    expect($firstReport->status)->toBe(WasteReportStatus::Approved);
     foreach ([
         ['2026-07-31', 'Akhir Juli', 'approved'],
         ['2026-08-31', 'Akhir Agustus', 'approved'],
@@ -164,9 +161,23 @@ it('downloads only approved incidents inside the selected calendar month', funct
         $nextPayload = $payload;
         $nextPayload['event_date'] = $date;
         $nextPayload['events'][0]['reason'] = $reason;
+        if ($status === 'pending') {
+            WasteWorkflow::query()->create([
+                'brand_id'  => $brand->id,
+                'outlet_id' => $outlet->id,
+                'name'      => 'Menunggu',
+                'is_active' => true,
+                'steps'     => [[
+                    'label' => 'Supervisor',
+                    'name'  => 'Supervisor',
+                    'phone' => '081234567890',
+                ]],
+            ]);
+        }
         $nextReport = $service->saveByAdmin($nextPayload, null, $user);
-        if ($status === 'approved') {
-            wasteExportActionApprove($nextReport, $user);
+        if ($status === 'pending') {
+            WasteWorkflow::query()->where('brand_id', $brand->id)->delete();
+            expect($nextReport->status)->toBe(WasteReportStatus::Pending);
         }
     }
 
@@ -249,15 +260,4 @@ function wasteExportActionCatalog(string $code): array
     ]);
 
     return [$brand, $outlet];
-}
-
-function wasteExportActionApprove(WasteReport $report, User $reviewer): WasteReport
-{
-    foreach ($report->latestVersion->events as $event) {
-        foreach ($event->lines as $line) {
-            $line->update(['sm_checked' => false, 'audit_checked' => false]);
-        }
-    }
-
-    return app(WasteMisReviewService::class)->approve($report, $reviewer);
 }

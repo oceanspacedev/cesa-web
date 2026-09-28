@@ -35,7 +35,7 @@ it('renders a guest report form even when the outlet has no approval workflow', 
         ->assertDontSeeText(__('waste::waste.submit'));
 });
 
-it('queues a report for MIS review when no external approval workflow exists', function (): void {
+it('approves a report immediately when no external approval workflow exists', function (): void {
     [$brand, $outlet, $item, $category] = wastePublicPagesSetup(withWorkflow: false);
 
     $result = app(WasteReportService::class)->submit($brand, $outlet, [
@@ -50,15 +50,16 @@ it('queues a report for MIS review when no external approval workflow exists', f
     ], [0 => [UploadedFile::fake()->image('evidence.jpg')]]);
 
     expect($result['approval_tokens'])->toBe([])
-        ->and($result['report']->status)->toBe(WasteReportStatus::Pending)
-        ->and($result['report']->approved_at)->toBeNull()
+        ->and($result['report']->status)->toBe(WasteReportStatus::Approved)
+        ->and($result['report']->approved_at)->not->toBeNull()
         ->and($result['report']->latestVersion->approvals)->toHaveCount(0)
         ->and($result['report']->latestVersion->workflow_snapshot)->toBe([]);
 
     $this->get(route('waste.public.progress', ['token' => $result['progress_token']]))
         ->assertSuccessful()
         ->assertDontSeeText($result['report']->uid)
-        ->assertSeeText(__('waste::waste.status.pending'));
+        ->assertSeeText(__('waste::waste.status.approved'))
+        ->assertDontSeeText(__('waste::waste.status.pending'));
 });
 
 it('shows Momoyo reference and NON PIP quantities on the public progress page', function (): void {

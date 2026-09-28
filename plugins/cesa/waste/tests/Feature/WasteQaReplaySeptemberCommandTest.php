@@ -62,7 +62,7 @@ it('replays one actual public submission into persistent QA rows without notific
         expect($report->submission_key)->toBe(ReplayWasteSeptemberQa::submissionKey('JCHICKEN', 7))
             ->and($report->reporter_email)->toBe(ReplayWasteSeptemberQa::reporterEmail('JCHICKEN', 7))
             ->and($report->reporter_name)->toBe('Petugas TPS dari Excel')
-            ->and($report->status)->toBe(WasteReportStatus::Pending)
+            ->and($report->status)->toBe(WasteReportStatus::Approved)
             ->and($report->outlet_id)->toBe($outlet->id)
             ->and($event->category_id)->toBe($category->id)
             ->and($line->item_id)->toBe($item->id)

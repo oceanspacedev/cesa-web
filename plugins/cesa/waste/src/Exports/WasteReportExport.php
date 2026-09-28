@@ -31,6 +31,7 @@ class WasteReportExport implements WithMultipleSheets
                 'brand',
                 'outlet',
                 'latestVersion.events.lines.item',
+                'latestVersion.approvals',
             ])
             ->when($dateFrom, fn (Builder $query): Builder => $query->whereDate('event_date', '>=', $dateFrom))
             ->when($dateTo, fn (Builder $query): Builder => $query->whereDate('event_date', '<=', $dateTo))
@@ -178,8 +179,8 @@ class WasteReportExport implements WithMultipleSheets
                     (float) $line->quantity,
                     $line->line_role,
                     $report->reporter_name,
-                    $line->sm_checked,
-                    $line->audit_checked,
+                    null,
+                    null,
                 ]);
             });
         })->values();

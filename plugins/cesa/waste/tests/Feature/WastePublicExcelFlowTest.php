@@ -13,7 +13,6 @@ use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Database\Factories\UserFactory;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Maatwebsite\Excel\Excel as ExcelFormat;
 use Maatwebsite\Excel\Facades\Excel;
@@ -92,8 +91,8 @@ it('reconstructs September source rows from public submissions through MIS revie
     ], pipQuantity: '99');
 
     expect(WasteReport::query()->count())->toBe(8)
-        ->and(WasteReport::query()->where('status', WasteReportStatus::Pending)->count())->toBe(8)
-        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $jchicken->id, $jOutlet->id, $user))->hasReports())->toBeFalse()
+        ->and(WasteReport::query()->where('status', WasteReportStatus::Approved)->count())->toBe(8)
+        ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $jchicken->id, $jOutlet->id, $user))->hasReports())->toBeTrue()
         ->and(WasteReport::query()->where('brand_id', $jchicken->id)->whereDate('event_date', '2026-09-01')->count())->toBe(2)
         ->and(WasteReport::query()->where('brand_id', $luuca->id)->whereDate('event_date', '2026-09-02')->count())->toBe(1);
 
@@ -101,26 +100,14 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->flatMap(fn (WasteReport $report) => $report->latestVersion->events->pluck('reason'))
         ->unique()->all())->toBe(['Waste']);
 
-    $firstJchickenReport = WasteReport::query()->where('brand_id', $jchicken->id)->orderBy('id')->firstOrFail();
-    expect(fn () => app(WasteMisReviewService::class)->approve($firstJchickenReport, $user))
-        ->toThrow(ValidationException::class);
-
-    publicExcelApprovePending($jchicken, $user, [
-        'B001-036' => [false, false],
-        'B001-088' => [false, false],
-        'P004-038' => [false, false],
-    ]);
-    publicExcelApprovePending($luuca, $user, [
-        'BB-100500' => [null, true],
-        'BB-100022' => [null, true],
-        'BB-100023' => [null, true],
-    ]);
+    publicExcelApprovePending($jchicken, $user);
+    publicExcelApprovePending($luuca, $user);
     publicExcelApprovePending($momoyo, $user);
 
     expect(WasteReport::query()->where('status', WasteReportStatus::Approved)->count())->toBe(8);
 
     publicExcelSubmit($jOutlet, '2026-10-01', $jCategories['Waste'], 'di luar bulan', [[$jItems['B001-036'], '7']], 'BAR');
-    publicExcelApprovePending($jchicken, $user, ['B001-036' => [false, false]]);
+    publicExcelApprovePending($jchicken, $user);
     WasteWorkflow::query()->create([
         'brand_id'  => $jchicken->id,
         'name'      => 'Approval supervisor',
@@ -138,9 +125,12 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->and($lExport->detailRows())->toHaveCount(3)
         ->and($mExport->detailRows())->toHaveCount(3);
 
-    expect($jExport->sheets()[0]->collection()->get(6)[10])->toBeFalse()
-        ->and($jExport->sheets()[0]->collection()->get(6)[11])->toBeFalse()
-        ->and($lExport->sheets()[0]->collection()->get(6)[9])->toBeTrue();
+    expect($jExport->sheets()[0]->collection()->get(5)[10])->toBe('Supervisor')
+        ->and($jExport->sheets()[0]->collection()->get(6)[10])->toBeNull()
+        ->and($lExport->sheets()[0]->collection()->get(5)[9])->toBe('STORE MANAGER')
+        ->and($lExport->sheets()[0]->collection()->get(5)[10])->toBe('AUDIT')
+        ->and($lExport->sheets()[0]->collection()->get(6)[9])->toBeNull()
+        ->and($lExport->sheets()[0]->collection()->get(6)[10])->toBeNull();
 
     $jSheet = publicExcelTemplateSheet(publicExcelWorkbook($jExport));
     expect($jSheet->getCell('A4')->getValue())->toBe('BULAN, TAHUN: SEPTEMBER 2026')
@@ -155,14 +145,13 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->and($jSheet->getCell('G7')->getValue())->toBe('layu')
         ->and($jSheet->getCell('I7')->getValue())->toBe('BAR')
         ->and($jSheet->getCell('J7')->getValue())->toBe('Waste')
-        ->and($jSheet->getCell('K7')->getValue())->toBeFalse()
-        ->and($jSheet->getCell('L7')->getValue())->toBeFalse()
+        ->and($jSheet->getCell('K6')->getValue())->toBe('Supervisor')
+        ->and($jSheet->getCell('K7')->getValue())->toBeNull()
         ->and($jSheet->getCell('B8')->getValue())->toBe('Tepung Crispy Breading')
         ->and($jSheet->getCell('C8')->getValue())->toBe('B001-088')
         ->and((float) $jSheet->getCell('E8')->getValue())->toBe(1320.0)
         ->and($jSheet->getCell('I8')->getValue())->toBe('COOK')
-        ->and($jSheet->getCell('K8')->getValue())->toBeFalse()
-        ->and($jSheet->getCell('L8')->getValue())->toBeFalse()
+        ->and($jSheet->getCell('K8')->getValue())->toBeNull()
         ->and($jSheet->getCell('B9')->getValue())->toBe('WIP BURGER BUN')
         ->and($jSheet->getCell('C9')->getValue())->toBe('P004-038')
         ->and($jSheet->getCell('D9')->getValue())->toBe('barang jadi & bahan baku')
@@ -170,8 +159,8 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->and($jSheet->getCell('F9')->getValue())->toBe('PRS')
         ->and($jSheet->getCell('I9')->getValue())->toBe('MP')
         ->and($jSheet->getCell('J9')->getValue())->toBe('Spoil')
-        ->and($jSheet->getCell('K9')->getValue())->toBeFalse()
-        ->and($jSheet->getCell('L9')->getValue())->toBeFalse()
+        ->and($jSheet->getCell('K9')->getValue())->toBeNull()
+        ->and($jSheet->getCell('L7')->getValue())->toBe('Avoidable food waste')
         ->and($jSheet->getCell('B10')->getValue())->toBeNull()
         ->and($jSheet->getCell('E8')->getDataType())->toBe(DataType::TYPE_NUMERIC);
 
@@ -187,16 +176,21 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->and($lSheet->getCell('F7')->getValue())->toBe('GR')
         ->and($lSheet->getCell('G7')->getValue())->toBe('Daun')
         ->and($lSheet->getCell('I7')->getValue())->toBe('Waste')
-        ->and($lSheet->getCell('J7')->getValue())->toBeTrue()
+        ->and($lSheet->getCell('J6')->getValue())->toBe('STORE MANAGER')
+        ->and($lSheet->getCell('K6')->getValue())->toBe('AUDIT')
+        ->and($lSheet->getCell('J7')->getValue())->toBeNull()
+        ->and($lSheet->getCell('K7')->getValue())->toBeNull()
         ->and($lSheet->getCell('B8')->getValue())->toBe('BUAH LONGAN 565GR')
         ->and($lSheet->getCell('C8')->getValue())->toBe('BB-100022')
         ->and((float) $lSheet->getCell('E8')->getValue())->toBe(494.1)
-        ->and($lSheet->getCell('J8')->getValue())->toBeTrue()
+        ->and($lSheet->getCell('J8')->getValue())->toBeNull()
+        ->and($lSheet->getCell('K8')->getValue())->toBeNull()
         ->and($lSheet->getCell('B9')->getValue())->toBe('NATA DE COCO KARA 1KGX6')
         ->and($lSheet->getCell('C9')->getValue())->toBe('BB-100023')
         ->and((float) $lSheet->getCell('E9')->getValue())->toBe(584.5)
         ->and($lSheet->getCell('G9')->getValue())->toBe('Air')
-        ->and($lSheet->getCell('J9')->getValue())->toBeTrue()
+        ->and($lSheet->getCell('J9')->getValue())->toBeNull()
+        ->and($lSheet->getCell('K9')->getValue())->toBeNull()
         ->and($lSheet->getCell('B10')->getValue())->toBeNull()
         ->and($lSheet->getCell('E7')->getDataType())->toBe(DataType::TYPE_NUMERIC);
 
@@ -210,6 +204,10 @@ it('reconstructs September source rows from public submissions through MIS revie
         ->and((float) $mSheet->getCell('F6')->getValue())->toBe(136.39)
         ->and($mSheet->getCell('G6')->getValue())->toBe('gram')
         ->and($mSheet->getCell('H6')->getValue())->toBe('Waste')
+        ->and($mSheet->getCell('I5')->getValue())->toBe('STORE MANAGER')
+        ->and($mSheet->getCell('J5')->getValue())->toBe('AUDIT')
+        ->and($mSheet->getCell('I6')->getValue())->toBeNull()
+        ->and($mSheet->getCell('J6')->getValue())->toBeNull()
         ->and(SpreadsheetDate::excelToDateTimeObject((float) $mSheet->getCell('A7')->getValue())->format('Y-m-d'))->toBe('2026-09-02')
         ->and($mSheet->getCell('B7')->getValue())->toBe('Black Tea PIP')
         ->and($mSheet->getCell('C7')->getValue())->toBe('Black Tea')
@@ -326,33 +324,15 @@ function publicExcelSubmit(
         ->assertRedirect();
 }
 
-/**
- * @param  array<string, array{0: ?bool, 1: bool}>  $sourceChecks
- */
-function publicExcelApprovePending(WasteBrand $brand, User $reviewer, array $sourceChecks = []): void
+function publicExcelApprovePending(WasteBrand $brand, User $reviewer): void
 {
     $reports = WasteReport::query()
-        ->with('latestVersion.events.lines')
         ->where('brand_id', $brand->id)
         ->where('status', WasteReportStatus::Pending)
         ->orderBy('id')
         ->get();
 
     foreach ($reports as $report) {
-        foreach ($report->latestVersion->events as $event) {
-            foreach ($event->lines as $line) {
-                if ($brand->code === 'JCHICKEN') {
-                    [$smChecked, $auditChecked] = $sourceChecks[$line->item_code]
-                        ?? throw new LogicException("Missing source checks for {$line->item_code}");
-                    $line->update(['sm_checked' => $smChecked, 'audit_checked' => $auditChecked]);
-                } elseif ($brand->code === 'LUUCA') {
-                    [, $auditChecked] = $sourceChecks[$line->item_code]
-                        ?? throw new LogicException("Missing source audit for {$line->item_code}");
-                    $line->update(['audit_checked' => $auditChecked]);
-                }
-            }
-        }
-
         expect(app(WasteMisReviewService::class)->approve($report, $reviewer)->status)
             ->toBe(WasteReportStatus::Approved);
     }

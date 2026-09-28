@@ -5,7 +5,6 @@ namespace Cesa\Waste\Services;
 use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Models\WasteApproval;
-use Cesa\Waste\Models\WasteEventLine;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteReportVersion;
 use Illuminate\Database\Eloquent\Collection;
@@ -41,69 +40,6 @@ class WasteMisReviewService
         return $this->decide($report, $reviewer, WasteReportStatus::Rejected, $reason);
     }
 
-    /**
-     * @param  array<int|string, array<string, mixed>>  $checks
-     */
-    public function updateExternalLineChecks(WasteReport $report, User $reviewer, array $checks): WasteReport
-    {
-        return DB::transaction(function () use ($report, $reviewer, $checks): WasteReport {
-            $lockedReport = WasteReport::query()->whereKey($report->getKey())->lockForUpdate()->firstOrFail();
-            Gate::forUser($reviewer)->authorize('review', $lockedReport);
-
-            $version = $lockedReport->latestVersion()->lockForUpdate()->firstOrFail();
-            $this->ensurePending($lockedReport, $version);
-
-            $approvals = $version->approvals()->lockForUpdate()->get();
-            if ($approvals->isEmpty() || ! $this->allExternalApprovalsApproved($approvals)) {
-                throw ValidationException::withMessages([
-                    'report' => 'Semua tahap approval eksternal harus disetujui sebelum peninjauan MIS.',
-                ]);
-            }
-
-            $brandCode = strtoupper((string) $lockedReport->brand()->value('code'));
-            if (! in_array($brandCode, ['JCHICKEN', 'LUUCA'], true)) {
-                throw ValidationException::withMessages(['report' => 'Brand ini tidak memerlukan penandaan per barang.']);
-            }
-
-            if ($checks === []) {
-                throw ValidationException::withMessages(['lines' => 'Pilih penanda untuk setidaknya satu barang.']);
-            }
-
-            $lines = WasteEventLine::query()
-                ->whereHas('event', fn ($query) => $query->where('version_id', $version->getKey()))
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
-            $allowedFields = $brandCode === 'JCHICKEN' ? ['sm_checked', 'audit_checked'] : ['audit_checked'];
-            $updatedChecks = [];
-
-            foreach ($checks as $lineId => $lineChecks) {
-                $line = filter_var($lineId, FILTER_VALIDATE_INT) ? $lines->get((int) $lineId) : null;
-                if (! $line || ! is_array($lineChecks) || $lineChecks === [] || array_diff(array_keys($lineChecks), $allowedFields) !== []) {
-                    throw ValidationException::withMessages(['lines' => 'Penanda barang tidak sesuai dengan laporan ini.']);
-                }
-
-                $values = [];
-                foreach ($lineChecks as $field => $value) {
-                    $values[$field] = $this->parseCheck($value);
-                }
-
-                $line->forceFill($values)->save();
-                $updatedChecks[(int) $lineId] = $values;
-            }
-
-            $lockedReport->activityLogs()->create([
-                'version_id' => $version->getKey(),
-                'event'      => 'mis_line_checks_updated',
-                'actor_type' => 'admin',
-                'actor_id'   => $reviewer->getKey(),
-                'metadata'   => ['checks' => $updatedChecks],
-            ]);
-
-            return $lockedReport->fresh('latestVersion');
-        }, 3);
-    }
-
     protected function decide(WasteReport $report, User $reviewer, WasteReportStatus $decision, ?string $reason = null): WasteReport
     {
         [$reviewedReport, $newManageToken] = DB::transaction(function () use ($report, $reviewer, $decision, $reason): array {
@@ -122,7 +58,7 @@ class WasteMisReviewService
             $approvals = $version->approvals()->lockForUpdate()->get();
             if ($approvals->isNotEmpty() && ! $this->allExternalApprovalsApproved($approvals)) {
                 throw ValidationException::withMessages([
-                    'report' => 'Semua tahap approval eksternal harus disetujui sebelum peninjauan MIS.',
+                    'report' => 'Semua langkah approval harus disetujui sebelum laporan ini disetujui.',
                 ]);
             }
 
@@ -132,8 +68,6 @@ class WasteMisReviewService
                         'report' => 'Setiap kejadian harus memiliki barang sebelum disetujui.',
                     ]);
                 }
-
-                $this->ensureManualChecksComplete($lockedReport, $version);
             }
 
             $now = now();
@@ -179,7 +113,7 @@ class WasteMisReviewService
     protected function ensurePending(WasteReport $report, WasteReportVersion $version): void
     {
         if ($report->status !== WasteReportStatus::Pending) {
-            throw ValidationException::withMessages(['report' => 'Laporan ini sudah diproses MIS.']);
+            throw ValidationException::withMessages(['report' => 'Laporan ini sudah diproses.']);
         }
 
         if ((int) $version->report_id !== (int) $report->getKey() || $version->status !== WasteReportStatus::Pending) {
@@ -193,39 +127,5 @@ class WasteMisReviewService
     protected function allExternalApprovalsApproved(Collection $approvals): bool
     {
         return $approvals->every(fn (WasteApproval $approval): bool => $approval->status === WasteApprovalStatus::Approved);
-    }
-
-    protected function parseCheck(mixed $value): ?bool
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        if (in_array($value, [true, false, 1, 0, '1', '0'], true)) {
-            return in_array($value, [true, 1, '1'], true);
-        }
-
-        throw ValidationException::withMessages(['lines' => 'Pilih TRUE atau FALSE untuk setiap penanda barang.']);
-    }
-
-    protected function ensureManualChecksComplete(WasteReport $report, WasteReportVersion $version): void
-    {
-        $brandCode = strtoupper((string) $report->brand()->value('code'));
-
-        if (! in_array($brandCode, ['JCHICKEN', 'LUUCA'], true)) {
-            return;
-        }
-
-        foreach ($version->events()->with('lines')->get() as $event) {
-            foreach ($event->lines as $line) {
-                if ($line->audit_checked === null || ($brandCode === 'JCHICKEN' && $line->sm_checked === null)) {
-                    throw ValidationException::withMessages([
-                        'report' => $brandCode === 'JCHICKEN'
-                            ? 'Tandai SM dan AUDIT untuk setiap barang sebelum menyetujui laporan.'
-                            : 'Tandai AUDIT untuk setiap barang sebelum menyetujui laporan.',
-                    ]);
-                }
-            }
-        }
     }
 }

@@ -9,7 +9,6 @@ use Cesa\Waste\Filament\Resources\WasteReportResource\Pages\ListWasteReports;
 use Cesa\Waste\Filament\Resources\WasteReportResource\Pages\ViewWasteReport;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
-use Cesa\Waste\Models\WasteEventLine;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
@@ -158,22 +157,8 @@ class WasteReportResource extends Resource
                                             ->label('Satuan')
                                             ->options(fn (Get $get): array => static::unitOptionsForItem(filled($get('item_id')) ? (int) $get('item_id') : null))
                                             ->required(),
-                                        Select::make('sm_checked')
-                                            ->label('SM')
-                                            ->options(['1' => 'TRUE', '0' => 'FALSE'])
-                                            ->placeholder('Belum ditandai')
-                                            ->helperText('Ditandai MIS per barang.')
-                                            ->visible(fn (Get $get): bool => static::selectedBrandCode($get) === 'JCHICKEN'
-                                                && static::canReviewSelectedBrand($get)),
-                                        Select::make('audit_checked')
-                                            ->label('AUDIT')
-                                            ->options(['1' => 'TRUE', '0' => 'FALSE'])
-                                            ->placeholder('Belum ditandai')
-                                            ->helperText('Ditandai MIS per barang.')
-                                            ->visible(fn (Get $get): bool => in_array(static::selectedBrandCode($get), ['JCHICKEN', 'LUUCA'], true)
-                                                && static::canReviewSelectedBrand($get)),
                                     ])
-                                    ->columns(6)
+                                    ->columns(4)
                                     ->minItems(1)
                                     ->defaultItems(1)
                                     ->addActionLabel(__('waste::waste.add_line'))
@@ -251,21 +236,6 @@ class WasteReportResource extends Resource
         $brandId = $get('/data.brand_id');
 
         return filled($brandId) ? (int) $brandId : null;
-    }
-
-    protected static function selectedBrandCode(Get $get): ?string
-    {
-        $brandId = static::selectedBrandId($get);
-
-        return $brandId ? strtoupper((string) WasteBrand::query()->whereKey($brandId)->value('code')) : null;
-    }
-
-    protected static function canReviewSelectedBrand(Get $get): bool
-    {
-        $brandId = static::selectedBrandId($get);
-        $brand = $brandId ? WasteBrand::query()->find($brandId) : null;
-
-        return $brand && app(WasteAccessService::class)->canManageBrand(filament()->auth()->user(), $brand);
     }
 
     /**
@@ -371,13 +341,7 @@ class WasteReportResource extends Resource
                         TextEntry::make('item_code')->label('Kode'),
                         TextEntry::make('quantity')->label(__('waste::waste.fields.quantity')),
                         TextEntry::make('unit')->label('Satuan'),
-                        TextEntry::make('sm_checked')->label('SM')->placeholder('Belum ditandai')
-                            ->visible(fn (WasteEventLine $record): bool => strtoupper((string) $record->event->version->report->brand->code) === 'JCHICKEN')
-                            ->formatStateUsing(fn (?bool $state): string => $state === null ? 'Belum ditandai' : ($state ? 'TRUE' : 'FALSE')),
-                        TextEntry::make('audit_checked')->label('AUDIT')->placeholder('Belum ditandai')
-                            ->visible(fn (WasteEventLine $record): bool => in_array(strtoupper((string) $record->event->version->report->brand->code), ['JCHICKEN', 'LUUCA'], true))
-                            ->formatStateUsing(fn (?bool $state): string => $state === null ? 'Belum ditandai' : ($state ? 'TRUE' : 'FALSE')),
-                    ])->columns(6)->columnSpanFull(),
+                    ])->columns(4)->columnSpanFull(),
                 ])->columnSpanFull(),
             ]),
         ]);

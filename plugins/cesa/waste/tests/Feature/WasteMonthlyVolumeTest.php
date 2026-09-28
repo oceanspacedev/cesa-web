@@ -9,6 +9,7 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteUnit;
+use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Cesa\Waste\Services\WasteReportService;
 use Database\Factories\UserFactory;
@@ -51,7 +52,26 @@ it('combines thirty days of incidents from three brands into isolated monthly to
                 $event['pip_quantity'] = (string) (1000 + $day);
             }
 
+            if ($day === 30) {
+                WasteWorkflow::query()->create([
+                    'brand_id'  => $entry['brand']->id,
+                    'outlet_id' => $entry['outlet']->id,
+                    'name'      => 'Menunggu',
+                    'is_active' => true,
+                    'steps'     => [[
+                        'label' => 'Supervisor',
+                        'name'  => 'Supervisor',
+                        'phone' => '081234567890',
+                    ]],
+                ]);
+            }
+
             $report = monthlyVolumeSubmit($entry['brand'], $entry['outlet'], sprintf('2026-09-%02d', $day), $event);
+
+            if ($day === 30) {
+                WasteWorkflow::query()->where('brand_id', $entry['brand']->id)->delete();
+            }
+
             if ($day < 30) {
                 monthlyVolumeApprove($report, $reviewer, $brandCode);
             }
@@ -198,6 +218,10 @@ function monthlyVolumeSubmit(WasteBrand $brand, WasteOutlet $outlet, string $dat
 
 function monthlyVolumeApprove(WasteReport $report, User $reviewer, string $brandCode): void
 {
+    if ($report->status === WasteReportStatus::Approved) {
+        return;
+    }
+
     $report->load('latestVersion.events.lines');
     foreach ($report->latestVersion->events as $event) {
         foreach ($event->lines as $line) {

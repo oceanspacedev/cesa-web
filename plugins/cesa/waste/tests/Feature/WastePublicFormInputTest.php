@@ -1,5 +1,6 @@
 <?php
 
+use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Livewire\PublicWasteReportForm;
 use Cesa\Waste\Livewire\PublicWasteRevisionPage;
 use Cesa\Waste\Models\WasteBrand;
@@ -289,7 +290,7 @@ it('keeps the progress link when notification dispatch fails after submission', 
         'is_active' => true,
     ]);
 
-    Queue::shouldReceive('push')->twice()->andThrow(new RuntimeException('queue unavailable'));
+    Queue::shouldReceive('push')->once()->andThrow(new RuntimeException('queue unavailable'));
 
     $component = Livewire::test(PublicWasteReportForm::class, [
         'brand'  => strtolower($brand->code),
@@ -310,7 +311,9 @@ it('keeps the progress link when notification dispatch fails after submission', 
     $redirect = (string) ($component->effects['redirect'] ?? '');
 
     expect(WasteReport::query()->count())->toBe(1)
-        ->and($deliveries)->toHaveCount(2)
+        ->and(WasteReport::query()->sole()->status)->toBe(WasteReportStatus::Approved)
+        ->and($deliveries)->toHaveCount(1)
+        ->and($deliveries->pluck('type')->all())->toBe(['requester_approved'])
         ->and($deliveries->pluck('status')->unique()->all())->toBe(['failed'])
         ->and($deliveries->pluck('last_error')->unique()->all())->toBe(['queue unavailable']);
 

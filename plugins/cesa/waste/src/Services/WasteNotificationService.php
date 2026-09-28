@@ -2,6 +2,7 @@
 
 namespace Cesa\Waste\Services;
 
+use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Jobs\SendWasteNotification;
 use Cesa\Waste\Models\WasteApproval;
 use Cesa\Waste\Models\WasteReport;
@@ -15,6 +16,12 @@ class WasteNotificationService
     {
         $version = $report->latestVersion()->with(['approvals', 'events.evidences'])->first();
         if (! $version) {
+            return;
+        }
+
+        if ($report->status === WasteReportStatus::Approved && $version->approvals->isEmpty()) {
+            $this->queueRequester($report, 'approved', $progressToken);
+
             return;
         }
 

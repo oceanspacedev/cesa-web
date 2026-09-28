@@ -7,7 +7,6 @@ use Cesa\Waste\Filament\Resources\WasteReportResource\Pages\ViewWasteReport;
 use Cesa\Waste\Jobs\SendWasteNotification;
 use Cesa\Waste\Livewire\PublicWasteProgressPage;
 use Cesa\Waste\Models\WasteBrand;
-use Cesa\Waste\Models\WasteEventLine;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Services\WasteApprovalService;
@@ -27,21 +26,14 @@ beforeEach(function (): void {
     Route::get('/_test/waste-reports/{record}/edit', fn (): string => '')->name('filament.admin.resources.waste-reports.edit');
 });
 
-it('requires explicit SM and AUDIT decisions on every Jchicken line before MIS approval', function (): void {
-    [$brand, $outlet, $report, $lines] = misReviewReport('JCHICKEN');
+it('approves a Jchicken report without storing SM or AUDIT decisions', function (): void {
+    [$brand, $outlet, $report] = misReviewReport('JCHICKEN');
     $reviewer = UserFactory::new()->createQuietly();
     $brand->users()->attach($reviewer);
 
     expect((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeFalse();
 
     $service = app(WasteMisReviewService::class);
-    expect(fn () => $service->approve($report, $reviewer))->toThrow(ValidationException::class);
-
-    $lines[0]->update(['sm_checked' => false, 'audit_checked' => false]);
-    $lines[1]->update(['sm_checked' => true]);
-    expect(fn () => $service->approve($report, $reviewer))->toThrow(ValidationException::class);
-
-    $lines[1]->update(['audit_checked' => false]);
     $approved = $service->approve($report, $reviewer);
 
     expect($approved->status)->toBe(WasteReportStatus::Approved)
@@ -57,18 +49,12 @@ it('requires explicit SM and AUDIT decisions on every Jchicken line before MIS a
     expect(fn () => $service->approve($approved, $reviewer))->toThrow(ValidationException::class);
 });
 
-it('requires Luuca AUDIT and allows Momoyo to be approved without review flags', function (): void {
-    [$luucaBrand, , $luucaReport, $luucaLines] = misReviewReport('LUUCA');
+it('approves Luuca and Momoyo reports without spreadsheet review columns', function (): void {
+    [$luucaBrand, , $luucaReport] = misReviewReport('LUUCA');
     $reviewer = UserFactory::new()->createQuietly();
     $luucaBrand->users()->attach($reviewer);
 
     $service = app(WasteMisReviewService::class);
-    expect(fn () => $service->approve($luucaReport, $reviewer))->toThrow(ValidationException::class);
-
-    foreach ($luucaLines as $line) {
-        $line->update(['audit_checked' => false]);
-    }
-
     expect($service->approve($luucaReport, $reviewer)->status)->toBe(WasteReportStatus::Approved);
 
     [$momoyoBrand, , $momoyoReport] = misReviewReport('MOMOYO');
@@ -91,7 +77,7 @@ it('rejects from the MIS panel with a reason and lets the reporter revise from t
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->assertActionVisible('misReject')
         ->callAction('misReject', data: ['reason' => '  Foto perlu diperjelas.  '])
-        ->assertNotified('Laporan ditolak MIS.');
+        ->assertNotified('Laporan ditolak.');
 
     $rejected = $report->fresh('latestVersion');
 
@@ -115,23 +101,19 @@ it('rejects from the MIS panel with a reason and lets the reporter revise from t
 });
 
 it('exposes the MIS approval action only while the report awaits internal review', function (): void {
-    [$brand, , $report, $lines] = misReviewReport('JCHICKEN');
+    [$brand, , $report] = misReviewReport('JCHICKEN');
     $reviewer = UserFactory::new()->createQuietly();
     $brand->users()->attach($reviewer);
     $this->actingAs($reviewer);
     filament()->setCurrentPanel(filament()->getPanel('admin'));
 
-    foreach ($lines as $line) {
-        $line->update(['sm_checked' => false, 'audit_checked' => false]);
-    }
-
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->assertActionVisible('misApprove')
-        ->assertSee('SM')
-        ->assertSee('AUDIT')
-        ->assertSee('FALSE')
+        ->assertSee('Setujui')
+        ->assertDontSee('Setujui (MIS)')
+        ->assertDontSee('Tolak (MIS)')
         ->callAction('misApprove')
-        ->assertNotified('Laporan disetujui MIS.')
+        ->assertNotified('Laporan disetujui.')
         ->assertActionHidden('misApprove')
         ->assertActionHidden('misReject');
 
@@ -208,8 +190,8 @@ it('shows evidence only to admins allowed to view the current report version', f
     $this->get($url)->assertNotFound();
 });
 
-it('waits for every external approval then lets MIS check stable lines and release the monthly export', function (): void {
-    [$brand, $outlet, $report, $lines] = misReviewReport('JCHICKEN');
+it('waits for every external approval then lets MIS release the monthly export', function (): void {
+    [$brand, $outlet, $report] = misReviewReport('JCHICKEN');
     $reviewer = UserFactory::new()->createQuietly();
     $brand->users()->attach($reviewer);
     $this->actingAs($reviewer);
@@ -230,7 +212,6 @@ it('waits for every external approval then lets MIS check stable lines and relea
     $mis = app(WasteMisReviewService::class);
     expect(fn () => $mis->approve($report, $reviewer))->toThrow(ValidationException::class);
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
-        ->assertActionHidden('misReviewLines')
         ->assertActionHidden('misApprove');
 
     $firstDecision = app(WasteApprovalService::class)->approve($firstToken);
@@ -246,47 +227,21 @@ it('waits for every external approval then lets MIS check stable lines and relea
         ->and($lastDecision['report']->activityLogs()->where('event', 'external_approved')->exists())->toBeTrue()
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeFalse();
 
-    expect(fn () => $mis->updateExternalLineChecks($report, $reviewer, [999999 => ['sm_checked' => true]]))
-        ->toThrow(ValidationException::class);
-
-    $outletStaff = UserFactory::new()->createQuietly();
-    $outlet->users()->attach($outletStaff);
-    expect(fn () => $mis->updateExternalLineChecks($report, $outletStaff, [
-        $lines[0]->getKey() => ['sm_checked' => true, 'audit_checked' => true],
-    ]))->toThrow(AuthorizationException::class)
-        ->and(fn () => $mis->updateExternalLineChecks($report, $reviewer, [
-            $lines[0]->getKey() => ['quantity' => 999],
-        ]))->toThrow(ValidationException::class)
-        ->and($lines[0]->fresh()->quantity)->toBe('1.0000');
-
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->mountAction('viewEvidence')
         ->assertActionMounted('viewEvidence');
 
     Livewire::test(ViewWasteReport::class, ['record' => $report->getKey()])
         ->assertActionVisible('viewEvidence')
-        ->assertActionVisible('misReviewLines')
+        ->assertDontSee('Tandai SM / AUDIT (MIS)')
         ->assertActionVisible('misApprove')
-        ->callAction('misReviewLines', data: [
-            'line_'.$lines[0]->getKey().'_sm'    => '0',
-            'line_'.$lines[0]->getKey().'_audit' => '1',
-            'line_'.$lines[1]->getKey().'_sm'    => '1',
-            'line_'.$lines[1]->getKey().'_audit' => '0',
-        ])
-        ->assertNotified('Penanda MIS per barang tersimpan.')
         ->callAction('misApprove')
-        ->assertNotified('Laporan disetujui MIS.')
-        ->assertActionHidden('misReviewLines')
+        ->assertNotified('Laporan disetujui.')
         ->assertActionHidden('misApprove');
 
     expect($report->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and($first->fresh()->status)->toBe(WasteApprovalStatus::Approved)
         ->and($second->fresh()->status)->toBe(WasteApprovalStatus::Approved)
-        ->and($lines[0]->fresh()->sm_checked)->toBeFalse()
-        ->and($lines[0]->fresh()->audit_checked)->toBeTrue()
-        ->and($lines[1]->fresh()->sm_checked)->toBeTrue()
-        ->and($lines[1]->fresh()->audit_checked)->toBeFalse()
-        ->and($report->activityLogs()->where('event', 'mis_line_checks_updated')->exists())->toBeTrue()
         ->and($report->notifications()->where('type', 'requester_approved')->exists())->toBeTrue()
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeTrue();
 });

@@ -95,7 +95,7 @@ class WasteWorkflowResource extends Resource
                 TextInput::make('phone')->label('WhatsApp')->tel(),
                 TextInput::make('email')->label('Email')->email(),
             ])->minItems(1)->required()->columnSpanFull(),
-            Toggle::make('is_active')->label('Aktif')->helperText('Jika nonaktif, laporan memakai alur persetujuan lain atau menunggu tinjauan MIS.')->default(true)->columnSpanFull(),
+            Toggle::make('is_active')->label('Aktif')->helperText('Jika nonaktif, laporan memakai alur persetujuan brand. Jika tidak ada alur yang aktif, laporan langsung disetujui.')->default(true)->columnSpanFull(),
         ]);
     }
 

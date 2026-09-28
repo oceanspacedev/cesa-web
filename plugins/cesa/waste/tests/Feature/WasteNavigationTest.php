@@ -109,7 +109,7 @@ it('lists laporan waste beside pengaturan like form transfer', function (): void
         ->and($html)->toContain('Pengaturan');
 });
 
-it('explains that a disabled approval route still waits for MIS review', function (): void {
+it('explains that a disabled approval route approves the report when no other flow is active', function (): void {
     $activeField = collect(WasteWorkflowResource::form(Schema::make(new ManageWasteWorkflows))->getComponents())
         ->first(fn ($component): bool => $component->getName() === 'is_active');
 
@@ -118,6 +118,6 @@ it('explains that a disabled approval route still waits for MIS review', functio
     $outletColumn = WasteWorkflowResource::table(Table::make(new ManageWasteWorkflows))
         ->getColumns()['outlet.name'];
 
-    expect((string) $helper->getContent())->toContain('menunggu tinjauan MIS')
+    expect((string) $helper->getContent())->toContain('laporan langsung disetujui')
         ->and($outletColumn->getPlaceholder())->toBe('Semua outlet');
 });

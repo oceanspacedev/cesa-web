@@ -2,9 +2,12 @@
 
 namespace Cesa\Waste\Exports;
 
+use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
+use Cesa\Waste\Models\WasteApproval;
 use Cesa\Waste\Models\WasteEventLine;
 use Cesa\Waste\Models\WasteReport;
+use Cesa\Waste\Services\WasteWorkflowService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -20,6 +23,9 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection, WithColumnWidths, WithStrictNullComparison, WithStyles, WithTitle
 {
+    /** @var array<int, string>|null */
+    protected ?array $approvalLabels = null;
+
     /**
      * @param  Collection<int, WasteReport>  $reports
      */
@@ -48,7 +54,7 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                     $showDate = $lastWrittenDate !== $dateKey;
                     $quantity = (float) $line->quantity;
 
-                    $rows[] = match ($brandCode) {
+                    $rows[] = array_merge(match ($brandCode) {
                         'JCHICKEN' => [
                             $showDate ? $date->day : null,
                             $line->item_name,
@@ -60,8 +66,6 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                             $report->reporterNameForTemplate(),
                             $event->section,
                             $event->category_name,
-                            $line->sm_checked,
-                            $line->audit_checked,
                         ],
                         'LUUCA' => [
                             $showDate ? Date::dateTimeToExcel($date) : null,
@@ -73,7 +77,6 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                             $event->reason,
                             $report->reporterNameForTemplate(),
                             $event->category_name,
-                            $line->audit_checked,
                         ],
                         'MOMOYO' => [
                             Date::dateTimeToExcel($date),
@@ -87,7 +90,7 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                             $line->unit_label ?: $line->unit,
                             $event->category_name,
                         ],
-                    };
+                    }, $this->approvalValues($report));
 
                     $lastWrittenDate = $dateKey;
                 }
@@ -124,7 +127,10 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                 ['TAHUN : '.$report->event_date->format('Y')],
                 ['BULAN : '.strtoupper($report->event_date->locale('id')->translatedFormat('F'))],
                 [$statusLabel === null ? null : 'STATUS : '.$statusLabel],
-                ['TGL', 'NAMA PIP', 'NAMA BARANG', 'KODE ITEM', 'QTY PIP', 'QTY', 'UNIT', 'KETERANGAN'],
+                array_merge(
+                    ['TGL', 'NAMA PIP', 'NAMA BARANG', 'KODE ITEM', 'QTY PIP', 'QTY', 'UNIT', 'KETERANGAN'],
+                    $this->approvalLabels(),
+                ),
             ];
         }
 
@@ -134,9 +140,12 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
             [strtoupper($report->brand->name.' '.$report->outlet->name)],
             ['BULAN, TAHUN: '.$month.($statusLabel === null ? '' : ' | STATUS: '.$statusLabel)],
             [null],
-            $brandCode === 'JCHICKEN'
-                ? ['TANGGAL', 'NAMA PRODUK', 'KODE CSA', 'JENIS', 'JUMLAH', 'SATUAN CSA', 'ALASAN WASTE', 'USER', 'SECTION', 'KATEGORI', 'SM', 'AUDIT']
-                : ['TANGGAL', 'NAMA PRODUK', 'KODE CSA', 'JENIS', 'JUMLAH', 'SATUAN CSA', 'ALASAN WASTE', 'USER', 'KATEGORI', 'AUDIT'],
+            array_merge(
+                $brandCode === 'JCHICKEN'
+                    ? ['TANGGAL', 'NAMA PRODUK', 'KODE CSA', 'JENIS', 'JUMLAH', 'SATUAN CSA', 'ALASAN WASTE', 'USER', 'SECTION', 'KATEGORI']
+                    : ['TANGGAL', 'NAMA PRODUK', 'KODE CSA', 'JENIS', 'JUMLAH', 'SATUAN CSA', 'ALASAN WASTE', 'USER', 'KATEGORI'],
+                $this->approvalLabels(),
+            ),
         ];
     }
 
@@ -145,41 +154,52 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
      */
     public function columnWidths(): array
     {
-        return strtoupper($this->reports->first()->brand->code) === 'MOMOYO'
+        $brandCode = strtoupper($this->reports->first()->brand->code);
+        $widths = $brandCode === 'MOMOYO'
             ? ['A' => 14, 'B' => 28, 'C' => 36, 'D' => 20, 'E' => 16, 'F' => 14, 'G' => 14, 'H' => 28]
-            : (strtoupper($this->reports->first()->brand->code) === 'JCHICKEN'
-                ? ['A' => 16, 'B' => 38, 'C' => 20, 'D' => 25, 'E' => 16, 'F' => 17, 'G' => 54, 'H' => 25, 'I' => 20, 'J' => 20, 'K' => 12, 'L' => 12, 'M' => 28, 'N' => 54]
-                : ['A' => 16, 'B' => 38, 'C' => 20, 'D' => 25, 'E' => 16, 'F' => 17, 'G' => 54, 'H' => 25, 'I' => 20, 'J' => 20]);
+            : ($brandCode === 'JCHICKEN'
+                ? ['A' => 16, 'B' => 38, 'C' => 20, 'D' => 25, 'E' => 16, 'F' => 17, 'G' => 54, 'H' => 25, 'I' => 20, 'J' => 20]
+                : ['A' => 16, 'B' => 38, 'C' => 20, 'D' => 25, 'E' => 16, 'F' => 17, 'G' => 54, 'H' => 25, 'I' => 20]);
+
+        foreach ($this->approvalLabels() as $index => $label) {
+            $widths[$this->columnLetter($this->baseColumnCount($brandCode) + $index + 1)] = 14;
+        }
+
+        if ($brandCode === 'JCHICKEN') {
+            $legend = $this->legendStartColumn();
+            $widths[$legend] = 28;
+            $widths[$this->columnLetter($this->columnNumber($legend) + 1)] = 54;
+        }
+
+        return $widths;
     }
 
     public function styles(Worksheet $sheet): array
     {
         $brandCode = strtoupper($this->reports->first()->brand->code);
         $isMomoyo = $brandCode === 'MOMOYO';
-        $lastColumn = match ($brandCode) {
-            'MOMOYO'   => 'H',
-            'JCHICKEN' => 'L',
-            default    => 'J',
-        };
-        $printLastColumn = $brandCode === 'JCHICKEN' ? 'N' : $lastColumn;
+        $lastColumn = $this->columnLetter($this->baseColumnCount($brandCode) + count($this->approvalLabels()));
+        $legendColumn = $brandCode === 'JCHICKEN' ? $this->legendStartColumn() : null;
+        $noteColumn = $legendColumn ? $this->columnLetter($this->columnNumber($legendColumn) + 1) : null;
+        $printLastColumn = $noteColumn ?? $lastColumn;
         $headingRow = $isMomoyo ? 5 : 6;
         $firstDataRow = $headingRow + 1;
 
-        if ($brandCode === 'JCHICKEN') {
+        if ($legendColumn && $noteColumn) {
             foreach ([
-                'M7'  => 'Avoidable food waste',
-                'M9'  => 'unavoidable food waste',
-                'M11' => 'Preparation Waste',
-                'M13' => 'Operational/Kitchen Waste',
-                'M15' => 'Plate waste',
-                'N6'  => 'Waste',
-                'N7'  => 'Produksi berlebihan',
-                'N8'  => 'Kesalahan produksi',
-                'N9'  => 'sampah makanan yang tidak dapat dihindari dan tidak dapat digunakan',
+                $legendColumn.'7'  => 'Avoidable food waste',
+                $legendColumn.'9'  => 'unavoidable food waste',
+                $legendColumn.'11' => 'Preparation Waste',
+                $legendColumn.'13' => 'Operational/Kitchen Waste',
+                $legendColumn.'15' => 'Plate waste',
+                $noteColumn.'6'    => 'Waste',
+                $noteColumn.'7'    => 'Produksi berlebihan',
+                $noteColumn.'8'    => 'Kesalahan produksi',
+                $noteColumn.'9'    => 'sampah makanan yang tidak dapat dihindari dan tidak dapat digunakan',
             ] as $cell => $value) {
                 $sheet->setCellValue($cell, $value);
             }
-            $sheet->getStyle('M6:N15')->getAlignment()->setWrapText(true);
+            $sheet->getStyle($legendColumn.'6:'.$noteColumn.'15')->getAlignment()->setWrapText(true);
         }
 
         $lastDataRow = max($firstDataRow, $sheet->getHighestRow());
@@ -248,5 +268,92 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                 $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('#,##0.####');
             }
         }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function approvalLabels(): array
+    {
+        if ($this->approvalLabels !== null) {
+            return $this->approvalLabels;
+        }
+
+        $report = $this->reports->first();
+        $workflow = app(WasteWorkflowService::class)->resolve($report->brand, $report->outlet);
+        $labels = [];
+
+        if ($workflow) {
+            foreach (array_values($workflow->steps ?? []) as $index => $step) {
+                if (! is_array($step)) {
+                    continue;
+                }
+
+                $label = trim((string) ($step['label'] ?? ''));
+                $labels[] = $label !== '' ? $label : 'Approval '.($index + 1);
+            }
+        }
+
+        if ($labels === []) {
+            $labels = ['STORE MANAGER', 'AUDIT'];
+        }
+
+        return $this->approvalLabels = $labels;
+    }
+
+    /**
+     * @return array<int, bool|null>
+     */
+    protected function approvalValues(WasteReport $report): array
+    {
+        $approvals = $report->latestVersion?->approvals?->keyBy('step_order');
+
+        return array_map(function (int $index) use ($approvals): ?bool {
+            $approval = $approvals?->get($index + 1);
+
+            return match ($approval instanceof WasteApproval ? $approval->status : null) {
+                WasteApprovalStatus::Approved => true,
+                WasteApprovalStatus::Rejected => false,
+                default                       => null,
+            };
+        }, array_keys($this->approvalLabels()));
+    }
+
+    protected function baseColumnCount(string $brandCode): int
+    {
+        return match ($brandCode) {
+            'MOMOYO'   => 8,
+            'JCHICKEN' => 10,
+            default    => 9,
+        };
+    }
+
+    protected function legendStartColumn(): string
+    {
+        return $this->columnLetter($this->baseColumnCount('JCHICKEN') + count($this->approvalLabels()) + 1);
+    }
+
+    protected function columnLetter(int $number): string
+    {
+        $letter = '';
+
+        while ($number > 0) {
+            $number--;
+            $letter = chr(65 + ($number % 26)).$letter;
+            $number = intdiv($number, 26);
+        }
+
+        return $letter;
+    }
+
+    protected function columnNumber(string $letter): int
+    {
+        $number = 0;
+
+        foreach (str_split($letter) as $character) {
+            $number = ($number * 26) + (ord($character) - 64);
+        }
+
+        return $number;
     }
 }

@@ -34,7 +34,7 @@ return [
         'no_outlets'         => 'Belum ada outlet aktif. Hubungi admin brand.',
         'no_results'         => 'Brand atau outlet tidak ditemukan. Coba kata lain.',
         'empty'              => 'Belum ada brand aktif. Hubungi admin untuk menyiapkan outlet.',
-        'no_approval'        => 'Laporan akan diperiksa MIS.',
+        'no_approval'        => 'Laporan langsung disetujui.',
     ],
     'progress_title'          => 'Status laporan waste',
     'needs_revision'          => 'Laporan perlu diperbaiki',
