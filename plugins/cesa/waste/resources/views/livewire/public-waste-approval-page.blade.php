@@ -33,6 +33,22 @@
         </div>
 
         <div class="space-y-4">
+            <section class="rounded-lg border border-gray-200 bg-white px-6 py-5 shadow-sm" aria-label="{{ __('waste::waste.approval_timeline') }}">
+                <h2 class="text-sm font-medium text-gray-900">{{ __('waste::waste.approval_timeline') }}</h2>
+                <ol class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    @foreach ($approvals as $step)
+                        <li @class([
+                            'flex min-w-0 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm sm:min-w-40',
+                            'border-blue-300 bg-blue-50' => $step['status'] === 'pending',
+                            'border-gray-200' => $step['status'] !== 'pending',
+                        ])>
+                            <span class="font-medium text-gray-900">{{ $step['label'] }}</span>
+                            <span class="text-gray-600">{{ $step['status_label'] }}</span>
+                        </li>
+                    @endforeach
+                </ol>
+            </section>
+
             <section x-data="{ expanded: true }" class="overflow-hidden pf-card">
                 <button
                     type="button"

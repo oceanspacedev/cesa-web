@@ -176,18 +176,18 @@ it('uses master approval steps as spreadsheet columns and keeps SM and AUDIT whe
 
     [$oneHeader, $oneSheet] = $exportMonth('2026-10-02', ['Supervisor']);
     expect($oneHeader)->toBe(['Supervisor', null])
-        ->and($oneSheet->getCell('K7')->getValue())->toBeFalse();
+        ->and($oneSheet->getCell('K7')->getValue())->toBe('Ditolak');
 
     [$twoHeaders, $twoSheet] = $exportMonth('2026-11-02', ['SM', 'AUDIT']);
     expect($twoHeaders)->toBe(['SM', 'AUDIT'])
-        ->and($twoSheet->getCell('K7')->getValue())->toBeTrue()
-        ->and($twoSheet->getCell('L7')->getValue())->toBeFalse();
+        ->and($twoSheet->getCell('K7')->getValue())->toBe('Disetujui')
+        ->and($twoSheet->getCell('L7')->getValue())->toBe('Ditolak');
 
     [$threeHeaders, $threeSheet] = $exportMonth('2026-12-02', ['SM', 'AUDIT', 'GA']);
     expect($threeHeaders)->toBe(['SM', 'AUDIT', 'GA'])
-        ->and($threeSheet->getCell('K7')->getValue())->toBeTrue()
-        ->and($threeSheet->getCell('L7')->getValue())->toBeTrue()
-        ->and($threeSheet->getCell('M7')->getValue())->toBeFalse();
+        ->and($threeSheet->getCell('K7')->getValue())->toBe('Disetujui')
+        ->and($threeSheet->getCell('L7')->getValue())->toBe('Disetujui')
+        ->and($threeSheet->getCell('M7')->getValue())->toBe('Ditolak');
 });
 
 /** @return array{WasteBrand, WasteOutlet, WasteCategory, array<int, WasteItem>, User} */

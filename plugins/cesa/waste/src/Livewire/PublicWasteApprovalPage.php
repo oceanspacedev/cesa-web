@@ -37,10 +37,7 @@ class PublicWasteApprovalPage extends SimplePage
             return;
         }
 
-        $result = $service->approve($this->token);
-        $this->actionTaken = true;
-        $this->summary['status'] = $result['report']->status?->value;
-        $this->summary['status_label'] = __('waste::waste.status.'.($result['report']->status?->value ?? 'pending'));
+        $this->rememberDecision($service->approve($this->token)['report']);
     }
 
     public function reject(WasteApprovalService $service): void
@@ -53,10 +50,7 @@ class PublicWasteApprovalPage extends SimplePage
             throw ValidationException::withMessages(['rejectionReason' => 'Alasan penolakan wajib diisi.']);
         }
 
-        $result = $service->reject($this->token, $this->rejectionReason);
-        $this->actionTaken = true;
-        $this->summary['status'] = $result['report']->status?->value;
-        $this->summary['status_label'] = __('waste::waste.status.'.($result['report']->status?->value ?? 'rejected'));
+        $this->rememberDecision($service->reject($this->token, $this->rejectionReason)['report']);
     }
 
     public function getTitle(): string
@@ -90,9 +84,24 @@ class PublicWasteApprovalPage extends SimplePage
                 'unit'     => $line->unit,
             ])->all(),
         ])->all();
-        $this->approvals = $approval->version->approvals->map(fn ($step): array => [
+        $this->approvals = $this->approvalSteps($approval->version);
+    }
+
+    protected function rememberDecision($report): void
+    {
+        $this->actionTaken = true;
+        $this->summary['status'] = $report->status?->value;
+        $this->summary['status_label'] = __('waste::waste.status.'.($report->status?->value ?? 'pending'));
+        $this->approvals = $this->approvalSteps($report->latestVersion);
+    }
+
+    /**
+     * @return array<int, array{label: string, status: ?string, status_label: string}>
+     */
+    protected function approvalSteps($version): array
+    {
+        return $version->approvals->map(fn ($step): array => [
             'label'        => $step->label,
-            'name'         => $step->approver_name,
             'status'       => $step->status?->value,
             'status_label' => __('waste::waste.approval_status.'.($step->status?->value ?? 'waiting')),
         ])->all();

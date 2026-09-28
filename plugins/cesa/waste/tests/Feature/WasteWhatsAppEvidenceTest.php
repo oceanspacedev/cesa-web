@@ -51,7 +51,8 @@ it('queues every evidence photo for the requester and active external approver o
         ->and($approverPhotos->pluck('payload')->pluck('evidence_id')->sort()->values()->all())->toBe($evidenceIds)
         ->and($approverPhotos->first()->payload['message'])->toContain('Jchicken / Ciledug, 22/09/2026')
         ->and($report->notifications()->where('type', 'requester_submitted')->count())->toBe(1)
-        ->and($report->notifications()->where('type', 'approval_1')->count())->toBe(1);
+        ->and($report->notifications()->where('type', 'approval_1')->count())->toBe(1)
+        ->and($report->notifications()->where('type', 'approval_1')->first()->payload['message'])->toContain('Supervisor:');
 
     Queue::assertPushed(SendWasteNotification::class, 6);
 

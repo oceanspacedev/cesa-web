@@ -42,7 +42,7 @@ class WasteNotificationService
 
     public function queueApprovalReminder(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
-        $message = "Pengingat: approval waste {$report->uid} masih menunggu tindakan.\n"
+        $message = "Pengingat {$approval->label}: laporan waste {$report->uid} masih menunggu persetujuan.\n"
             .route('waste.public.approval', ['token' => $token]);
 
         if (filled($approval->approver_phone)) {
@@ -98,7 +98,8 @@ class WasteNotificationService
 
     protected function queueApproval(WasteReport $report, WasteReportVersion $version, WasteApproval $approval, string $token): void
     {
-        $message = "Approval waste {$report->uid} membutuhkan tindakan.\n".route('waste.public.approval', ['token' => $token]);
+        $message = "{$approval->label}: laporan waste {$report->uid} menunggu persetujuan.\n"
+            .route('waste.public.approval', ['token' => $token]);
 
         if (filled($approval->approver_phone)) {
             $this->queueDelivery($report, $version, 'whatsapp', 'approval_'.$approval->step_order, $approval->approver_phone, $message);

@@ -162,7 +162,7 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
                 : ['A' => 16, 'B' => 38, 'C' => 20, 'D' => 25, 'E' => 16, 'F' => 17, 'G' => 54, 'H' => 25, 'I' => 20]);
 
         foreach ($this->approvalLabels() as $index => $label) {
-            $widths[$this->columnLetter($this->baseColumnCount($brandCode) + $index + 1)] = 14;
+            $widths[$this->columnLetter($this->baseColumnCount($brandCode) + $index + 1)] = max(18, mb_strlen($label) + 2);
         }
 
         if ($brandCode === 'JCHICKEN') {
@@ -227,6 +227,13 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
         $sheet->getStyle("A{$firstDataRow}:{$lastColumn}{$lastDataRow}")->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
         $sheet->getStyle("A{$firstDataRow}:{$lastColumn}{$lastDataRow}")->getAlignment()->setWrapText(true);
         $sheet->getStyle("A{$firstDataRow}:A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        foreach ($this->approvalLabels() as $index => $label) {
+            $column = $this->columnLetter($this->baseColumnCount($brandCode) + $index + 1);
+            $sheet->getStyle("{$column}{$headingRow}:{$column}{$lastDataRow}")
+                ->getAlignment()
+                ->setWrapText(false)
+                ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
         $quantityColumn = $isMomoyo ? 'F' : 'E';
         $this->formatQuantityColumn($sheet, $quantityColumn, $firstDataRow, $lastDataRow);
 
@@ -302,18 +309,18 @@ class WasteTemplateSheet extends WasteTextValueBinder implements FromCollection,
     }
 
     /**
-     * @return array<int, bool|null>
+     * @return array<int, string|null>
      */
     protected function approvalValues(WasteReport $report): array
     {
         $approvals = $report->latestVersion?->approvals?->keyBy('step_order');
 
-        return array_map(function (int $index) use ($approvals): ?bool {
+        return array_map(function (int $index) use ($approvals): ?string {
             $approval = $approvals?->get($index + 1);
 
             return match ($approval instanceof WasteApproval ? $approval->status : null) {
-                WasteApprovalStatus::Approved => true,
-                WasteApprovalStatus::Rejected => false,
+                WasteApprovalStatus::Approved => 'Disetujui',
+                WasteApprovalStatus::Rejected => 'Ditolak',
                 default                       => null,
             };
         }, array_keys($this->approvalLabels()));
