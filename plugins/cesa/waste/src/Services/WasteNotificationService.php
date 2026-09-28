@@ -142,15 +142,19 @@ class WasteNotificationService
 
     protected function requesterMessage(WasteReport $report, string $type, ?string $progressToken, ?string $manageToken): string
     {
-        $lines = [
-            $this->placeLine($report),
-            '',
-            match ($type) {
-                'approved' => 'Laporan disetujui.',
-                'rejected' => 'Laporan ditolak.',
-                default    => 'Laporan terkirim.',
-            },
-        ];
+        $materials = $this->reportMaterials($report);
+        $lines = [$this->placeLine($report)];
+
+        if ($materials !== '') {
+            $lines[] = $materials;
+        }
+
+        $lines[] = '';
+        $lines[] = match ($type) {
+            'approved' => 'Laporan disetujui.',
+            'rejected' => 'Laporan ditolak.',
+            default    => 'Laporan terkirim.',
+        };
 
         if ($progressToken) {
             $lines[] = route('waste.public.progress', ['token' => $progressToken]);
@@ -165,6 +169,22 @@ class WasteNotificationService
         }
 
         return implode("\n", $lines);
+    }
+
+    protected function reportMaterials(WasteReport $report): string
+    {
+        $version = $report->latestVersion;
+        if (! $version) {
+            return '';
+        }
+
+        $version->loadMissing('events.lines');
+
+        return $version->events
+            ->sortBy('sequence')
+            ->map(fn (object $event): string => $this->materialLines($event))
+            ->filter()
+            ->implode("\n");
     }
 
     protected function materialLines(object $event): string

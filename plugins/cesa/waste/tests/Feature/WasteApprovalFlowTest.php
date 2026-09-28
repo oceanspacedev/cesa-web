@@ -98,7 +98,8 @@ it('walks one report from submission through each whatsapp step into the monthly
 
     expect($second['report']->status)->toBe(WasteReportStatus::Approved)
         ->and($second['next_token'])->toBeNull()
-        ->and($second['report']->notifications()->where('type', 'requester_approved')->exists())->toBeTrue();
+        ->and($second['report']->notifications()->where('type', 'requester_approved')->exists())->toBeTrue()
+        ->and($second['report']->notifications()->where('type', 'requester_approved')->first()->payload['message'])->toContain("Chicken 2 PCS\n\nLaporan disetujui.");
 
     $sheet = $export()->sheets()[0]->collection();
 
