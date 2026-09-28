@@ -2,6 +2,8 @@
 
 namespace Cesa\Waste\Livewire;
 
+use Cesa\Waste\Enums\WasteApprovalStatus;
+use Cesa\Waste\Enums\WasteReportStatus;
 use Cesa\Waste\Services\WasteApprovalService;
 use Cesa\Waste\Services\WasteReportService;
 use Filament\Pages\SimplePage;
@@ -20,6 +22,8 @@ class PublicWasteApprovalPage extends SimplePage
     public array $approvals = [];
 
     public string $token = '';
+
+    public ?int $approvalId = null;
 
     public string $rejectionReason = '';
 
@@ -70,6 +74,7 @@ class PublicWasteApprovalPage extends SimplePage
             'status'        => $report->status?->value,
             'status_label'  => __('waste::waste.status.'.($report->status?->value ?? 'pending')),
             'current_step'  => $approval->displayName(),
+            'step_status'   => $approval->status?->value,
             'approver_name' => $approval->approver_name,
         ];
         $this->events = $approval->version->events->map(fn ($event): array => [
@@ -84,14 +89,20 @@ class PublicWasteApprovalPage extends SimplePage
                 'unit'     => $line->unit,
             ])->all(),
         ])->all();
+        $this->approvalId = $approval->getKey();
         $this->approvals = $this->approvalSteps($approval->version);
+        $this->actionTaken = $approval->status !== WasteApprovalStatus::Pending
+            || $report->status !== WasteReportStatus::Pending;
     }
 
     protected function rememberDecision($report): void
     {
         $this->actionTaken = true;
+        $report->loadMissing('latestVersion.approvals');
+        $step = $report->latestVersion->approvals->firstWhere('id', $this->approvalId);
         $this->summary['status'] = $report->status?->value;
         $this->summary['status_label'] = __('waste::waste.status.'.($report->status?->value ?? 'pending'));
+        $this->summary['step_status'] = $step?->status?->value;
         $this->approvals = $this->approvalSteps($report->latestVersion);
     }
 

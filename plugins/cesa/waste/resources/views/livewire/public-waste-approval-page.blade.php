@@ -145,8 +145,19 @@
                     </div>
                 </section>
             @else
-                <div role="status" class="rounded-lg border border-green-200 bg-green-50 px-6 py-5 text-sm font-medium text-green-800 shadow-sm">
-                    {{ __('waste::waste.decision_saved') }}
+                @php
+                    $closedMessage = match ($summary['status'] ?? null) {
+                        'approved' => __('waste::waste.approval_closed_approved'),
+                        'rejected' => __('waste::waste.approval_closed_rejected'),
+                        default => __('waste::waste.approval_closed_step'),
+                    };
+                    $closedClass = match ($summary['status'] ?? null) {
+                        'rejected' => 'border-red-200 bg-red-50 text-red-800',
+                        default => 'border-green-200 bg-green-50 text-green-800',
+                    };
+                @endphp
+                <div role="status" class="rounded-lg border px-6 py-5 text-sm font-medium shadow-sm {{ $closedClass }}">
+                    {{ $closedMessage }}
                 </div>
             @endif
         </div>

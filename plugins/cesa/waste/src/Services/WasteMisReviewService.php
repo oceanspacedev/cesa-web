@@ -71,7 +71,6 @@ class WasteMisReviewService
                     $approval->forceFill([
                         'status'     => WasteApprovalStatus::Approved,
                         'decided_at' => $approval->decided_at ?? $now,
-                        'token_hash' => null,
                     ])->save();
                 }
             } else {
@@ -84,7 +83,6 @@ class WasteMisReviewService
                         'status'        => WasteApprovalStatus::Rejected,
                         'decision_note' => $reason,
                         'decided_at'    => $now,
-                        'token_hash'    => null,
                     ])->save();
                 }
             }

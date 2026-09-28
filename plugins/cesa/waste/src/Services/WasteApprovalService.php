@@ -133,7 +133,6 @@ class WasteApprovalService
                 'status'        => $decision,
                 'decision_note' => $note,
                 'decided_at'    => now(),
-                'token_hash'    => null,
             ])->save();
 
             $nextToken = null;

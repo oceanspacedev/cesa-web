@@ -106,4 +106,10 @@ it('walks one report from submission through each whatsapp step into the monthly
         ->and($sheet->get(5))->toContain('Store Manager', 'Audit')
         ->and($sheet->get(6)[10])->toBe('Disetujui')
         ->and($sheet->get(6)[11])->toBe('Disetujui');
+
+    $this->get(route('waste.public.approval', ['token' => $result['approval_tokens'][0]]))
+        ->assertSuccessful()
+        ->assertSeeText(__('waste::waste.approval_closed_approved'))
+        ->assertDontSeeText(__('waste::waste.approve'))
+        ->assertDontSeeText(__('waste::waste.reject'));
 });

@@ -9,7 +9,6 @@ use Cesa\Waste\Livewire\PublicWasteProgressPage;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
-use Cesa\Waste\Services\WasteApprovalService;
 use Cesa\Waste\Services\WasteMisReviewService;
 use Database\Factories\UserFactory;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -143,8 +142,7 @@ it('blocks unauthorized reviewers and does not override external approval workfl
     $rejected = $service->reject($report, $outsider, 'Perlu koreksi.');
 
     expect($rejected->status)->toBe(WasteReportStatus::Rejected)
-        ->and($version->approvals()->first()->fresh()->status)->toBe(WasteApprovalStatus::Rejected)
-        ->and($version->approvals()->first()->token_hash)->toBeNull();
+        ->and($version->approvals()->first()->fresh()->status)->toBe(WasteApprovalStatus::Rejected);
 });
 
 it('keeps internal MIS decisions with the brand manager even when outlet staff can edit reports', function (): void {
@@ -220,7 +218,6 @@ it('lets the dashboard approve a report before whatsapp finishes the steps', fun
         ->and($report->fresh()->status)->toBe(WasteReportStatus::Approved)
         ->and($first->fresh()->status)->toBe(WasteApprovalStatus::Approved)
         ->and($second->fresh()->status)->toBe(WasteApprovalStatus::Approved)
-        ->and($first->fresh()->token_hash)->toBeNull()
         ->and((new WasteReportExport('2026-09-01', '2026-09-30', 'approved', $brand->id, $outlet->id, $reviewer))->hasReports())->toBeTrue();
 });
 
@@ -243,7 +240,6 @@ it('sends a usable revision link when the dashboard rejects a report still waiti
 
     expect($rejected->status)->toBe(WasteReportStatus::Rejected)
         ->and($approval->fresh()->status)->toBe(WasteApprovalStatus::Rejected)
-        ->and($approval->fresh()->token_hash)->toBeNull()
         ->and($rejected->progress_token_hash)->toBe(hash('sha256', $progressToken))
         ->and($rejected->manage_token_hash)->toBe(hash('sha256', $manageToken))
         ->and($rejected->manage_token_hash)->not->toBe($rejected->progress_token_hash)
