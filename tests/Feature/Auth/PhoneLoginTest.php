@@ -78,7 +78,8 @@ it('sends an OTP through WAG Hub for a registered active user', function () {
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://hub.test/api/v1/messages'
         && $request['recipient']['value'] === '6281234567890'
         && str_contains((string) $request['message']['text'], $otpCodes[0])
-        && $request['purpose'] === 'authentication'
+        && $request['purpose'] === 'otp'
+        && $request['expires_at'] === $otpRecord->expires_at->utc()->format('Y-m-d\TH:i:s\Z')
         && $request->hasHeader('Idempotency-Key', 'whatsapp-login-otp-'.$otpRecord->id));
 });
 

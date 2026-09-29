@@ -68,7 +68,13 @@ class WhatsAppOtpService
             });
 
             try {
-                $this->sendOtp($number, $otp, (int) $otpRecord->id);
+                $expiresAt = $otpRecord->expires_at;
+
+                if (! $expiresAt instanceof CarbonInterface) {
+                    throw new RuntimeException('OTP tidak memiliki waktu kedaluwarsa.');
+                }
+
+                $this->sendOtp($number, $otp, (int) $otpRecord->id, $expiresAt);
             } catch (Throwable $exception) {
                 $otpRecord->forceFill(['expires_at' => now()])->save();
 
@@ -152,7 +158,7 @@ class WhatsAppOtpService
     /**
      * Kirim pesan OTP melalui WAG Hub dengan template dari konfigurasi.
      */
-    protected function sendOtp(string $number, string $otp, int $otpRecordId): void
+    protected function sendOtp(string $number, string $otp, int $otpRecordId, CarbonInterface $expiresAt): void
     {
         $expiresIn = max(1, (int) config('wag.otp.expires_in', 300));
         $validFor = $expiresIn % 60 === 0
@@ -170,7 +176,8 @@ class WhatsAppOtpService
 
         $this->whatsApp->sendMessage($number, $message, [
             'force_hub'        => true,
-            'purpose'          => 'authentication',
+            'purpose'          => 'otp',
+            'expires_at'       => $expiresAt->utc()->format('Y-m-d\TH:i:s\Z'),
             'idempotency_key'  => 'whatsapp-login-otp-'.$otpRecordId,
             'client_reference' => 'whatsapp-login',
             'timeout'          => 15,

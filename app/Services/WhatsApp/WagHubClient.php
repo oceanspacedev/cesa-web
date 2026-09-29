@@ -83,7 +83,7 @@ class WagHubClient
      *
      * @param  string  $phone  Nomor WhatsApp tujuan (format lokal 08... atau internasional 628...)
      * @param  string  $text  Isi pesan teks
-     * @param  array<string, mixed>  $options  Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose, client_reference, timeout, force_hub, attachment_type, attachment
+     * @param  array<string, mixed>  $options  Konfigurasi tambahan: idempotency_key, mode (sync/async), route_key, purpose (otp atau transactional), expires_at, client_reference, timeout, force_hub, attachment_type, attachment
      * @return array<string, mixed>
      */
     public function sendMessage(string $phone, string $text, array $options = []): array
@@ -125,6 +125,10 @@ class WagHubClient
             'route_key'        => $routeKey,
             'client_reference' => $clientReference,
         ];
+
+        if (filled($options['expires_at'] ?? null)) {
+            $payload['expires_at'] = (string) $options['expires_at'];
+        }
 
         if (isset($options['attachment'])) {
             $payload['message'] = array_merge($payload['message'], [
