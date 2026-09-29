@@ -101,7 +101,7 @@ class WasteWorkflowResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->formatStateUsing(fn ($state): string => (string) count($state ?? []))->label('Langkah'), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
+        return $table->columns([TextColumn::make('brand.name')->label('Brand')->sortable(), TextColumn::make('outlet.name')->label('Outlet')->placeholder('Semua outlet'), TextColumn::make('name')->label('Nama')->searchable(), TextColumn::make('steps')->label('Langkah')->state(fn (WasteWorkflow $record): int => count($record->steps ?? [])), WasteActiveColumn::make()])->recordActions([EditAction::make()->slideOver()->modalWidth('md'), DeleteAction::make()])->toolbarActions([BulkActionGroup::make([DeleteBulkAction::make()])]);
     }
 
     public static function getPages(): array

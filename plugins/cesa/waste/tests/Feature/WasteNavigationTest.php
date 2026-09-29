@@ -11,6 +11,9 @@ use Cesa\Waste\Filament\Resources\WasteSectionResource;
 use Cesa\Waste\Filament\Resources\WasteUnitResource;
 use Cesa\Waste\Filament\Resources\WasteWorkflowResource;
 use Cesa\Waste\Filament\Resources\WasteWorkflowResource\Pages\ManageWasteWorkflows;
+use Cesa\Waste\Models\WasteBrand;
+use Cesa\Waste\Models\WasteOutlet;
+use Cesa\Waste\Models\WasteWorkflow;
 use Database\Factories\UserFactory;
 use Filament\Forms\Components\Field;
 use Filament\Navigation\NavigationItem;
@@ -19,6 +22,8 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
 
 it('lists laporan waste beside pengaturan like form transfer', function (): void {
     app()->setLocale('id');
@@ -120,4 +125,50 @@ it('explains that a disabled approval route approves the report when no other fl
 
     expect((string) $helper->getContent())->toContain('laporan langsung disetujui')
         ->and($outletColumn->getPlaceholder())->toBe('Semua outlet');
+});
+
+it('counts approval people in the langkah column', function (): void {
+    if (! Route::has('filament.admin.waste.configurations')) {
+        Route::get('/_test/waste/configurations', static fn (): string => '')
+            ->name('filament.admin.waste.configurations');
+    }
+
+    $user = UserFactory::new()->createQuietly();
+    $brand = WasteBrand::query()->create(['name' => 'Jchicken', 'is_active' => true]);
+    $outlet = WasteOutlet::query()->create(['brand_id' => $brand->id, 'name' => 'Ciledug', 'is_active' => true]);
+    $brand->users()->attach($user);
+    $this->actingAs($user);
+    filament()->setCurrentPanel(filament()->getPanel('admin'));
+
+    $onePerson = WasteWorkflow::query()->create([
+        'brand_id'  => $brand->id,
+        'outlet_id' => $outlet->id,
+        'name'      => 'Persetujuan Ciledug',
+        'steps'     => [[
+            'label' => 'SM',
+            'name'  => 'APRI',
+            'phone' => '0895636786435',
+            'email' => null,
+        ]],
+        'is_active' => true,
+    ]);
+    $twoPeople = WasteWorkflow::query()->create([
+        'brand_id' => $brand->id,
+        'name'     => 'Persetujuan Jchicken',
+        'steps'    => [
+            ['label' => 'SM', 'name' => 'APRI', 'phone' => '0895636786435', 'email' => null],
+            ['label' => 'Audit', 'name' => 'Bima', 'phone' => null, 'email' => 'bima@example.com'],
+        ],
+        'is_active' => true,
+    ]);
+
+    $column = Livewire::test(ManageWasteWorkflows::class)->instance()->getTable()->getColumn('steps');
+
+    $column->record($onePerson);
+    $column->clearCachedState();
+    expect(trim(strip_tags($column->toEmbeddedHtml())))->toBe('1');
+
+    $column->record($twoPeople);
+    $column->clearCachedState();
+    expect(trim(strip_tags($column->toEmbeddedHtml())))->toBe('2');
 });
