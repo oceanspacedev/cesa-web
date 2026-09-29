@@ -211,6 +211,7 @@
         .ic-amber   { background: #CA8A04; }
         .ic-indigo  { background: #4F46E5; }
         .ic-navy    { background: #1E3A8A; }
+        .ic-sky     { background: #0284C7; }
 
         /* ===== EMPTY STATE ===== */
         .empty-state {
@@ -281,6 +282,43 @@
             .app-card-name { font-size: 12px; }
             .nav-brand-name { display: none; }
         }
+
+        .local-network-dialog {
+            position: fixed;
+            inset: 0;
+            height: fit-content;
+            margin: auto;
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 420px;
+            width: calc(100% - 32px);
+            color: #111827;
+            box-shadow: 0 20px 40px rgba(17, 24, 39, 0.18);
+        }
+
+        .local-network-dialog::backdrop {
+            background: rgba(17, 24, 39, 0.45);
+        }
+
+        .local-network-dialog h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .local-network-dialog p {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #4B5563;
+        }
+
+        .local-network-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -339,6 +377,9 @@
                             class="app-card"
                             title="{{ $app['description'] }}"
                             id="app-{{ $app['key'] }}"
+                            @if ($app['local_only'] ?? false)
+                                data-local-only
+                            @endif
                             @if ($isExternal)
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -375,7 +416,51 @@
         <span class="footer-text">© {{ date('Y') }} IT Support — CESA</span>
     </footer>
 
+    <dialog class="local-network-dialog" id="local-network-dialog" aria-labelledby="local-network-title">
+        <h2 id="local-network-title">Harus di WiFi kantor</h2>
+        <p>Odoo hanya terbuka lewat jaringan WiFi kantor. Di luar jaringan itu, halaman ini tidak akan bisa diakses.</p>
+        <div class="local-network-actions">
+            <button type="button" class="btn btn-ghost" id="local-network-cancel">Batal</button>
+            <button type="button" class="btn btn-primary" id="local-network-continue">Buka Odoo</button>
+        </div>
+    </dialog>
+
 </div>
+<script>
+    const localNetworkDialog = document.getElementById('local-network-dialog');
+    const localNetworkContinue = document.getElementById('local-network-continue');
+
+    document.querySelectorAll('[data-local-only]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                return;
+            }
+
+            event.preventDefault();
+            localNetworkDialog.dataset.url = link.href;
+            localNetworkDialog.showModal();
+        });
+    });
+
+    document.getElementById('local-network-cancel').addEventListener('click', () => {
+        localNetworkDialog.close();
+    });
+
+    localNetworkContinue.addEventListener('click', () => {
+        const url = localNetworkDialog.dataset.url;
+        localNetworkDialog.close();
+
+        if (url) {
+            window.open(url, '_blank', 'noopener');
+        }
+    });
+
+    localNetworkDialog.addEventListener('click', (event) => {
+        if (event.target === localNetworkDialog) {
+            localNetworkDialog.close();
+        }
+    });
+</script>
 </body>
 </html>
 

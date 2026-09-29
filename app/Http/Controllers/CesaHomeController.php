@@ -11,7 +11,7 @@ class CesaHomeController extends Controller
     /**
      * All registered CESA internal applications.
      *
-     * @var array<int, array{key: string, name: string, description: string, url: string, color: string, icon: string, always_show: bool}>
+     * @var array<int, array{key: string, name: string, description: string, url: string, color: string, icon: string, always_show: bool, local_only?: bool}>
      */
     protected array $apps = [
         [
@@ -90,10 +90,11 @@ class CesaHomeController extends Controller
             'key'         => 'odoo',
             'name'        => 'Odoo',
             'description' => 'Sistem ERP Odoo',
-            'url'         => 'https://odoo.completeselular.com/',
+            'url'         => 'http://30.30.30.49:8069/',
             'color'       => 'purple',
             'icon'        => 'odoo',
             'always_show' => true,
+            'local_only'  => true,
         ],
         [
             'key'         => 'sam',
@@ -102,6 +103,33 @@ class CesaHomeController extends Controller
             'url'         => 'https://sam.mediaselularindonesia.com/',
             'color'       => 'orange',
             'icon'        => 'sam',
+            'always_show' => true,
+        ],
+        [
+            'key'         => 'cloud-busdev',
+            'name'        => 'Cloud Busdev',
+            'description' => 'Penyimpanan file Busdev',
+            'url'         => 'http://csa1.completeselular.com/owncloud/',
+            'color'       => 'sky',
+            'icon'        => 'cloud',
+            'always_show' => true,
+        ],
+        [
+            'key'         => 'n8n',
+            'name'        => 'n8n',
+            'description' => 'Otomasi alur kerja',
+            'url'         => 'https://n8n.completeselular.com/',
+            'color'       => 'pink',
+            'icon'        => 'n8n',
+            'always_show' => true,
+        ],
+        [
+            'key'         => 'iams',
+            'name'        => 'IAMS',
+            'description' => 'Internal Audit Management System',
+            'url'         => 'https://iams.completeselular.com/',
+            'color'       => 'indigo',
+            'icon'        => 'iams',
             'always_show' => true,
         ],
     ];
