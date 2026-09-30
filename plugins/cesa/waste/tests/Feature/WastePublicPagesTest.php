@@ -196,7 +196,13 @@ it('advances one page at a time and keeps later fields off the first page', func
         ->set('data.reporter_phone', '081234567890')
         ->call('nextStep')
         ->assertSet('currentStep', 2)
-        ->assertSeeText(__('waste::waste.fields.reason'))
+        ->assertSeeText(__('waste::waste.steps.report'))
+        ->assertSeeInOrder([
+            __('waste::waste.fields.reason'),
+            __('waste::waste.items_photos'),
+            __('waste::waste.choose_item'),
+            __('waste::waste.camera_title'),
+        ])
         ->assertSee('placeholder="'.__('waste::waste.placeholders.quantity').'"', false)
         ->assertSee('placeholder="'.__('waste::waste.placeholders.reason').'"', false)
         ->assertSeeText(__('waste::waste.placeholders.section'))
@@ -336,6 +342,13 @@ it('renders report progress and evidence without exposing private approval or ma
         ->assertSee('src="'.$evidenceUrl.'"', false)
         ->assertSee('waste-camera-slots', false)
         ->assertSee(__('waste::waste.progress_title'), false)
+        ->assertSeeInOrder([
+            __('waste::waste.steps.report'),
+            __('waste::waste.fields.reason'),
+            'Spilled during preparation',
+            __('waste::waste.items_photos'),
+            'Black Tea',
+        ])
         ->assertSeeText(__('waste::waste.fields.reason'))
         ->assertSeeText(__('waste::waste.choose_item'))
         ->assertSeeText(__('waste::waste.fields.quantity'))

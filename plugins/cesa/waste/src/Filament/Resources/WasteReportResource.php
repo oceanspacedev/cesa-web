@@ -138,37 +138,6 @@ class WasteReportResource extends Resource
                             ->hiddenLabel()
                             ->schema([
                                 Hidden::make('id'),
-                                Repeater::make('lines')
-                                    ->hiddenLabel()
-                                    ->schema([
-                                        Hidden::make('id'),
-                                        Select::make('item_id')
-                                            ->label(__('waste::waste.choose_item'))
-                                            ->placeholder(__('waste::waste.choose_item'))
-                                            ->options(fn (Get $get): array => static::itemOptions(static::selectedBrandId($get)))
-                                            ->required()
-                                            ->searchable()
-                                            ->live()
-                                            ->afterStateUpdated(function (Set $set, mixed $state): void {
-                                                $set('unit', WasteItem::query()->whereKey($state)->value('unit'));
-                                            })
-                                            ->columnSpan(2),
-                                        TextInput::make('quantity')
-                                            ->label(__('waste::waste.fields.quantity'))
-                                            ->placeholder(__('waste::waste.placeholders.quantity'))
-                                            ->numeric()
-                                            ->required(),
-                                        Select::make('unit')
-                                            ->label('Satuan')
-                                            ->options(fn (Get $get): array => static::unitOptionsForItem(filled($get('item_id')) ? (int) $get('item_id') : null))
-                                            ->required(),
-                                    ])
-                                    ->columns(4)
-                                    ->minItems(1)
-                                    ->defaultItems(1)
-                                    ->addActionLabel(__('waste::waste.add_line'))
-                                    ->reorderable(false)
-                                    ->columnSpanFull(),
                                 TextInput::make('reason')
                                     ->label(__('waste::waste.fields.reason'))
                                     ->placeholder(__('waste::waste.placeholders.reason'))
@@ -203,6 +172,37 @@ class WasteReportResource extends Resource
                                     ->placeholder(__('waste::waste.placeholders.pip_quantity'))
                                     ->numeric()
                                     ->visible(fn (Get $get): bool => static::referenceItemOptions(static::selectedBrandId($get)) !== []),
+                                Repeater::make('lines')
+                                    ->label(__('waste::waste.lines_section'))
+                                    ->schema([
+                                        Hidden::make('id'),
+                                        Select::make('item_id')
+                                            ->label(__('waste::waste.choose_item'))
+                                            ->placeholder(__('waste::waste.choose_item'))
+                                            ->options(fn (Get $get): array => static::itemOptions(static::selectedBrandId($get)))
+                                            ->required()
+                                            ->searchable()
+                                            ->live()
+                                            ->afterStateUpdated(function (Set $set, mixed $state): void {
+                                                $set('unit', WasteItem::query()->whereKey($state)->value('unit'));
+                                            })
+                                            ->columnSpan(2),
+                                        TextInput::make('quantity')
+                                            ->label(__('waste::waste.fields.quantity'))
+                                            ->placeholder(__('waste::waste.placeholders.quantity'))
+                                            ->numeric()
+                                            ->required(),
+                                        Select::make('unit')
+                                            ->label('Satuan')
+                                            ->options(fn (Get $get): array => static::unitOptionsForItem(filled($get('item_id')) ? (int) $get('item_id') : null))
+                                            ->required(),
+                                    ])
+                                    ->columns(4)
+                                    ->minItems(1)
+                                    ->defaultItems(1)
+                                    ->addActionLabel(__('waste::waste.add_line'))
+                                    ->reorderable(false)
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2)
                             ->minItems(1)

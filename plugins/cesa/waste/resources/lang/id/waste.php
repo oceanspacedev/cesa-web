@@ -14,13 +14,14 @@ return [
     'back'                    => 'Kembali',
     'steps'                   => [
         'start'  => 'Data pelapor',
-        'report' => 'Barang & foto',
+        'report' => 'Kejadian',
     ],
+    'items_photos'            => 'Barang & foto',
     'step_hints' => [
         'start'  => 'Isi tanggal kejadian dan identitas Anda.',
-        'report' => 'Isi barang, jumlah, alasan, section, dan kategori, lalu ambil foto.',
-        'luuca'  => 'Isi barang, jumlah, alasan, dan kategori, lalu ambil foto.',
-        'momoyo' => 'Isi barang, jumlah, kategori, dan referensi PIP bila ada, lalu ambil foto.',
+        'report' => 'Isi satu alasan untuk kejadian ini, lalu barang, jumlah, section, kategori, dan foto.',
+        'luuca'  => 'Isi satu alasan untuk kejadian ini, lalu barang, jumlah, kategori, dan foto.',
+        'momoyo' => 'Isi kategori untuk kejadian ini, lalu barang, jumlah, referensi PIP bila ada, dan foto.',
     ],
     'entry'                   => [
         'title'              => 'Pilih outlet untuk mulai laporan',

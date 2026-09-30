@@ -55,7 +55,10 @@
                                         </div>
                                     @endif
 
-                                    <div class="space-y-4">
+                                    @include('waste::livewire.partials.event-details', ['eventIndex' => $eventIndex, 'event' => $event])
+
+                                    <div class="space-y-4 border-t border-gray-200 pt-6">
+                                        <h3 class="text-sm font-medium text-gray-900">{{ __('waste::waste.items_photos') }}</h3>
                                         @foreach (($event['lines'] ?? []) as $lineIndex => $line)
                                             @php
                                                 $lineItemModel = 'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id';
@@ -105,9 +108,6 @@
                                         <button type="button" wire:click="addLine({{ $eventIndex }})" class="w-full rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm font-medium text-primary-600 hover:border-primary-300 hover:bg-primary-50">
                                             + {{ __('waste::waste.add_line') }}
                                         </button>
-                                    </div>
-
-                                    @include('waste::livewire.partials.event-details', ['eventIndex' => $eventIndex, 'event' => $event])
 
                                     @php
                                         $storedPhotos = $photos[$eventIndex] ?? [];
@@ -236,6 +236,7 @@
                                         @if ($errors->first('photos.'.$eventIndex))
                                             <p class="text-sm text-red-600">{{ $errors->first('photos.'.$eventIndex) }}</p>
                                         @endif
+                                    </div>
                                     </div>
                                 </div>
                             @endforeach

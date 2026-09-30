@@ -365,13 +365,14 @@ it('follows the public report form on the admin create form', function (): void 
     $steps = wasteFormChildren($wizard);
     $reporter = collect(wasteFormChildren($steps[0]))->map->getName()->all();
     $event = wasteFormChildren($steps[1])[0];
-    $eventFields = collect(wasteFormChildren($event))->map->getName()->all();
-    $lineFields = collect(wasteFormChildren(wasteFormChildren($event)[1]))->map->getName()->all();
+    $eventChildren = wasteFormChildren($event);
+    $eventFields = collect($eventChildren)->map->getName()->all();
+    $lineFields = collect(wasteFormChildren($eventChildren[array_key_last($eventChildren)]))->map->getName()->all();
 
     expect($steps[0]->getLabel())->toBe('Data pelapor')
-        ->and($steps[1]->getLabel())->toBe('Barang & foto')
+        ->and($steps[1]->getLabel())->toBe('Kejadian')
         ->and($reporter)->toBe(['brand_id', 'outlet_id', 'event_date', 'reporter_name', 'reporter_phone', 'reporter_email'])
-        ->and($eventFields)->toBe(['id', 'lines', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity'])
+        ->and($eventFields)->toBe(['id', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity', 'lines'])
         ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit']);
 });
 

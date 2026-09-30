@@ -67,6 +67,8 @@
                                 <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $event['pip_quantity'] }} {{ $event['pip_unit'] }}</div>
                             </x-waste::public-field>
                         @endif
+                        <div class="space-y-4 border-t border-gray-200 pt-6">
+                            <h3 class="text-sm font-medium text-gray-900">{{ __('waste::waste.items_photos') }}</h3>
                         @foreach ($event['lines'] as $line)
                             <div wire:key="progress-line-{{ $event['sequence'] }}-{{ $loop->index }}" style="display: grid; grid-template-columns: minmax(0, 1fr) 8.5rem; gap: 1.5rem; align-items: start;">
                                 <x-waste::public-field :label="__('waste::waste.choose_item')">
@@ -89,6 +91,7 @@
                                 </div>
                             </div>
                         @endif
+                        </div>
                     </div>
                 @endforeach
             </div>

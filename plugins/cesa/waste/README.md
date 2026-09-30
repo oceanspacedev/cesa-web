@@ -1,6 +1,6 @@
 # Waste / adjustment
 
-Laporan waste outlet tanpa login. Satu laporan milik satu brand dan satu outlet. Isinya identitas pelapor plus satu atau lebih kejadian. Tiap kejadian punya barang, jumlah, kategori, dan 1–5 foto kamera. Alasan wajib untuk JCHICKEN dan LUUCA. Section tersedia pada JCHICKEN. Field nama PIP/referensi tersedia pada MOMOYO.
+Laporan waste outlet tanpa login. Satu laporan milik satu brand dan satu outlet. Isinya identitas pelapor plus satu atau lebih kejadian. Tiap kejadian punya satu alasan, lalu barang, jumlah, kategori, dan 1–5 foto kamera. Alasan wajib untuk JCHICKEN dan LUUCA. Section tersedia pada JCHICKEN. Field nama PIP/referensi tersedia pada MOMOYO.
 
 Setiap pengiriman dari form publik masuk `pending`. Jika ada workflow approval eksternal, approver memeriksa secara berurutan. Sesudah semua tahap eksternal selesai, atau jika tidak ada workflow eksternal, pengelola brand memeriksa laporan sebagai MIS di panel admin. Hanya keputusan MIS yang membuat laporan `approved` dan masuk ekspor bulanan. Workflow yang aktif tetapi tidak lengkap harus diperbaiki sebelum pengiriman dapat diproses.
 
@@ -54,14 +54,13 @@ URL: `/waste/{brand}/{outlet}`. Brand dicocokkan ke `code` atau nama. Outlet dic
 Dua halaman, tetap dua meskipun ada lebih dari satu kejadian.
 
 1. **Data pelapor.** Tanggal kejadian, nama, WhatsApp, email opsional. Nama, WhatsApp, dan email disimpan di `localStorage` dengan kunci `cesa.waste.reporter` supaya kunjungan berikutnya terisi lagi. Tanggal dan isi kejadian tidak disimpan. Halaman revisi tidak menimpa data yang sudah ada dengan nilai browser.
-2. **Barang & foto.** Satu halaman yang sama untuk semua brand. Pilihan barang dan satuan berasal dari master brand; field yang tidak relevan disembunyikan dari data brand.
+2. **Kejadian.** Satu halaman yang sama untuk semua brand. Tiap blok adalah satu kejadian dengan satu alasan. Pilihan barang dan satuan berasal dari master brand; field yang tidak relevan disembunyikan dari data brand.
 
 Halaman ini selalu menampilkan, untuk tiap kejadian:
 
-1. Barang, jumlah, dan satuan. **Tambah barang** menambah baris di kejadian yang sama. Satuan alternatif hanya dapat dipilih setelah disetujui admin untuk barang tersebut.
-2. Alasan, teks bebas, wajib untuk JCHICKEN dan LUUCA.
-3. Kategori, wajib.
-4. Foto kamera.
+1. Alasan, teks bebas, wajib untuk JCHICKEN dan LUUCA. Satu alasan untuk satu kejadian.
+2. Kategori, wajib.
+3. **Barang & foto.** Barang, jumlah, dan satuan, lalu foto kamera. **Tambah barang** menambah baris di kejadian yang sama, bukan alasan baru. Satuan alternatif hanya dapat dipilih setelah disetujui admin untuk barang tersebut.
 
 Dua field tambahan muncul hanya kalau brand-nya punya datanya:
 
@@ -75,10 +74,11 @@ Dua field tambahan muncul hanya kalau brand-nya punya datanya:
 ### JCHICKEN
 
 ```text
-Barang + jumlah
 Alasan
 Section | Kategori
-Foto
+Barang & foto
+  Barang + jumlah
+  Foto
 ```
 
 Section pilihan dari tabel `waste_sections`: `BAR`, `COOK`, `ASSEMBLY`, `MP`, `DINING`. Boleh dikosongkan. Jenis barang (`bahan baku`, `barang jadi`) tersimpan dari master, tidak ada input sendiri. Tidak ada barang PIP pada master JCHICKEN saat ini.
@@ -86,10 +86,11 @@ Section pilihan dari tabel `waste_sections`: `BAR`, `COOK`, `ASSEMBLY`, `MP`, `D
 ### LUUCA
 
 ```text
-Barang + jumlah
 Alasan
 Kategori
-Foto
+Barang & foto
+  Barang + jumlah
+  Foto
 ```
 
 Tidak ada section dan tidak ada barang PIP pada master saat ini. Jenis di master (`BAHAN BAKU LUUCA`) ikut diimpor untuk ekspor, tanpa menambah field di form.
@@ -97,10 +98,11 @@ Tidak ada section dan tidak ada barang PIP pada master saat ini. Jenis di master
 ### MOMOYO
 
 ```text
-Barang + jumlah          <- bahan yang terbuang
-Kategori                 <- padanan kolom Keterangan di Excel
+Kategori                 <- padanan kolom Keterangan di Excel, satu untuk kejadian ini
 Barang PIP | Jumlah PIP  <- opsional
-Foto
+Barang & foto
+  Barang + jumlah        <- bahan yang terbuang
+  Foto
 ```
 
 Dua cara mengisi satu kejadian:
@@ -155,8 +157,8 @@ Antrian `whatsapp` (bisa diubah lewat `WASTE_NOTIFICATION_QUEUE`).
 3. Siapkan Master Satuan dan impor barang: `php artisan waste:import-master --jchicken=...` atau opsi brand yang sesuai. Barang tanpa satuan tetap nonaktif sampai admin menetapkan satuan. Brand baru butuh cabang baru di `WasteMasterImportService::definition()`.
 4. Jika kejadian menggunakan satuan berbeda dari satuan utama, tampung kandidat dari workbook dengan `waste:stage-alternate-units` lalu admin meninjau setiap pasangan di menu **Kandidat satuan**. Hanya persetujuan yang menautkan satuan alternatif ke barang.
 5. Isi kategori aktif milik brand itu. Form publik hanya menampilkan kategori brand, bukan kategori global.
-6. Tentukan bentuk halaman Barang & foto dari data, tanpa membuat form baru:
-   - Bentuk LUUCA (barang, alasan, kategori, foto): cukup impor barang dan isi kategori. Jangan buat baris section dan jangan set `item_type` ke `PIP`.
+6. Tentukan bentuk halaman Kejadian dari data, tanpa membuat form baru:
+   - Bentuk LUUCA (alasan, kategori, lalu barang dan foto): cukup impor barang dan isi kategori. Jangan buat baris section dan jangan set `item_type` ke `PIP`.
    - Bentuk JCHICKEN (tambah section): isi section aktif brand itu di tabel `waste_sections`, lewat admin Sections.
    - Bentuk MOMOYO (tambah PIP): pastikan import atau data item mengisi `item_type` persis `PIP` untuk produk PIP. Contoh Excel juga memuat barang PIP di bawah referensi PIP, termasuk referensi ke barang yang sama.
 7. Jika perlu approval eksternal sebelum MIS, buat workflow aktif. Isi nama approver plus WhatsApp atau email di setiap langkah. Tanpa workflow eksternal, pengiriman tetap `pending` dan menunggu MIS.
@@ -171,7 +173,7 @@ Menu admin Waste sama polanya dengan form transfer: **Laporan waste**, lalu **Pe
 
 `/admin/waste-reports` bisa membuat, mengubah, dan menghapus laporan. Tombol catat insiden untuk koreksi, bukan jalur harian outlet.
 
-Form admin memakai dua langkah yang sama dengan form publik. Langkah pertama identitas pelapor, ditambah brand dan outlet. Langkah kedua urutannya sama: barang, jumlah, satuan, alasan, lalu section dan kategori. Section hanya muncul untuk brand yang punya daftar section. Pengelola brand dapat menandai `SM` dan `AUDIT` per barang pada form admin untuk laporan tanpa approval eksternal; laporan dengan approval eksternal memakai aksi penandaan MIS setelah seluruh approver setuju.
+Form admin memakai dua langkah yang sama dengan form publik. Langkah pertama identitas pelapor, ditambah brand dan outlet. Langkah kedua adalah kejadian: satu alasan, lalu section dan kategori, lalu barang dan jumlah. Section hanya muncul untuk brand yang punya daftar section. Pengelola brand dapat menandai `SM` dan `AUDIT` per barang pada form admin untuk laporan tanpa approval eksternal; laporan dengan approval eksternal memakai aksi penandaan MIS setelah seluruh approver setuju.
 
 Simpan dari admin tidak meminta foto baru dan tidak mengirim WhatsApp. Laporan yang berasal dari form publik tetap wajib memiliki foto bukti pada setiap kejadian. Koreksi admin atas laporan yang sudah disetujui membuka versi `pending` baru sehingga MIS harus meninjau ulang sebelum hasilnya masuk ekspor. Laporan dengan approval eksternal tidak dapat diedit dari form admin; pelapor merevisi melalui tautan setelah penolakan. Status tidak diubah langsung di form admin.
 
