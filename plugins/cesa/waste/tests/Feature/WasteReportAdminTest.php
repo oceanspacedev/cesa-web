@@ -357,6 +357,7 @@ it('blocks edits to reports with external workflow approvals', function (): void
 });
 
 it('follows the public report form on the admin create form', function (): void {
+    app()->setLocale('id');
     $schema = WasteReportResource::form(Schema::make());
     $wizard = wasteFormChildren($schema)[0];
 
