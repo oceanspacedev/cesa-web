@@ -66,6 +66,7 @@ class EditWasteReport extends EditRecord
                 'item_id'  => $line->item_id,
                 'quantity' => $line->quantity,
                 'unit'     => $line->unit,
+                'reason'   => filled($line->reason) ? $line->reason : $event->reason,
             ])->all(),
         ])->all() ?? [];
 

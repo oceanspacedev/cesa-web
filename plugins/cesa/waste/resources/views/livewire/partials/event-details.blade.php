@@ -1,9 +1,3 @@
-@if (strtoupper((string) ($brandData['code'] ?? '')) !== 'MOMOYO')
-    <x-waste::public-field :label="__('waste::waste.fields.reason')" :required="true" :error="$errors->first('data.events.'.$eventIndex.'.reason')">
-        <input type="text" wire:model="data.events.{{ $eventIndex }}.reason" class="fi-input" placeholder="{{ __('waste::waste.placeholders.reason') }}" required>
-    </x-waste::public-field>
-@endif
-
 @if ($sections !== [])
     <div class="grid gap-6 sm:grid-cols-2">
         <x-waste::public-select

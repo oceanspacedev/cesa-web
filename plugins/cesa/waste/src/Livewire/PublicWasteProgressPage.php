@@ -55,6 +55,7 @@ class PublicWasteProgressPage extends SimplePage
                 'item'     => $line->item_name,
                 'quantity' => $this->formatQuantity($line->quantity),
                 'unit'     => $line->unit,
+                'reason'   => filled($line->reason) ? $line->reason : $event->reason,
             ])->all(),
         ])->all() ?? [];
     }

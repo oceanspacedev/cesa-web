@@ -87,6 +87,7 @@ class PublicWasteApprovalPage extends SimplePage
                 'code'     => $line->item_code,
                 'quantity' => $line->quantity,
                 'unit'     => $line->unit,
+                'reason'   => filled($line->reason) ? $line->reason : $event->reason,
             ])->all(),
         ])->all();
         $this->approvalId = $approval->getKey();

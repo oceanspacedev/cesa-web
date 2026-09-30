@@ -114,6 +114,7 @@ class PublicWasteReportForm extends SimplePage
                     'item_id'  => $line->item_id,
                     'quantity' => $line->quantity,
                     'unit'     => $line->unit,
+                    'reason'   => filled($line->reason) ? $line->reason : $event->reason,
                 ])->all(),
             ])->all() ?? [],
         ];
@@ -303,7 +304,7 @@ class PublicWasteReportForm extends SimplePage
 
     public function addLine(int $eventIndex): void
     {
-        $this->data['events'][$eventIndex]['lines'][] = ['item_id' => null, 'quantity' => null, 'unit' => null];
+        $this->data['events'][$eventIndex]['lines'][] = ['item_id' => null, 'quantity' => null, 'unit' => null, 'reason' => ''];
     }
 
     public function removeLine(int $eventIndex, int $lineIndex): void
@@ -387,13 +388,14 @@ class PublicWasteReportForm extends SimplePage
     protected function validateReportStep(): void
     {
         $this->normalizeDecimalInputs();
+        $this->applySharedReasonToBlankLines();
+        $requiresLineReason = strtoupper((string) ($this->brandData['code'] ?? '')) !== 'MOMOYO';
 
         foreach (array_keys($this->data['events'] ?? []) as $index) {
             $index = (int) $index;
 
             $rules = [
                 "data.events.{$index}.category_id" => ['required'],
-                "data.events.{$index}.reason"      => [strtoupper((string) ($this->brandData['code'] ?? '')) === 'MOMOYO' ? 'nullable' : 'required', 'string', 'max:2000'],
             ];
 
             $rules["data.events.{$index}.pip_quantity"] = [
@@ -405,7 +407,6 @@ class PublicWasteReportForm extends SimplePage
 
             $this->validate($rules, [], [
                 "data.events.{$index}.category_id"  => __('waste::waste.fields.category'),
-                "data.events.{$index}.reason"       => __('waste::waste.fields.reason'),
                 "data.events.{$index}.pip_quantity" => __('waste::waste.fields.pip_quantity'),
             ]);
 
@@ -414,12 +415,36 @@ class PublicWasteReportForm extends SimplePage
                 "data.events.{$index}.lines.*.item_id"  => ['required'],
                 "data.events.{$index}.lines.*.quantity" => ['required', 'numeric', 'gt:0', 'regex:/^\d{1,14}(?:\.\d{1,4})?$/'],
                 "data.events.{$index}.lines.*.unit"     => ['nullable', 'string', 'max:32'],
+                "data.events.{$index}.lines.*.reason"   => [$requiresLineReason ? 'required' : 'nullable', 'string', 'max:2000'],
             ], [], [
                 "data.events.{$index}.lines.*.item_id"  => __('waste::waste.choose_item'),
                 "data.events.{$index}.lines.*.quantity" => __('waste::waste.fields.quantity'),
+                "data.events.{$index}.lines.*.reason"   => __('waste::waste.fields.reason'),
             ]);
 
             $this->validateEventPhotos($index);
+        }
+    }
+
+    protected function applySharedReasonToBlankLines(): void
+    {
+        if (strtoupper((string) ($this->brandData['code'] ?? '')) === 'MOMOYO') {
+            return;
+        }
+
+        foreach ($this->data['events'] ?? [] as $eventIndex => $event) {
+            $sharedReason = trim((string) ($event['reason'] ?? ''));
+            if ($sharedReason === '') {
+                continue;
+            }
+
+            foreach ($event['lines'] ?? [] as $lineIndex => $line) {
+                if (! is_array($line) || trim((string) ($line['reason'] ?? '')) !== '') {
+                    continue;
+                }
+
+                $this->data['events'][$eventIndex]['lines'][$lineIndex]['reason'] = $sharedReason;
+            }
         }
     }
 
@@ -492,7 +517,7 @@ class PublicWasteReportForm extends SimplePage
             'reason'          => '',
             'pip_item_id'     => null,
             'pip_quantity'    => null,
-            'lines'           => [['item_id' => null, 'quantity' => null, 'unit' => null]],
+            'lines'           => [['item_id' => null, 'quantity' => null, 'unit' => null, 'reason' => '']],
         ];
     }
 }

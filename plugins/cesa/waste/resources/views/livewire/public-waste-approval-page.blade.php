@@ -70,13 +70,15 @@
                                 <h3 class="font-medium text-gray-900">{{ __('waste::waste.event_title', ['number' => $event['sequence']]) }}</h3>
                                 <span class="break-words text-sm text-gray-600">{{ $event['category'] }}</span>
                             </div>
-                            <p class="mt-2 break-words text-sm text-gray-600">{{ $event['reason'] }}</p>
                             <ul class="mt-3 divide-y divide-gray-200">
                                 @foreach ($event['lines'] as $line)
                                     <li wire:key="approval-line-{{ $event['sequence'] }}-{{ $loop->index }}" class="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-2 text-sm">
                                         <span class="min-w-0 break-words text-gray-900">
                                             {{ $line['item'] }}
                                             <span class="text-gray-500">({{ $line['code'] }})</span>
+                                            @if (filled($line['reason']))
+                                                <span class="mt-1 block text-gray-600">{{ $line['reason'] }}</span>
+                                            @endif
                                         </span>
                                         <span class="font-medium text-gray-900">{{ $line['quantity'] }} {{ $line['unit'] }}</span>
                                     </li>

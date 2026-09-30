@@ -371,8 +371,8 @@ it('follows the public report form on the admin create form', function (): void 
     expect($steps[0]->getLabel())->toBe('Data pelapor')
         ->and($steps[1]->getLabel())->toBe('Barang & foto')
         ->and($reporter)->toBe(['brand_id', 'outlet_id', 'event_date', 'reporter_name', 'reporter_phone', 'reporter_email'])
-        ->and($eventFields)->toBe(['id', 'lines', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity'])
-        ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit']);
+        ->and($eventFields)->toBe(['id', 'lines', 'section', 'category_id', 'pip_item_id', 'pip_quantity'])
+        ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit', 'reason']);
 });
 
 it('shows business report fields while keeping delivery diagnostics out of the report page', function (): void {

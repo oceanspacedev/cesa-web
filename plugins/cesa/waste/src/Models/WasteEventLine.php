@@ -13,7 +13,7 @@ class WasteEventLine extends Model
     protected $table = 'waste_event_lines';
 
     protected $fillable = [
-        'event_id', 'item_id', 'item_code', 'item_name', 'item_type', 'unit', 'unit_label', 'quantity', 'line_role',
+        'event_id', 'item_id', 'item_code', 'item_name', 'item_type', 'unit', 'unit_label', 'quantity', 'reason', 'line_role',
         'sm_checked', 'audit_checked',
     ];
 

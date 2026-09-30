@@ -99,6 +99,12 @@
                                                 </x-waste::public-field>
 
                                                 <p x-show="availableUnits.length > 1" x-cloak class="text-xs text-gray-600">{{ __('waste::waste.alternate_unit_hint') }}</p>
+
+                                                @if (strtoupper((string) ($brandData['code'] ?? '')) !== 'MOMOYO')
+                                                    <x-waste::public-field :label="__('waste::waste.fields.reason')" :required="true" :error="$errors->first('data.events.'.$eventIndex.'.lines.'.$lineIndex.'.reason')">
+                                                        <input type="text" wire:model="data.events.{{ $eventIndex }}.lines.{{ $lineIndex }}.reason" class="fi-input" placeholder="{{ __('waste::waste.placeholders.reason') }}" required>
+                                                    </x-waste::public-field>
+                                                @endif
                                             </div>
                                         @endforeach
 

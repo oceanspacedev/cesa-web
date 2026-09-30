@@ -536,8 +536,10 @@ class WasteReportService
             }
 
             $isPipReference = $pipItem && Str::upper(trim((string) $pipItem->item_type)) === 'PIP';
+            $sharedReason = trim((string) ($event['reason'] ?? ''));
+            $isMomoyo = Str::upper($brand->code) === 'MOMOYO';
 
-            $lines = collect($event['lines'] ?? [])->values()->map(function (mixed $line, int $lineIndex) use ($brand, $sequence, $isPipReference): array {
+            $lines = collect($event['lines'] ?? [])->values()->map(function (mixed $line, int $lineIndex) use ($brand, $sequence, $isPipReference, $sharedReason, $isMomoyo, $category): array {
                 if (! is_array($line)) {
                     throw ValidationException::withMessages(["data.events.{$sequence}.lines.{$lineIndex}" => 'Format barang tidak valid.']);
                 }
@@ -564,6 +566,8 @@ class WasteReportService
                     throw ValidationException::withMessages(["data.events.{$sequence}.lines.{$lineIndex}.unit" => 'Satuan ini belum disetujui untuk barang yang dipilih.']);
                 }
 
+                $reason = $this->lineReason($line, $sharedReason, $isMomoyo, $category, "data.events.{$sequence}.lines.{$lineIndex}.reason");
+
                 return [
                     'item_id'    => $item->getKey(),
                     'item_code'  => $item->code,
@@ -574,6 +578,7 @@ class WasteReportService
                         ? trim((string) $item->source_unit_label)
                         : $unit,
                     'quantity'  => $quantity,
+                    'reason'    => $reason,
                     'line_role' => $isPipReference ? 'component' : 'direct',
                 ];
             })->all();
@@ -582,14 +587,8 @@ class WasteReportService
                 throw ValidationException::withMessages(["data.events.{$sequence}.lines" => 'Tambahkan minimal satu barang.']);
             }
 
-            $reason = trim((string) ($event['reason'] ?? ''));
-            if ($reason === '' && Str::upper($brand->code) === 'MOMOYO') {
-                $reason = $category?->name ?? 'Adjustment';
-            }
-
-            if ($reason === '') {
-                throw ValidationException::withMessages(["data.events.{$sequence}.reason" => 'Alasan wajib diisi.']);
-            }
+            $uniqueReasons = array_values(array_unique(array_column($lines, 'reason')));
+            $reason = count($uniqueReasons) === 1 ? $uniqueReasons[0] : implode(' | ', $uniqueReasons);
 
             return [
                 'event' => [
@@ -607,6 +606,28 @@ class WasteReportService
                 'lines' => $lines,
             ];
         })->all();
+    }
+
+    protected function lineReason(array $line, string $sharedReason, bool $isMomoyo, ?WasteCategory $category, string $field): string
+    {
+        $reason = trim((string) ($line['reason'] ?? ''));
+        if ($reason === '') {
+            $reason = $sharedReason;
+        }
+
+        if ($reason === '' && $isMomoyo) {
+            $reason = $category?->name ?? 'Adjustment';
+        }
+
+        if ($reason === '') {
+            throw ValidationException::withMessages([$field => 'Alasan wajib diisi.']);
+        }
+
+        if (Str::length($reason) > 2000) {
+            throw ValidationException::withMessages([$field => 'Alasan maksimal 2000 karakter.']);
+        }
+
+        return $reason;
     }
 
     protected function section(WasteBrand $brand, mixed $value, string $field): ?string

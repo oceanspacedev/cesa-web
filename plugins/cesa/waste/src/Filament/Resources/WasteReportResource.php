@@ -9,6 +9,7 @@ use Cesa\Waste\Filament\Resources\WasteReportResource\Pages\ListWasteReports;
 use Cesa\Waste\Filament\Resources\WasteReportResource\Pages\ViewWasteReport;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
+use Cesa\Waste\Models\WasteEventLine;
 use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
@@ -162,18 +163,19 @@ class WasteReportResource extends Resource
                                             ->label('Satuan')
                                             ->options(fn (Get $get): array => static::unitOptionsForItem(filled($get('item_id')) ? (int) $get('item_id') : null))
                                             ->required(),
+                                        TextInput::make('reason')
+                                            ->label(__('waste::waste.fields.reason'))
+                                            ->placeholder(__('waste::waste.placeholders.reason'))
+                                            ->required(fn (Get $get): bool => ! static::brandSkipsItemReason($get))
+                                            ->visible(fn (Get $get): bool => ! static::brandSkipsItemReason($get))
+                                            ->maxLength(2000)
+                                            ->columnSpanFull(),
                                     ])
                                     ->columns(4)
                                     ->minItems(1)
                                     ->defaultItems(1)
                                     ->addActionLabel(__('waste::waste.add_line'))
                                     ->reorderable(false)
-                                    ->columnSpanFull(),
-                                TextInput::make('reason')
-                                    ->label(__('waste::waste.fields.reason'))
-                                    ->placeholder(__('waste::waste.placeholders.reason'))
-                                    ->required()
-                                    ->maxLength(2000)
                                     ->columnSpanFull(),
                                 Select::make('section')
                                     ->label(__('waste::waste.fields.section'))
@@ -232,8 +234,18 @@ class WasteReportResource extends Resource
             'reason'       => null,
             'pip_item_id'  => null,
             'pip_quantity' => null,
-            'lines'        => [['item_id' => null, 'quantity' => null, 'unit' => null]],
+            'lines'        => [['item_id' => null, 'quantity' => null, 'unit' => null, 'reason' => null]],
         ];
+    }
+
+    protected static function brandSkipsItemReason(Get $get): bool
+    {
+        $brandId = static::selectedBrandId($get);
+        if (! $brandId) {
+            return false;
+        }
+
+        return strtoupper((string) WasteBrand::query()->whereKey($brandId)->value('code')) === 'MOMOYO';
     }
 
     protected static function selectedBrandId(Get $get): ?int
@@ -336,7 +348,6 @@ class WasteReportResource extends Resource
                 RepeatableEntry::make('latestVersion.events')->schema([
                     TextEntry::make('section')->label(__('waste::waste.fields.section'))->placeholder('—'),
                     TextEntry::make('category_name')->label(__('waste::waste.fields.category')),
-                    TextEntry::make('reason')->label(__('waste::waste.fields.reason')),
                     TextEntry::make('pip_item_name')->label(__('waste::waste.fields.pip_item'))
                         ->visible(fn (mixed $state): bool => filled($state)),
                     TextEntry::make('pip_quantity')->label(__('waste::waste.fields.pip_quantity'))
@@ -346,6 +357,9 @@ class WasteReportResource extends Resource
                         TextEntry::make('item_code')->label('Kode'),
                         TextEntry::make('quantity')->label(__('waste::waste.fields.quantity')),
                         TextEntry::make('unit')->label('Satuan'),
+                        TextEntry::make('reason')->label(__('waste::waste.fields.reason'))
+                            ->state(fn (WasteEventLine $record): string => filled($record->reason) ? (string) $record->reason : (string) $record->event?->reason)
+                            ->columnSpanFull(),
                     ])->columns(4)->columnSpanFull(),
                 ])->columnSpanFull(),
             ]),

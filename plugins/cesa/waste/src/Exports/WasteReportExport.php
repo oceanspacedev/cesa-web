@@ -169,7 +169,7 @@ class WasteReportExport implements WithMultipleSheets
                     $event->sequence + 1,
                     $event->section,
                     $event->category_name,
-                    $event->reason,
+                    $line->reason ?: $event->reason,
                     $event->pip_item_name,
                     $event->pip_quantity === null || $lineIndex !== 0 ? null : (float) $event->pip_quantity,
                     $event->pip_unit,

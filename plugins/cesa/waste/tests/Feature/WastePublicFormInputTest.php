@@ -113,6 +113,59 @@ it('submits the Ciledug input flow for each brand with its own fields', function
     'MOMOYO Ciledug'   => ['MOMOYO', 'momoyo-ciledug', false, true],
 ]);
 
+it('stores one reason and one quantity on each item', function (): void {
+    $brand = WasteBrand::query()->create(['name' => 'Jchicken', 'code' => 'JCHICKEN', 'is_active' => true]);
+    $outlet = WasteOutlet::query()->create([
+        'brand_id'  => $brand->id,
+        'name'      => 'Ciledug',
+        'code'      => 'CILEDUG',
+        'slug'      => 'jchicken-ciledug',
+        'timezone'  => 'Asia/Jakarta',
+        'is_active' => true,
+    ]);
+    $firstItem = WasteItem::query()->create([
+        'brand_id' => $brand->id, 'code' => 'B001', 'name' => 'Chicken Popcorn', 'unit' => 'GR', 'is_active' => true,
+    ]);
+    $secondItem = WasteItem::query()->create([
+        'brand_id' => $brand->id, 'code' => 'B002', 'name' => 'Chicken Skin', 'unit' => 'PCS', 'is_active' => true,
+    ]);
+    $category = WasteCategory::query()->create([
+        'brand_id' => $brand->id, 'code' => 'WASTE', 'name' => 'Waste', 'is_active' => true,
+    ]);
+
+    $component = Livewire::test(PublicWasteReportForm::class, [
+        'brand'  => 'jchicken',
+        'outlet' => 'jchicken-ciledug',
+    ])
+        ->set('data.reporter_name', 'Sari')
+        ->set('data.reporter_phone', '081234567890')
+        ->call('nextStep')
+        ->assertSee('wire:model="data.events.0.lines.0.reason"', false)
+        ->assertDontSee('wire:model="data.events.0.reason"', false)
+        ->call('addLine', 0)
+        ->assertSee('wire:model="data.events.0.lines.1.reason"', false)
+        ->set('data.events.0.category_id', $category->id)
+        ->set('data.events.0.lines.0.item_id', $firstItem->id)
+        ->set('data.events.0.lines.0.quantity', '2')
+        ->set('data.events.0.lines.0.reason', 'Layu')
+        ->set('data.events.0.lines.1.item_id', $secondItem->id)
+        ->set('data.events.0.lines.1.quantity', '1,5')
+        ->set('data.events.0.lines.1.reason', 'Sisa')
+        ->set('photos.0.0', UploadedFile::fake()->image('evidence.jpg'))
+        ->call('submit')
+        ->assertRedirect();
+
+    $lines = WasteReport::query()->sole()->latestVersion->events->sole()->lines;
+
+    expect($lines)->toHaveCount(2)
+        ->and($lines[0]->item_id)->toBe($firstItem->id)
+        ->and($lines[0]->quantity)->toBe('2.0000')
+        ->and($lines[0]->reason)->toBe('Layu')
+        ->and($lines[1]->item_id)->toBe($secondItem->id)
+        ->and($lines[1]->quantity)->toBe('1.5000')
+        ->and($lines[1]->reason)->toBe('Sisa');
+});
+
 it('keeps a photo with its event when an earlier event is removed', function (): void {
     $brand = WasteBrand::query()->create(['name' => 'Luuca', 'code' => 'LUUCA', 'is_active' => true]);
     $outlet = WasteOutlet::query()->create([
