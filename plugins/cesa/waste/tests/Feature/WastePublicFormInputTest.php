@@ -9,6 +9,7 @@ use Cesa\Waste\Models\WasteItem;
 use Cesa\Waste\Models\WasteNotificationDelivery;
 use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
+use Cesa\Waste\Models\WasteReportVersion;
 use Cesa\Waste\Models\WasteSection;
 use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteApprovalService;
@@ -164,6 +165,61 @@ it('stores one reason and one quantity on each item', function (): void {
         ->and($lines[1]->item_id)->toBe($secondItem->id)
         ->and($lines[1]->quantity)->toBe('1.5000')
         ->and($lines[1]->reason)->toBe('Sisa');
+});
+
+it('stores a second kejadian when sequence 0 is already used on the new version', function (): void {
+    $brand = WasteBrand::query()->create(['name' => 'Jchicken', 'code' => 'JCHICKEN', 'is_active' => true]);
+    $outlet = WasteOutlet::query()->create([
+        'brand_id'  => $brand->id,
+        'name'      => 'Ciledug',
+        'code'      => 'CILEDUG',
+        'slug'      => 'jchicken-ciledug',
+        'timezone'  => 'Asia/Jakarta',
+        'is_active' => true,
+    ]);
+    $item = WasteItem::query()->create([
+        'brand_id' => $brand->id, 'code' => 'B001', 'name' => 'Chicken Popcorn', 'unit' => 'GR', 'is_active' => true,
+    ]);
+    $category = WasteCategory::query()->create([
+        'brand_id' => $brand->id, 'code' => 'WASTE', 'name' => 'Waste', 'is_active' => true,
+    ]);
+
+    WasteReportVersion::created(function (WasteReportVersion $version): void {
+        if ($version->events()->exists()) {
+            return;
+        }
+
+        $version->events()->create([
+            'sequence'      => 0,
+            'category_name' => 'Waste',
+            'reason'        => 'Sudah ada',
+        ]);
+    });
+
+    try {
+        Livewire::test(PublicWasteReportForm::class, [
+            'brand'  => 'jchicken',
+            'outlet' => 'jchicken-ciledug',
+        ])
+            ->set('data.reporter_name', 'Sari')
+            ->set('data.reporter_phone', '081234567890')
+            ->call('nextStep')
+            ->set('data.events.0.category_id', $category->id)
+            ->set('data.events.0.lines.0.item_id', $item->id)
+            ->set('data.events.0.lines.0.quantity', '2')
+            ->set('data.events.0.lines.0.reason', 'Layu')
+            ->set('photos.0.0', UploadedFile::fake()->image('evidence.jpg'))
+            ->call('submit')
+            ->assertRedirect();
+
+        $events = WasteReport::query()->sole()->latestVersion->events->sortBy('sequence')->values();
+
+        expect($events)->toHaveCount(2)
+            ->and($events->pluck('sequence')->all())->toBe([0, 1])
+            ->and($events[1]->lines->sole()->reason)->toBe('Layu');
+    } finally {
+        WasteReportVersion::flushEventListeners();
+    }
 });
 
 it('keeps a photo with its event when an earlier event is removed', function (): void {

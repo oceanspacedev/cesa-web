@@ -65,6 +65,7 @@ it('records Jchicken September items, grouped lines, sections, and the corrected
         ->and($report->outlet_id)->toBe($outlet->id)
         ->and($report->event_date->format('Y-m-d'))->toBe('2026-09-01')
         ->and($events)->toHaveCount(3)
+        ->and($events->pluck('sequence')->all())->toBe([0, 1, 2])
         ->and($events[0]->section)->toBe('BAR')
         ->and($events[0]->lines->sole()->quantity)->toBe('58.0000')
         ->and($events[1]->section)->toBe('ASSEMBLY')

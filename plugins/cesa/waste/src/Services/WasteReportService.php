@@ -401,6 +401,7 @@ class WasteReportService
             $usedSourceEventIds = [];
             $submittedEvents = array_values($data['events'] ?? []);
             $eventData = $this->validateEventData($brand, $submittedEvents);
+            $nextSequence = ((int) ($version->events()->max('sequence') ?? -1)) + 1;
 
             foreach ($eventData as $sequence => $event) {
                 $sourceEventId = $submittedEvents[$sequence]['source_event_id'] ?? null;
@@ -427,6 +428,7 @@ class WasteReportService
                     $usedSourceEventIds[$sourceEventId] = true;
                 }
 
+                $event['event']['sequence'] = $nextSequence++;
                 $eventModel = $version->events()->create($event['event']);
 
                 foreach ($event['lines'] as $line) {
