@@ -44,9 +44,6 @@
                         @if (count($events) > 1)
                             <h3 class="text-sm font-medium text-gray-900">{{ __('waste::waste.event_title', ['number' => $event['sequence']]) }}</h3>
                         @endif
-                        <x-waste::public-field :label="__('waste::waste.fields.reason')">
-                            <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $event['reason'] }}</div>
-                        </x-waste::public-field>
                         @if (filled($event['category']))
                             <x-waste::public-field :label="__('waste::waste.fields.category')">
                                 <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $event['category'] }}</div>
@@ -67,16 +64,19 @@
                                 <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $event['pip_quantity'] }} {{ $event['pip_unit'] }}</div>
                             </x-waste::public-field>
                         @endif
-                        <div class="space-y-4 border-t border-gray-200 pt-6">
-                            <h3 class="text-sm font-medium text-gray-900">{{ __('waste::waste.items_photos') }}</h3>
                         @foreach ($event['lines'] as $line)
-                            <div wire:key="progress-line-{{ $event['sequence'] }}-{{ $loop->index }}" style="display: grid; grid-template-columns: minmax(0, 1fr) 8.5rem; gap: 1.5rem; align-items: start;">
+                            <div wire:key="progress-line-{{ $event['sequence'] }}-{{ $loop->index }}" style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr); gap: 1.5rem; align-items: start;">
                                 <x-waste::public-field :label="__('waste::waste.choose_item')">
                                     <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $line['item'] }}</div>
                                 </x-waste::public-field>
                                 <x-waste::public-field :label="__('waste::waste.fields.quantity')">
                                     <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $line['quantity'] }} {{ $line['unit'] }}</div>
                                 </x-waste::public-field>
+                                @if ($loop->first)
+                                    <x-waste::public-field :label="__('waste::waste.fields.reason')">
+                                        <div class="fi-input w-full px-3 py-2 text-sm text-gray-950">{{ $event['reason'] }}</div>
+                                    </x-waste::public-field>
+                                @endif
                             </div>
                         @endforeach
                         @if ($event['evidence'])
@@ -91,7 +91,6 @@
                                 </div>
                             </div>
                         @endif
-                        </div>
                     </div>
                 @endforeach
             </div>

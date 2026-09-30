@@ -14,14 +14,13 @@ return [
     'back'                    => 'Back',
     'steps'                   => [
         'start'  => 'Reporter',
-        'report' => 'Incident',
+        'report' => 'Items & photos',
     ],
-    'items_photos'            => 'Items & photos',
     'step_hints' => [
         'start'  => 'Enter the event date and your details.',
-        'report' => 'Enter one reason for this incident, then the items, quantities, section, category, and photos.',
-        'luuca'  => 'Enter one reason for this incident, then the items, quantities, category, and photos.',
-        'momoyo' => 'Enter the category for this incident, then the items, quantities, a PIP reference when applicable, and photos.',
+        'report' => 'Enter the item, quantity, and reason on one row, then the section, category, and photos.',
+        'luuca'  => 'Enter the item, quantity, and reason on one row, then the category and photos.',
+        'momoyo' => 'Enter the item, quantity, category, and PIP reference when applicable, then take a photo.',
     ],
     'entry'                   => [
         'title'              => 'Choose an outlet to start a report',

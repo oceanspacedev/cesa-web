@@ -368,12 +368,12 @@ it('follows the public report form on the admin create form', function (): void 
     $event = wasteFormChildren($steps[1])[0];
     $eventChildren = wasteFormChildren($event);
     $eventFields = collect($eventChildren)->map->getName()->all();
-    $lineFields = collect(wasteFormChildren($eventChildren[array_key_last($eventChildren)]))->map->getName()->all();
+    $lineFields = collect(wasteFormChildren($eventChildren[1]))->map->getName()->all();
 
     expect($steps[0]->getLabel())->toBe('Data pelapor')
-        ->and($steps[1]->getLabel())->toBe('Kejadian')
+        ->and($steps[1]->getLabel())->toBe('Barang & foto')
         ->and($reporter)->toBe(['brand_id', 'outlet_id', 'event_date', 'reporter_name', 'reporter_phone', 'reporter_email'])
-        ->and($eventFields)->toBe(['id', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity', 'lines'])
+        ->and($eventFields)->toBe(['id', 'lines', 'reason', 'section', 'category_id', 'pip_item_id', 'pip_quantity'])
         ->and($lineFields)->toBe(['id', 'item_id', 'quantity', 'unit']);
 });
 

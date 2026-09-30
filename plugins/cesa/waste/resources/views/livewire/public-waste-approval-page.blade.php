@@ -71,7 +71,6 @@
                                 <span class="break-words text-sm text-gray-600">{{ $event['category'] }}</span>
                             </div>
                             <p class="mt-2 break-words text-sm text-gray-600">{{ $event['reason'] }}</p>
-                            <h4 class="mt-4 text-sm font-medium text-gray-900">{{ __('waste::waste.items_photos') }}</h4>
                             <ul class="mt-3 divide-y divide-gray-200">
                                 @foreach ($event['lines'] as $line)
                                     <li wire:key="approval-line-{{ $event['sequence'] }}-{{ $loop->index }}" class="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-2 text-sm">

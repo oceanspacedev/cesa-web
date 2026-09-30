@@ -55,14 +55,12 @@
                                         </div>
                                     @endif
 
-                                    @include('waste::livewire.partials.event-details', ['eventIndex' => $eventIndex, 'event' => $event])
-
-                                    <div class="space-y-4 border-t border-gray-200 pt-6">
-                                        <h3 class="text-sm font-medium text-gray-900">{{ __('waste::waste.items_photos') }}</h3>
+                                    <div class="space-y-4">
                                         @foreach (($event['lines'] ?? []) as $lineIndex => $line)
                                             @php
                                                 $lineItemModel = 'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id';
                                                 $lineUnitModel = 'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.unit';
+                                                $showsReason = $lineIndex === 0 && strtoupper((string) ($brandData['code'] ?? '')) !== 'MOMOYO';
                                             @endphp
                                             <div
                                                 wire:key="line-{{ $this->structureVersion }}-{{ $eventIndex }}-{{ $lineIndex }}"
@@ -70,36 +68,44 @@
                                                 x-on:waste-item-selected="if ($event.detail.model === @js($lineItemModel)) selectItem($event.detail.id)"
                                                 class="space-y-4 pf-card p-4"
                                             >
-                                                <div class="flex items-center justify-between gap-3">
-                                                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('waste::waste.line_title', ['number' => $lineIndex + 1]) }}</span>
-                                                    @if (count($event['lines']) > 1)
+                                                @if (count($event['lines']) > 1)
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('waste::waste.line_title', ['number' => $lineIndex + 1]) }}</span>
                                                         <button type="button" wire:click="removeLine({{ $eventIndex }}, {{ $lineIndex }})" class="text-sm font-medium text-red-600 hover:text-red-700 hover:underline">
                                                             {{ __('waste::waste.remove') }}
                                                         </button>
+                                                    </div>
+                                                @endif
+
+                                                <div @class(['grid gap-4', 'grid-cols-3' => $showsReason, 'grid-cols-2' => ! $showsReason])>
+                                                    <x-waste::public-select
+                                                        :label="__('waste::waste.choose_item')"
+                                                        :options="$items"
+                                                        :model="'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id'"
+                                                        :value="$line['item_id'] ?? ''"
+                                                        :required="true"
+                                                        :placeholder="__('waste::waste.choose_item')"
+                                                        :error="$errors->first('data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id')"
+                                                    />
+
+                                                    <x-waste::public-field :label="__('waste::waste.fields.quantity')" :required="true" :error="$errors->first('data.events.'.$eventIndex.'.lines.'.$lineIndex.'.quantity') ?: $errors->first($lineUnitModel)">
+                                                        <div class="flex w-full items-center">
+                                                            <input type="text" inputmode="decimal" wire:model="data.events.{{ $eventIndex }}.lines.{{ $lineIndex }}.quantity" class="fi-input min-w-0 flex-1" placeholder="{{ __('waste::waste.placeholders.quantity') }}" required>
+                                                            <span x-show="availableUnits.length <= 1" class="shrink-0 pe-2 text-xs font-medium text-gray-500" data-waste-quantity-unit="{{ $line['unit'] ?? ($this->itemUnits[$line['item_id']] ?? '') }}" x-text="selectedUnit">{{ $line['unit'] ?? ($this->itemUnits[$line['item_id']] ?? '') }}</span>
+                                                            <select x-show="availableUnits.length > 1" x-model="selectedUnit" x-on:change="selectUnit($event.target.value)" x-bind:disabled="availableUnits.length <= 1" aria-label="{{ __('waste::waste.fields.unit') }}" class="shrink-0 border-0 bg-transparent pe-2 text-xs font-medium text-gray-700 focus:ring-0">
+                                                                <template x-for="unit in availableUnits" :key="unit">
+                                                                    <option :value="unit" x-text="unit"></option>
+                                                                </template>
+                                                            </select>
+                                                        </div>
+                                                    </x-waste::public-field>
+
+                                                    @if ($showsReason)
+                                                        <x-waste::public-field :label="__('waste::waste.fields.reason')" :required="true" :error="$errors->first('data.events.'.$eventIndex.'.reason')">
+                                                            <input type="text" wire:model="data.events.{{ $eventIndex }}.reason" class="fi-input" placeholder="{{ __('waste::waste.placeholders.reason') }}" required>
+                                                        </x-waste::public-field>
                                                     @endif
                                                 </div>
-
-                                                <x-waste::public-select
-                                                    :label="__('waste::waste.choose_item')"
-                                                    :options="$items"
-                                                    :model="'data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id'"
-                                                    :value="$line['item_id'] ?? ''"
-                                                    :required="true"
-                                                    :placeholder="__('waste::waste.choose_item')"
-                                                    :error="$errors->first('data.events.'.$eventIndex.'.lines.'.$lineIndex.'.item_id')"
-                                                />
-
-                                                <x-waste::public-field :label="__('waste::waste.fields.quantity')" :required="true" :error="$errors->first('data.events.'.$eventIndex.'.lines.'.$lineIndex.'.quantity') ?: $errors->first($lineUnitModel)">
-                                                    <div class="flex w-full items-center">
-                                                        <input type="text" inputmode="decimal" wire:model="data.events.{{ $eventIndex }}.lines.{{ $lineIndex }}.quantity" class="fi-input min-w-0 flex-1" placeholder="{{ __('waste::waste.placeholders.quantity') }}" required>
-                                                        <span x-show="availableUnits.length <= 1" class="shrink-0 pe-2 text-xs font-medium text-gray-500" data-waste-quantity-unit="{{ $line['unit'] ?? ($this->itemUnits[$line['item_id']] ?? '') }}" x-text="selectedUnit">{{ $line['unit'] ?? ($this->itemUnits[$line['item_id']] ?? '') }}</span>
-                                                        <select x-show="availableUnits.length > 1" x-model="selectedUnit" x-on:change="selectUnit($event.target.value)" x-bind:disabled="availableUnits.length <= 1" aria-label="{{ __('waste::waste.fields.unit') }}" class="shrink-0 border-0 bg-transparent pe-2 text-xs font-medium text-gray-700 focus:ring-0">
-                                                            <template x-for="unit in availableUnits" :key="unit">
-                                                                <option :value="unit" x-text="unit"></option>
-                                                            </template>
-                                                        </select>
-                                                    </div>
-                                                </x-waste::public-field>
 
                                                 <p x-show="availableUnits.length > 1" x-cloak class="text-xs text-gray-600">{{ __('waste::waste.alternate_unit_hint') }}</p>
                                             </div>
@@ -108,6 +114,9 @@
                                         <button type="button" wire:click="addLine({{ $eventIndex }})" class="w-full rounded-lg border border-dashed border-gray-300 bg-white px-4 py-3 text-sm font-medium text-primary-600 hover:border-primary-300 hover:bg-primary-50">
                                             + {{ __('waste::waste.add_line') }}
                                         </button>
+                                    </div>
+
+                                    @include('waste::livewire.partials.event-details', ['eventIndex' => $eventIndex, 'event' => $event])
 
                                     @php
                                         $storedPhotos = $photos[$eventIndex] ?? [];
@@ -236,7 +245,6 @@
                                         @if ($errors->first('photos.'.$eventIndex))
                                             <p class="text-sm text-red-600">{{ $errors->first('photos.'.$eventIndex) }}</p>
                                         @endif
-                                    </div>
                                     </div>
                                 </div>
                             @endforeach
