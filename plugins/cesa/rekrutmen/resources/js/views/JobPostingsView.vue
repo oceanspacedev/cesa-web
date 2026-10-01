@@ -327,7 +327,16 @@
         <!-- Card Footer: Metrics & Action Buttons -->
         <div class="pt-3 border-t border-outline-gray-1 flex items-center justify-between text-[11px] text-ink-gray-5">
           <div class="flex items-center gap-2">
-            <span class="font-medium text-ink-gray-8 tabular-nums">{{ job.applications_count || 0 }} Pelamar</span>
+            <button
+              v-if="canVisitSection('jobApplications')"
+              type="button"
+              @click.stop="goToApplications(job)"
+              class="font-medium text-ink-gray-8 hover:text-blue-600 transition-colors tabular-nums cursor-pointer flex items-center gap-1 hover:underline"
+              title="Lihat Data Pelamar untuk lowongan ini"
+            >
+              <span>{{ job.applications_count || 0 }} Pelamar</span>
+            </button>
+            <span v-else class="font-medium text-ink-gray-8 tabular-nums">{{ job.applications_count || 0 }} Pelamar</span>
             <span class="text-ink-gray-3">&bull;</span>
             <span class="tabular-nums">{{ job.needed_count || 1 }} Kuota</span>
           </div>
@@ -458,7 +467,16 @@
             </div>
             <div>
               <span class="text-zinc-400 block text-[11px] mb-0.5">Total Pelamar</span>
-              <span class="font-semibold text-zinc-900 tabular-nums">{{ activeJob.applications_count || 0 }} Kandidat</span>
+              <button
+                v-if="canVisitSection('jobApplications')"
+                type="button"
+                @click="goToApplications(activeJob)"
+                class="font-semibold text-blue-600 hover:text-blue-700 hover:underline tabular-nums cursor-pointer flex items-center gap-1 text-left"
+                title="Lihat Data Pelamar untuk lowongan ini"
+              >
+                <span>{{ activeJob.applications_count || 0 }} Kandidat</span>
+              </button>
+              <span v-else class="font-semibold text-zinc-900 tabular-nums">{{ activeJob.applications_count || 0 }} Kandidat</span>
             </div>
             <div>
               <span class="text-zinc-400 block text-[11px] mb-0.5">Batas Lamaran</span>

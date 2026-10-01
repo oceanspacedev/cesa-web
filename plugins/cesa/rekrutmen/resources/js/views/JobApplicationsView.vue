@@ -2,77 +2,90 @@
   <div class="space-y-4 pb-12">
     <!-- Top Header: Title, Live Metrics & Primary Actions (Elevated "Asoy" Card) -->
     <div class="p-4 bg-surface-white rounded-lg border border-outline-gray-2 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3.5">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 min-w-0">
         <div class="w-10 h-10 rounded-lg bg-surface-gray-2 border border-outline-gray-2 flex items-center justify-center shrink-0 text-ink-gray-8 shadow-2xs">
           <Users class="w-5 h-5 stroke-[1.75]" />
         </div>
-        <div>
-          <div class="flex items-center gap-2.5">
-            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight">
+
+        <div class="min-w-0">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h1 class="text-base sm:text-lg font-bold text-ink-gray-9 tracking-tight truncate">
               {{ activeJobTitle ? `Pelamar: ${activeJobTitle}` : 'Data Pelamar Kerja' }}
             </h1>
-            <FBadge theme="blue" variant="subtle" size="sm" class="tabular-nums font-semibold">
+            <FBadge theme="blue" variant="subtle" size="sm" class="tabular-nums font-semibold shrink-0">
               <template #prefix>
                 <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></span>
               </template>
               {{ applications.length }} Total Pelamar
             </FBadge>
           </div>
-          <p class="text-xs text-ink-gray-5 mt-0.5">
+          <p class="text-xs text-ink-gray-5 mt-0.5 truncate">
             Pantau seluruh data kandidat pelamar, kualifikasi kecocokan, dan alur tahapan seleksi rekrutmen
           </p>
         </div>
       </div>
 
       <!-- Controls & View Switcher -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <!-- Active Job Filter Tag -->
-        <button
-          v-if="activeJobId"
-          type="button"
-          @click="resetJobFilter"
-          class="h-8 px-2.5 bg-surface-gray-2 hover:bg-surface-gray-3 text-ink-gray-8 rounded-md text-xs font-medium border border-outline-gray-2 flex items-center gap-1.5 transition-colors cursor-pointer"
-          title="Tampilkan Semua Pelamar"
-        >
-          <span>Filter: {{ activeJobTitle }}</span>
-          <span class="text-ink-gray-5 font-bold">&times;</span>
-        </button>
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Action Dropdown (Cocokkan CV & Analisis AI) -->
+        <div v-if="hasPermission('jobApplications', 'update')" class="relative shrink-0" ref="actionMenuRef">
+          <FButton
+            :theme="selectedAppIds.length ? 'blue' : 'gray'"
+            :variant="selectedAppIds.length ? 'solid' : 'outline'"
+            size="sm"
+            class="!h-8"
+            @click="actionMenuOpen = !actionMenuOpen"
+          >
+            <span>{{ selectedAppIds.length ? `Aksi (${selectedAppIds.length})` : 'Aksi' }}</span>
+            <template #suffix>
+              <ChevronDown class="w-3.5 h-3.5 ml-1 transition-transform duration-200" :class="{ 'rotate-180': actionMenuOpen }" />
+            </template>
+          </FButton>
 
-        <!-- Sinkronkan Berkas CV Action Button -->
-        <FButton
-          v-if="hasPermission('jobApplications', 'update')"
-          theme="gray"
-          variant="outline"
-          size="sm"
-          :icon-left="FileText"
-          :loading="isSyncingCvs"
-          @click="startSyncCvs"
-          title="Cocokkan berkas CV di folder storage dengan data kandidat pelamar"
-        >
-          Cocokkan CV
-        </FButton>
+          <!-- Dropdown Card -->
+          <div
+            v-if="actionMenuOpen"
+            class="absolute right-0 mt-1.5 w-56 bg-white rounded-lg shadow-lg border border-outline-gray-2 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+          >
+            <button
+              type="button"
+              @click="actionMenuOpen = false; startSyncCvs()"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs text-left text-ink-gray-8 hover:bg-surface-gray-2 hover:text-ink-gray-9 transition-colors cursor-pointer select-none"
+            >
+              <FileText class="w-4 h-4 text-ink-gray-5 shrink-0" />
+              <div>
+                <div class="font-medium text-ink-gray-9">Cocokkan Berkas CV</div>
+                <div class="text-[10px] text-ink-gray-5">Sinkronkan berkas CV di storage</div>
+              </div>
+            </button>
 
-        <!-- Evaluasi Kualifikasi Action Button -->
-        <FButton
-          v-if="hasPermission('jobApplications', 'update')"
-          :theme="selectedAppIds.length ? 'blue' : 'gray'"
-          :variant="selectedAppIds.length ? 'solid' : 'outline'"
-          size="sm"
-          :icon-left="RotateCw"
-          :loading="isScreening"
-          @click="startRescreening"
-          :title="selectedAppIds.length === 1 ? 'Jalankan evaluasi kualifikasi AI khusus untuk 1 pelamar terpilih' : (selectedAppIds.length > 1 ? `Jalankan evaluasi kualifikasi AI khusus untuk ${selectedAppIds.length} pelamar terpilih` : 'Jalankan evaluasi kualifikasi otomatis untuk pelamar')"
-        >
-          {{ selectedAppIds.length ? `Analisis ulang (${selectedAppIds.length})` : 'Analisis yang belum dinilai' }}
-        </FButton>
+            <div class="my-1 border-t border-outline-gray-2"></div>
+
+            <button
+              type="button"
+              @click="actionMenuOpen = false; startRescreening()"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs text-left text-ink-gray-8 hover:bg-surface-gray-2 hover:text-ink-gray-9 transition-colors cursor-pointer select-none"
+            >
+              <RotateCw class="w-4 h-4 text-ink-gray-5 shrink-0" :class="{ 'animate-spin': isScreening }" />
+              <div>
+                <div class="font-medium text-ink-gray-9">
+                  {{ selectedAppIds.length ? `Analisis Ulang (${selectedAppIds.length})` : 'Analisis AI' }}
+                </div>
+                <div class="text-[10px] text-ink-gray-5">
+                  {{ selectedAppIds.length ? 'Evaluasi pelamar terpilih' : 'Evaluasi yang belum dinilai' }}
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
 
         <!-- View Switcher (Daftar / Kanban) -->
-        <div class="inline-flex items-center p-0.5 bg-surface-gray-2 rounded-md border border-outline-gray-2">
+        <div class="inline-flex items-center p-0.5 bg-surface-gray-2 rounded-md border border-outline-gray-2 h-8">
           <button
             type="button"
             @click="viewMode = 'table'"
             :class="[
-              'px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer select-none flex items-center gap-1.5',
+              'px-2.5 h-full rounded text-xs font-medium transition-all cursor-pointer select-none flex items-center gap-1.5',
               viewMode === 'table'
                 ? 'bg-surface-white text-ink-gray-9 shadow-2xs font-semibold'
                 : 'text-ink-gray-6 hover:text-ink-gray-9'
@@ -85,7 +98,7 @@
             type="button"
             @click="viewMode = 'kanban'"
             :class="[
-              'px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer select-none flex items-center gap-1.5',
+              'px-2.5 h-full rounded text-xs font-medium transition-all cursor-pointer select-none flex items-center gap-1.5',
               viewMode === 'kanban'
                 ? 'bg-surface-white text-ink-gray-9 shadow-2xs font-semibold'
                 : 'text-ink-gray-6 hover:text-ink-gray-9'
@@ -530,34 +543,63 @@
               </div>
             </div>
 
-            <!-- Right Side: AI Match Score + Stage Selector + Actions -->
-            <div class="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-outline-gray-1">
-              <!-- AI Match Score -->
-              <div class="shrink-0 space-y-1.5" @click.stop>
-                <FBadge :theme="aiStatusTheme(app)" variant="subtle" size="sm">{{ aiStatusLabel(app) }}</FBadge>
-                <p v-if="aiNeedsReview(app)" class="max-w-56 text-[11px] text-amber-700" :title="app.ai_screening_error">{{ app.ai_screening_error || 'Periksa CV atau coba analisis kembali.' }}</p>
-                <div v-if="hasAiResult(app)">
-                  <button
-                    type="button"
-                    @click="openAnalysisModal(app)"
-                    class="cursor-pointer transition-transform hover:scale-105"
-                    title="Klik untuk melihat hasil analisis kualifikasi"
+            <!-- Right Side: AI Match Score + Stage Selector + Actions (All h-8, perfectly aligned) -->
+            <div class="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-outline-gray-1">
+              <!-- AI Match Score / Action -->
+              <div class="flex items-center shrink-0" @click.stop>
+                <!-- Has AI result -->
+                <button
+                  v-if="hasAiResult(app)"
+                  type="button"
+                  @click="openAnalysisModal(app)"
+                  class="h-8 inline-flex items-center cursor-pointer transition-transform hover:scale-105 shrink-0"
+                  title="Klik untuk melihat hasil analisis kualifikasi"
+                >
+                  <FBadge
+                    :theme="app.ai_match_score >= 75 ? 'green' : (app.ai_match_score >= 50 ? 'orange' : 'gray')"
+                    variant="subtle"
+                    size="sm"
+                    class="font-semibold tabular-nums h-8 inline-flex items-center px-2.5"
                   >
-                    <FBadge
-                      :theme="app.ai_match_score >= 75 ? 'green' : (app.ai_match_score >= 50 ? 'orange' : 'gray')"
-                      variant="subtle"
-                      size="sm"
-                      class="font-semibold tabular-nums"
-                    >
-                      {{ app.ai_match_score }}% &bull; {{ formatAiRecommendation(app.ai_recommendation) }}
-                    </FBadge>
-                  </button>
+                    {{ app.ai_match_score }}% &bull; {{ formatAiRecommendation(app.ai_recommendation) }}
+                  </FBadge>
+                </button>
+
+                <!-- Processing -->
+                <FBadge
+                  v-else-if="isAiInProgress(app)"
+                  theme="blue"
+                  variant="subtle"
+                  size="sm"
+                  class="h-8 inline-flex items-center px-2.5 shrink-0"
+                >
+                  <template #prefix>
+                    <RotateCw class="w-3 h-3 animate-spin mr-1.5" />
+                  </template>
+                  Menganalisis...
+                </FBadge>
+
+                <!-- Needs Review / Error -->
+                <div v-else-if="aiNeedsReview(app)" class="inline-flex items-center gap-1.5 shrink-0">
+                  <FBadge
+                    theme="red"
+                    variant="subtle"
+                    size="sm"
+                    class="h-8 inline-flex items-center px-2.5 cursor-pointer"
+                    :title="app.ai_screening_error || 'Periksa CV atau coba analisis kembali.'"
+                    @click="rescreenSingleCandidate(app)"
+                  >
+                    Perlu Review
+                  </FBadge>
                 </div>
-                <div v-else-if="!isAiInProgress(app) && canAccessRecord('jobApplications', 'update', app)">
+
+                <!-- Not analyzed yet: Action button -->
+                <div v-else-if="canAccessRecord('jobApplications', 'update', app)" class="shrink-0">
                   <FButton
                     theme="gray"
                     variant="outline"
                     size="sm"
+                    class="!h-8"
                     :icon-left="RotateCw"
                     :loading="isScreening"
                     @click="rescreenSingleCandidate(app)"
@@ -566,15 +608,22 @@
                     Analisis CV
                   </FButton>
                 </div>
+
+                <!-- Waiting / No Permission -->
+                <div v-else class="shrink-0">
+                  <FBadge theme="gray" variant="subtle" size="sm" class="h-8 inline-flex items-center px-2.5">
+                    Menunggu
+                  </FBadge>
+                </div>
               </div>
 
-              <!-- Stage Selector Dropdown -->
+              <!-- Stage Selector Dropdown (h-8) -->
               <div v-if="canAccessRecord('jobApplications', 'update', app)" class="relative min-w-[140px] shrink-0" @click.stop>
                 <select
                   :value="app.status === 'rejected' ? 'rejected' : (app.current_stage_id || app.stage?.id || 1)"
                   @change="handleStageChange(app, $event.target.value)"
                   :class="[
-                    'w-full h-8 text-xs font-medium rounded-md pl-2.5 pr-7 border cursor-pointer transition-colors appearance-none shadow-2xs',
+                    'w-full h-8 text-xs font-medium rounded-md pl-2.5 pr-7 border cursor-pointer transition-colors appearance-none shadow-2xs leading-none',
                     app.status === 'rejected'
                       ? 'bg-rose-50 border-rose-300 text-rose-700 font-semibold'
                       : 'bg-surface-white border-outline-gray-2 text-ink-gray-8 hover:border-outline-gray-3 focus:outline-none focus:ring-1 focus:ring-outline-gray-4'
@@ -591,13 +640,14 @@
                 <ChevronDown class="w-3 h-3 text-ink-gray-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
 
-              <!-- Action Buttons -->
+              <!-- Action Buttons (h-8) -->
               <div class="flex items-center gap-1.5 shrink-0" @click.stop>
                 <FButton
                   v-if="canAccessRecord('jobApplications', 'view', app)"
                   theme="gray"
                   variant="outline"
                   size="sm"
+                  class="!h-8"
                   :icon-left="Eye"
                   @click="openDetail(app)"
                   title="Detail Profil Kandidat"
@@ -610,6 +660,7 @@
                   theme="gray"
                   variant="ghost"
                   size="sm"
+                  class="!h-8 !w-8"
                   :icon-left="Send"
                   @click="openSendEmailModal(app)"
                   title="Kirim Notifikasi (Email / WhatsApp)"
@@ -1747,7 +1798,7 @@ import { useRekrutmenStore } from '../stores/rekrutmen';
 import { createPoller } from '../lib/polling';
 import { createRequestKey, escapeHtml } from '../lib/utils';
 import { filterJobApplications } from '../lib/collectionFilters';
-import { canAccessRecord, hasPermission } from '../lib/permissions';
+import { canAccessRecord, hasPermission, canVisitSection } from '../lib/permissions';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -1789,6 +1840,14 @@ const matchFilter = ref('all');
 const searchQuery = ref('');
 const toastMessage = ref(null);
 const toastType = ref('success');
+const actionMenuRef = ref(null);
+const actionMenuOpen = ref(false);
+
+const handleActionMenuClickOutside = (e) => {
+  if (actionMenuRef.value && !actionMenuRef.value.contains(e.target)) {
+    actionMenuOpen.value = false;
+  }
+};
 const selectedApp = ref(null);
 const analysisModalApp = ref(null);
 const dragOverStageId = ref(null);
@@ -1988,6 +2047,7 @@ onMounted(() => {
     heartbeatTimer = setInterval(checkHeartbeat, 25000);
   }
   document.addEventListener('visibilitychange', resumeAiPolling);
+  document.addEventListener('click', handleActionMenuClickOutside);
   resumeAiPolling();
 });
 
@@ -2007,6 +2067,7 @@ onUnmounted(() => {
   isAiViewActive = false;
   aiPoller.stop();
   document.removeEventListener('visibilitychange', resumeAiPolling);
+  document.removeEventListener('click', handleActionMenuClickOutside);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   notificationPoller.stop();
 });
