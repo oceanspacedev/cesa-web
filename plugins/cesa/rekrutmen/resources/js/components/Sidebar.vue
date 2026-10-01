@@ -56,19 +56,6 @@
         <span>Lowongan Kerja</span>
       </router-link>
 
-      <router-link
-        v-if="canVisitSection('jobApplications')"
-        to="/admin/job-applications"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all group"
-        :class="[
-          isActive('/admin/job-applications')
-            ? 'bg-blue-600 text-white font-semibold shadow-sm shadow-blue-600/30'
-            : 'text-slate-400 hover:bg-slate-800/70 hover:text-white'
-        ]"
-      >
-        <Users class="w-4 h-4 shrink-0 transition-transform group-hover:scale-105" />
-        <span>Data Pelamar</span>
-      </router-link>
 
       <router-link
         v-if="canVisitSection('requestManPowers')"
@@ -148,6 +135,9 @@ const props = defineProps({
 const route = useRoute();
 
 const isActive = (path) => {
+  if (path === '/admin/job-postings' && (route.path.startsWith('/admin/job-applications') || route.path.startsWith('/rekrutmen/applications'))) {
+    return true;
+  }
   return route.path.startsWith(path);
 };
 

@@ -19,7 +19,7 @@
         </div>
 
         <!-- Center: Mathematically Centered Navigation Menu Links -->
-        <nav class="hidden md:flex items-center justify-center gap-6 lg:gap-8 text-xs absolute inset-x-0 mx-auto w-fit z-0 pointer-events-none [&>*]:pointer-events-auto">
+        <nav class="flex items-center justify-center gap-3 sm:gap-6 lg:gap-8 text-xs absolute inset-x-0 mx-auto w-fit z-0 pointer-events-none [&>*]:pointer-events-auto">
           <router-link
             v-if="canVisitSection('jobPostings')"
             to="/admin/job-postings"
@@ -33,18 +33,6 @@
             Lowongan Kerja
           </router-link>
 
-          <router-link
-            v-if="canVisitSection('jobApplications')"
-            to="/admin/job-applications"
-            class="py-1 text-xs font-medium transition-colors"
-            :class="[
-              isActive('/admin/job-applications')
-                ? 'text-[#0c2340] font-semibold'
-                : 'text-zinc-500 hover:text-zinc-900'
-            ]"
-          >
-            Data Pelamar
-          </router-link>
 
           <router-link
             v-if="canVisitSection('requestManPowers')"
@@ -186,14 +174,7 @@
             </div>
           </div>
 
-          <!-- Mobile Hamburger Toggle -->
-          <button
-            @click="mobileMenuOpen = !mobileMenuOpen"
-            class="md:hidden p-1.5 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
-          >
-            <Menu v-if="!mobileMenuOpen" class="w-4 h-4" />
-            <X v-else class="w-4 h-4" />
-          </button>
+
         </div>
 
       </div>
@@ -246,15 +227,6 @@
               Lowongan Kerja
             </router-link>
 
-            <router-link
-              v-if="canVisitSection('jobApplications')"
-              to="/admin/job-applications"
-              @click="mobileMenuOpen = false"
-              class="menu-item block px-3 py-2 rounded-md text-xs transition-colors"
-              :class="isActive('/admin/job-applications') ? 'text-zinc-950 bg-zinc-100 font-semibold' : 'font-medium text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'"
-            >
-              Data Pelamar
-            </router-link>
 
             <router-link
               v-if="canVisitSection('requestManPowers')"
@@ -413,6 +385,9 @@ const loadPlugins = async () => {
 };
 
 const isActive = (path) => {
+  if (path === '/admin/job-postings' && (route.path.startsWith('/admin/job-applications') || route.path.startsWith('/rekrutmen/applications'))) {
+    return true;
+  }
   return route.path.startsWith(path);
 };
 

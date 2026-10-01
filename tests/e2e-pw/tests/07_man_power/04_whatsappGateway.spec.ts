@@ -49,11 +49,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('restricted SPA navigation opens the first permitted page and hides inaccessible links', async ({ page }) => {
-  currentPermissions = { jobApplications: { viewAny: true, update: false } };
+  currentPermissions = { jobPostings: { viewAny: true, update: false } };
   await page.goto('http://whatsapp-ui.test/rekrutmen');
-  await expect(page).toHaveURL(/\/admin\/job-applications$/);
-  await expect(page.getByRole('link', { name: 'Data Pelamar', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Lowongan Kerja', exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/admin\/job-postings$/);
+  await expect(page.getByRole('link', { name: 'Lowongan Kerja', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Permintaan FPTK', exact: true })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Master Data', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Aplikasi CESA', exact: true })).toHaveCount(0);
 });
