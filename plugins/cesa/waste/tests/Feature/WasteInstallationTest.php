@@ -54,3 +54,9 @@ it('registers the item type snapshot migration for installed sites', function ()
         fn (string $path): bool => str_contains($path, '2026_09_24_081340_add_item_type_to_waste_event_lines_table.php'),
     ))->toBeTrue();
 });
+
+it('registers the line reason migration for installed sites', function (): void {
+    expect(collect(app('migrator')->paths())->contains(
+        fn (string $path): bool => str_contains($path, '2026_09_30_130000_add_reason_to_waste_event_lines_table.php'),
+    ))->toBeTrue();
+});

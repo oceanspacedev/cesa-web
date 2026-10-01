@@ -22,6 +22,7 @@ class WastePluginSmokeTest extends WasteTestCase
         $this->assertSame('waste', app(WastePlugin::class)->getId());
         $this->assertContains('web', $package->routeFileNames);
         $this->assertContains('2026_09_22_000000_create_waste_tables', $package->migrationFileNames);
+        $this->assertContains('2026_09_30_130000_add_reason_to_waste_event_lines_table', $package->migrationFileNames);
         $this->assertTrue(Route::has('waste.public.form'));
         $this->assertTrue(Route::has('waste.public.submitted'));
         $this->assertTrue(Route::has('waste.public.progress'));
