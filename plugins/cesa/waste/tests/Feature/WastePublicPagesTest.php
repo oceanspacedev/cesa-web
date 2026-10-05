@@ -15,6 +15,8 @@ use Cesa\Waste\Models\WasteWorkflow;
 use Cesa\Waste\Services\WasteApprovalService;
 use Cesa\Waste\Services\WasteReportService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -60,6 +62,37 @@ it('approves a report immediately when no external approval workflow exists', fu
         ->assertDontSeeText($result['report']->uid)
         ->assertSeeText(__('waste::waste.status.approved'))
         ->assertDontSeeText(__('waste::waste.status.pending'));
+});
+
+it('stores Livewire camera evidence after the temporary file is moved onto the same disk', function (): void {
+    [$brand, $outlet, $item, $category] = wastePublicPagesSetup(withWorkflow: false);
+
+    config(['waste.attachments.disk' => 'tmp-for-tests']);
+    Storage::fake('tmp-for-tests');
+
+    $filename = 'd4Lq20iLxbmjm8yzP6ssuFNYJlHUFECE744GZhYY.jpg';
+    $contents = file_get_contents(UploadedFile::fake()->image('bukti.jpg')->getRealPath());
+    expect($contents)->not->toBeFalse();
+    Storage::disk('tmp-for-tests')->put('livewire-tmp/'.$filename, $contents);
+
+    $result = app(WasteReportService::class)->submit($brand, $outlet, [
+        'event_date'     => '2026-09-22',
+        'reporter_name'  => 'Field Reporter',
+        'reporter_phone' => '089999887766',
+        'events'         => [[
+            'category_id' => $category->id,
+            'reason'      => 'Spilled during preparation',
+            'lines'       => [['item_id' => $item->id, 'quantity' => '1.25']],
+        ]],
+    ], [0 => [TemporaryUploadedFile::createFromLivewire($filename)]]);
+
+    $evidence = $result['report']->fresh(['latestVersion.events.evidences'])
+        ->latestVersion->events->sole()->evidences->sole();
+
+    expect($evidence->original_name)->not->toBe('')
+        ->and($evidence->size)->toBeGreaterThan(0)
+        ->and($evidence->sha256)->toHaveLength(64)
+        ->and(Storage::disk('tmp-for-tests')->exists($evidence->path))->toBeTrue();
 });
 
 it('shows Momoyo reference and NON PIP quantities on the public progress page', function (): void {

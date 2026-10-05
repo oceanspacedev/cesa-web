@@ -20,6 +20,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use League\Flysystem\UnableToRetrieveMetadata;
 
 class WasteReportService
 {
@@ -444,7 +445,7 @@ class WasteReportService
                     }
                 } else {
                     foreach ($eventPhotos as $photo) {
-                        $this->storeEvidence($eventModel, $photo);
+                        $this->storeEvidence($eventModel, $photo, $sequence);
                     }
                 }
 
@@ -718,22 +719,59 @@ class WasteReportService
         return $integer.'.'.$fraction;
     }
 
-    protected function storeEvidence(WasteEvent $event, UploadedFile $photo): WasteEvidence
+    protected function storeEvidence(WasteEvent $event, UploadedFile $photo, int $sequence): WasteEvidence
     {
         validator(['photo' => $photo], [
             'photo' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp,image/gif', 'max:'.config('waste.attachments.max_size', 5120)],
         ])->validate();
+
+        $metadata = $this->evidenceMetadata($photo, $sequence);
 
         $disk = (string) config('waste.attachments.disk', 'local');
         $path = $photo->store((string) config('waste.attachments.directory', 'waste/evidence'), $disk);
 
         return $event->evidences()->create([
             'path'          => $path,
-            'original_name' => $photo->getClientOriginalName(),
-            'mime_type'     => $photo->getMimeType(),
-            'size'          => $photo->getSize(),
-            'sha256'        => hash_file('sha256', $photo->getRealPath()),
+            'original_name' => $metadata['original_name'],
+            'mime_type'     => $metadata['mime_type'],
+            'size'          => $metadata['size'],
+            'sha256'        => $metadata['sha256'],
         ]);
+    }
+
+    /**
+     * @return array{original_name: string, mime_type: string, size: int, sha256: string}
+     */
+    protected function evidenceMetadata(UploadedFile $photo, int $sequence): array
+    {
+        $missingPhotoMessage = [
+            "photos.{$sequence}" => 'Foto tidak ditemukan. Ambil ulang foto kamera lalu kirim lagi.',
+        ];
+
+        try {
+            $realPath = $photo->getRealPath();
+            $size = $photo->getSize();
+            $mimeType = $photo->getMimeType();
+            $originalName = $photo->getClientOriginalName();
+        } catch (UnableToRetrieveMetadata) {
+            throw ValidationException::withMessages($missingPhotoMessage);
+        }
+
+        if (! is_string($realPath) || $realPath === '' || ! is_file($realPath) || $size < 1) {
+            throw ValidationException::withMessages($missingPhotoMessage);
+        }
+
+        $sha256 = hash_file('sha256', $realPath);
+        if ($sha256 === false) {
+            throw ValidationException::withMessages($missingPhotoMessage);
+        }
+
+        return [
+            'original_name' => $originalName,
+            'mime_type'     => $mimeType ?: 'application/octet-stream',
+            'size'          => $size,
+            'sha256'        => $sha256,
+        ];
     }
 
     public function reportForProgressToken(string $token): WasteReport
