@@ -169,6 +169,7 @@ class ExitClearanceSubmissionTest extends ExitClearanceTestCase
 
     public function test_exit_clearance_waghub_job_uses_correct_payload(): void
     {
+        config()->set('wag.engine_url', 'https://waghub.mekayastudio.com/api/v2');
 
         Http::fake([
             'https://waghub.mekayastudio.com/api/v1/messages' => Http::response(['status' => 'queued'], 200),
@@ -177,7 +178,7 @@ class ExitClearanceSubmissionTest extends ExitClearanceTestCase
         $job = new SendWhatsAppNotification(
             '+628123456789',
             'Test message',
-            'https://waghub.mekayastudio.com',
+            'https://waghub.mekayastudio.com/api/v2',
             'test-token',
             10,
         );

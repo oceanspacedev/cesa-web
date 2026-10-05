@@ -2,7 +2,6 @@
 
 namespace Cesa\FormTransfer\Services;
 
-use App\Services\WhatsApp\WagHubClient;
 use Cesa\FormTransfer\Enums\TransferRequestApprovalStatus;
 use Cesa\FormTransfer\Enums\TransferRequestRealizationStatus;
 use Cesa\FormTransfer\Enums\TransferRequestSubmissionStatus;
@@ -224,7 +223,15 @@ HTML;
 
     public function notifyApprover(TransferRequest $request, array $approval, array $approvals): void
     {
+        [$approval, $approvals] = $this->hydrateApproverContactFromWorkflow($request, $approval, $approvals);
+
         if (! ($approval['email'] ?? null)) {
+            Log::warning('FormTransfer approver notification skipped due to missing email.', [
+                'transfer_request_id' => $request->getKey(),
+                'uid'                 => $request->uid,
+                'approver_name'       => $approval['name'] ?? null,
+            ]);
+
             return;
         }
 
@@ -242,6 +249,14 @@ HTML;
 
             Notification::route('mail', $approval['email'])
                 ->notify($notification);
+        }
+
+        if (! filled($approval['phone'] ?? null)) {
+            Log::warning('FormTransfer WhatsApp notification skipped due to missing phone.', [
+                'transfer_request_id' => $request->getKey(),
+                'uid'                 => $request->uid,
+                'approver_email'      => $approval['email'] ?? null,
+            ]);
         }
 
         $this->sendWhatsApp(
@@ -1006,6 +1021,52 @@ HTML;
         return array_map(static fn (string $line): string => rtrim($line, "\r"), $lines);
     }
 
+    /**
+     * @param  array<string, mixed>  $approval
+     * @param  array<int, array<string, mixed>>  $approvals
+     * @return array{0: array<string, mixed>, 1: array<int, array<string, mixed>>}
+     */
+    protected function hydrateApproverContactFromWorkflow(TransferRequest $request, array $approval, array $approvals): array
+    {
+        if (filled($approval['phone'] ?? null) && filled($approval['email'] ?? null)) {
+            return [$approval, $approvals];
+        }
+
+        $request->loadMissing('approvalWorkflow');
+        $matchedStep = collect($request->approvalWorkflow?->steps ?? [])
+            ->first(function (array $step) use ($approval): bool {
+                $email = strtolower(trim((string) ($approval['email'] ?? '')));
+                $name = strtolower(trim((string) ($approval['name'] ?? '')));
+                $stepEmail = strtolower(trim((string) Arr::get($step, 'default_email', '')));
+                $stepName = strtolower(trim((string) Arr::get($step, 'default_name', '')));
+
+                return ($email !== '' && $email === $stepEmail)
+                    || ($name !== '' && $name === $stepName);
+            });
+
+        if (! is_array($matchedStep)) {
+            return [$approval, $approvals];
+        }
+
+        $approval['phone'] = $approval['phone'] ?: Arr::get($matchedStep, 'default_phone');
+        $approval['email'] = $approval['email'] ?: Arr::get($matchedStep, 'default_email');
+
+        foreach ($approvals as $index => $row) {
+            if (($row['task_id'] ?? null) !== ($approval['task_id'] ?? null)) {
+                continue;
+            }
+
+            $approvals[$index]['phone'] = $approval['phone'] ?? ($row['phone'] ?? null);
+            $approvals[$index]['email'] = $approval['email'] ?? ($row['email'] ?? null);
+        }
+
+        if ($request->exists) {
+            $request->forceFill(['approvals' => $approvals])->saveQuietly();
+        }
+
+        return [$approval, $approvals];
+    }
+
     protected function sendWhatsApp(?string $phone, ?string $message): void
     {
         if (! $phone || ! $message) {
@@ -1018,13 +1079,8 @@ HTML;
             return;
         }
 
-        $endpoint = Arr::get($config, 'endpoint');
-        $apiKey = Arr::get($config, 'api_key');
-        $hub = app(WagHubClient::class);
-        if ($hub->engine()->isV2() && $hub->engine()->isConfigured()) {
-            $endpoint = $hub->engine()->baseUrl();
-            $apiKey = 'shared-integration';
-        }
+        $endpoint = Arr::get($config, 'endpoint') ?: config('wag.url');
+        $apiKey = Arr::get($config, 'api_key') ?: config('wag.token');
 
         $missing = [];
 

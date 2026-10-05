@@ -2,13 +2,20 @@
 
 namespace Cesa\Rekrutmen\Services;
 
+use App\Services\WhatsApp\WagHubClient;
 use App\Services\WhatsApp\WagHubEngineClient;
 
 class WhatsAppEngineClient extends WagHubEngineClient
 {
     public function baseUrl(): string
     {
-        return $this->storedIntegration()?->url ? rtrim($this->storedIntegration()->url, '/').'/api/v2' : rtrim(trim((string) config('rekrutmen.notifications.whatsapp.engine_url')), '/');
+        $storedUrl = $this->storedIntegration()?->url;
+
+        if (filled($storedUrl)) {
+            return WagHubClient::normalizeHubOrigin((string) $storedUrl).'/api/v2';
+        }
+
+        return rtrim(trim((string) config('rekrutmen.notifications.whatsapp.engine_url')), '/');
     }
 
     protected function token(): string

@@ -7,6 +7,7 @@ use Cesa\ExitClearance\Services\WhatsAppThrottleService as ExitClearanceWhatsApp
 use Cesa\FormTransfer\Filament\Clusters\Configurations\Resources\FormTransferResource;
 use Cesa\FormTransfer\Jobs\SendWhatsAppNotification;
 use Cesa\FormTransfer\Models\FormTransfer;
+use Cesa\FormTransfer\Models\TransferApprovalWorkflow;
 use Cesa\FormTransfer\Models\TransferRequest;
 use Cesa\FormTransfer\Notifications\ApprovalRequestNotification;
 use Cesa\FormTransfer\Notifications\RequestStatusNotification;
@@ -197,6 +198,55 @@ class NotificationDefaultsTest extends FormTransferTestCase
         Queue::assertPushed(SendWhatsAppNotification::class);
     }
 
+    public function test_notify_approver_fills_missing_phone_from_workflow(): void
+    {
+        Queue::fake();
+        Route::get('/test/form-transfer/approval/{task}', fn (): string => 'ok')
+            ->name('form-transfer.public.approval');
+        Route::get('/test/form-transfer/progress/{response}', fn (): string => 'ok')
+            ->name('form-transfer.public.progress');
+        app('router')->getRoutes()->refreshNameLookups();
+        app('router')->getRoutes()->refreshActionLookups();
+
+        config()->set('form-transfer.notifications.mail.enabled', false);
+        config()->set('form-transfer.notifications.whatsapp.enabled', true);
+        config()->set('form-transfer.notifications.whatsapp.endpoint', 'https://waghub.example.com');
+        config()->set('form-transfer.notifications.whatsapp.api_key', 'test-api-key');
+        config()->set('form-transfer.notifications.whatsapp.throttle.enabled', false);
+
+        $formTransfer = FormTransfer::factory()->create();
+        $workflow = TransferApprovalWorkflow::factory()->create([
+            'form_transfer_id' => $formTransfer->getKey(),
+            'steps'            => [[
+                'label'         => 'Pak William',
+                'default_name'  => 'William Surya Putra',
+                'default_email' => 'william@example.com',
+                'default_phone' => '081911430434',
+                'default_title' => 'Retail Manager',
+                'is_mandatory'  => true,
+            ]],
+        ]);
+        $approval = [
+            'name'    => 'William Surya Putra',
+            'email'   => 'william@example.com',
+            'phone'   => null,
+            'task_id' => 'approval-task-missing-phone',
+            'status'  => 'pending',
+        ];
+        $request = TransferRequest::factory()
+            ->for($formTransfer, 'formTransfer')
+            ->create([
+                'approval_workflow_id' => $workflow->getKey(),
+                'status_response_id'   => (string) Str::uuid(),
+                'approvals'            => [$approval],
+            ]);
+
+        app(TransferApprovalNotificationService::class)->notifyApprover($request, $approval, [$approval]);
+
+        Queue::assertPushed(SendWhatsAppNotification::class);
+        $this->assertSame('081911430434', $request->fresh()->approvals[0]['phone']);
+    }
+
     public function test_notify_requester_now_bypasses_queue(): void
     {
         Queue::fake();
@@ -228,6 +278,7 @@ class NotificationDefaultsTest extends FormTransferTestCase
 
     public function test_form_transfer_waghub_job_uses_correct_payload(): void
     {
+        config()->set('wag.engine_url', 'https://waghub.mekayastudio.com/api/v2');
 
         Http::fake([
             'https://waghub.mekayastudio.com/api/v1/messages' => Http::response(['status' => 'queued'], 200),
@@ -236,7 +287,7 @@ class NotificationDefaultsTest extends FormTransferTestCase
         $job = new SendWhatsAppNotification(
             '+628123456789',
             'Test message',
-            'https://waghub.mekayastudio.com',
+            'https://waghub.mekayastudio.com/api/v2',
             'test-token',
             10,
         );

@@ -89,6 +89,31 @@ it('reports an unavailable service without starting a local engine', function ()
     Http::assertSentCount(1);
 });
 
+it('posts hub messages to /api/v1/messages even when the origin includes /api/v2', function (): void {
+    Http::fake([
+        'https://hub.test/api/v1/messages' => Http::response(['status' => 'queued'], 200),
+    ]);
+
+    $client = new WagHubClient('https://hub.test/api/v2', 'app-token');
+    $client->sendMessage('081234567890', 'Kode OTP Anda: 123456', [
+        'force_hub'        => true,
+        'purpose'          => 'otp',
+        'mode'             => 'sync',
+        'idempotency_key'  => 'otp-login-0001',
+        'client_reference' => 'otp-0001',
+    ]);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://hub.test/api/v1/messages'
+        && $request->hasHeader('Authorization', 'Bearer app-token')
+        && $request->hasHeader('Idempotency-Key', 'otp-login-0001')
+        && $request['recipient'] === ['type' => 'phone', 'value' => '081234567890']
+        && $request['message'] === ['type' => 'text', 'text' => 'Kode OTP Anda: 123456']
+        && $request['purpose'] === 'otp'
+        && $request['mode'] === 'sync'
+        && $request['client_reference'] === 'otp-0001');
+    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/api/v2/api/v1/'));
+});
+
 it('uploads private bytes and sends an image through the hub even when v2 is configured', function (): void {
     config(['wag.engine_url' => 'https://hub.test/api/v2']);
     $attachmentId = '11111111-1111-4111-8111-111111111111';

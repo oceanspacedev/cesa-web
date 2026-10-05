@@ -9,6 +9,12 @@ use Cesa\ExitClearance\Services\ExitClearanceRequestService;
 use Filament\Actions\Exports\Models\Export;
 use Illuminate\Support\Carbon;
 
+test('exit clearance exporter uses a queue the legacy worker does not consume', function () {
+    $exporter = new RequestExporter(new Export, [], []);
+
+    expect($exporter->getJobQueue())->toBe('cesa-exports');
+});
+
 test('exit clearance exporter defines expected columns', function () {
     expect(collect(RequestExporter::getColumns())->map->getName()->all())->toBe([
         'form_uid',

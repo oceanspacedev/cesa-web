@@ -2,7 +2,6 @@
 
 namespace Cesa\FormTransfer\Services;
 
-use App\Services\WhatsApp\WagHubClient;
 use Cesa\FormTransfer\Contracts\NotificationChannel;
 use Cesa\FormTransfer\Jobs\SendWhatsAppNotification;
 use Illuminate\Support\Facades\Log;
@@ -34,13 +33,8 @@ class WhatsAppNotifier implements NotificationChannel
         }
 
         try {
-            $endpoint = config('form-transfer.notifications.whatsapp.endpoint');
-            $apiKey = config('form-transfer.notifications.whatsapp.api_key');
-            $hub = app(WagHubClient::class)->engine();
-            if ($hub->isV2()) {
-                $endpoint = $hub->baseUrl();
-                $apiKey = 'shared-integration';
-            }
+            $endpoint = config('form-transfer.notifications.whatsapp.endpoint') ?: config('wag.url');
+            $apiKey = config('form-transfer.notifications.whatsapp.api_key') ?: config('wag.token');
 
             $timeout = config('form-transfer.notifications.whatsapp.timeout', 10);
             $delaySeconds = app(WhatsAppThrottleService::class)->getDispatchDelaySeconds();

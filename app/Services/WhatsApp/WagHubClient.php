@@ -32,7 +32,7 @@ class WagHubClient
         ?string $engineUrl = null,
         ?string $engineToken = null,
     ) {
-        $this->url = rtrim($url ?? (string) config('wag.url'), '/');
+        $this->url = static::normalizeHubOrigin($url ?? (string) config('wag.url'));
         $this->token = trim($token ?? (string) config('wag.token'));
         $this->engineUrl = rtrim($engineUrl ?? ($url !== null ? $this->url.'/api/v2' : (string) config('wag.engine_url')), '/');
         $this->engineToken = trim($engineToken ?? $token ?? (string) config('wag.engine_token'));
@@ -200,7 +200,7 @@ class WagHubClient
     public function engine(): WagHubEngineClient
     {
         if (Schema::hasTable('wag_integrations') && ($stored = WagIntegration::query()->find(1)) && $stored->url) {
-            return new WagHubEngineClient($stored->url.'/api/v2', $stored->token);
+            return new WagHubEngineClient(static::normalizeHubOrigin((string) $stored->url).'/api/v2', $stored->token);
         }
 
         return new WagHubEngineClient($this->engineUrl, $this->engineToken);
@@ -212,10 +212,18 @@ class WagHubClient
     protected function hubCredentials(): array
     {
         if (Schema::hasTable('wag_integrations') && ($stored = WagIntegration::query()->find(1)) && filled($stored->url) && filled($stored->token)) {
-            return [rtrim((string) $stored->url, '/'), trim((string) $stored->token)];
+            return [static::normalizeHubOrigin((string) $stored->url), trim((string) $stored->token)];
         }
 
         return [$this->url, $this->token];
+    }
+
+    public static function normalizeHubOrigin(string $url): string
+    {
+        $url = rtrim($url, '/');
+        $url = (string) preg_replace('#/api/v[12]$#', '', $url);
+
+        return rtrim($url, '/');
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace Cesa\ExitClearance\Jobs;
 
 use App\Services\WhatsApp\WagHubClient;
-use Cesa\Rekrutmen\Models\WhatsAppAccount;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -18,8 +17,6 @@ class SendWhatsAppNotification implements ShouldQueue
      * The number of times the job may be attempted.
      */
     public int $tries;
-
-    protected ?string $hubSessionId = null;
 
     protected ?string $requestKey = null;
 
@@ -56,9 +53,6 @@ class SendWhatsAppNotification implements ShouldQueue
         $this->timeout = $timeout ?? (int) (config('exit-clearance.notifications.whatsapp.timeout') ?? 10);
         $this->backoff = $this->resolveBackoff();
         $this->requestKey = (string) Str::uuid();
-        if (app(WagHubClient::class)->engine()->isV2()) {
-            $this->hubSessionId = WhatsAppAccount::resolveForSend()?->hub_session_id;
-        }
     }
 
     /**
@@ -67,14 +61,13 @@ class SendWhatsAppNotification implements ShouldQueue
     public function handle(): void
     {
         try {
-            $client = app(WagHubClient::class);
-            if (! $client->engine()->isV2()) {
-                $client = new WagHubClient($this->endpoint, $this->apiKey, rtrim($this->endpoint, '/').'/api/v1/engine', $this->apiKey);
-            }
+            $client = new WagHubClient($this->endpoint, $this->apiKey);
             $key = $this->requestKey ?? 'exit-clearance-'.($this->job?->getJobId() ?? 'legacy');
             $result = $client->sendMessage($this->phone, $this->message, [
-                'session_id'       => $this->hubSessionId, 'idempotency_key' => $key,
-                'client_reference' => 'exit-clearance', 'timeout' => $this->timeout,
+                'force_hub'        => true,
+                'idempotency_key'  => $key,
+                'client_reference' => 'exit-clearance',
+                'timeout'          => $this->timeout,
             ]);
             if (($result['status'] ?? '') === 'failed') {
                 throw new \RuntimeException('Hub rejected the WhatsApp message.');

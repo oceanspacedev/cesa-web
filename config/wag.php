@@ -1,6 +1,8 @@
 <?php
 
 $url = rtrim(trim((string) env('WAG_URL', '')), '/');
+$url = (string) preg_replace('#/api/v[12]$#', '', $url);
+$url = rtrim($url, '/');
 
 return [
     'url'          => $url,

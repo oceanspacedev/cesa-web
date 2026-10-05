@@ -16,6 +16,11 @@ class RequestExporter extends Exporter
 {
     protected static ?string $model = Request::class;
 
+    public function getJobQueue(): ?string
+    {
+        return 'cesa-exports';
+    }
+
     public static function modifyQuery(Builder $query): Builder
     {
         return $query->with([
