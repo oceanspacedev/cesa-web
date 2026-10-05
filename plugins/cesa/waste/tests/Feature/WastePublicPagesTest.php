@@ -204,6 +204,10 @@ it('advances one page at a time and keeps later fields off the first page', func
         ->assertSeeText(__('waste::waste.fields.category'))
         ->assertSee($item->name.' — '.$item->code.' ('.$item->unit.')')
         ->assertSeeText(__('waste::waste.camera_start'))
+        ->assertSeeText(__('waste::waste.gallery_pick'))
+        ->assertSee('type="file"', false)
+        ->assertSee('accept="image/*"', false)
+        ->assertDontSee('capture=', false)
         ->assertSeeText(__('waste::waste.submit'))
         ->assertSeeText('Halaman 2 dari 2')
         ->assertDontSeeText(__('waste::waste.next'))
@@ -226,6 +230,10 @@ it('explains saved camera photos and lets the reporter remove one', function ():
         ->assertSeeText(__('waste::waste.camera_need_more'))
         ->assertSeeText(__('waste::waste.camera_hint'))
         ->assertSeeText(__('waste::waste.camera_open_hint'))
+        ->assertSeeText(__('waste::waste.gallery_pick'))
+        ->assertSeeText(__('waste::waste.gallery_hint'))
+        ->assertSee('data-waste-gallery', false)
+        ->assertDontSee('capture=', false)
         ->set('photos.0.0', UploadedFile::fake()->image('one.jpg'))
         ->set('photos.0.1', UploadedFile::fake()->image('two.jpg'))
         ->assertSeeText(__('waste::waste.camera_progress', ['count' => 2, 'max' => 5]))
@@ -441,7 +449,9 @@ it('renders the editable report only after rejection and keeps the existing vers
         ->assertSeeText(__('waste::waste.camera_capture'))
         ->assertSeeText(__('waste::waste.camera_retake'))
         ->assertSeeText(__('waste::waste.camera_use'))
-        ->assertDontSee('type="file"', false);
+        ->assertSeeText(__('waste::waste.gallery_pick'))
+        ->assertSee('type="file"', false)
+        ->assertDontSee('capture=', false);
 
     expect($report->fresh()->status)->toBe(WasteReportStatus::Rejected)
         ->and($report->versions()->count())->toBe(1)

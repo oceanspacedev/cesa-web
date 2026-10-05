@@ -194,22 +194,42 @@
                                             @endfor
                                         </ol>
 
-                                        <button
-                                            type="button"
-                                            x-show="!stream && !previewUrl && saved < maxPhotos"
-                                            x-cloak
-                                            @click="start()"
-                                            class="waste-camera-launch flex w-full flex-col items-center justify-center gap-2 rounded-xl px-4 py-8 text-center"
-                                        >
-                                            <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary-700 text-white" aria-hidden="true">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-7 w-7">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 8.5h3.2l1.2-2h7.2l1.2 2H20a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z" />
-                                                    <circle cx="12" cy="13.5" r="3.2" />
-                                                </svg>
-                                            </span>
-                                            <span class="text-base font-medium text-gray-950">{{ __('waste::waste.camera_start') }}</span>
-                                            <span class="text-sm text-gray-600">{{ __('waste::waste.camera_open_hint') }}</span>
-                                        </button>
+                                        <div x-show="!stream && !previewUrl && saved < maxPhotos" x-cloak class="space-y-3">
+                                            <button
+                                                type="button"
+                                                @click="start()"
+                                                class="waste-camera-launch flex w-full flex-col items-center justify-center gap-2 rounded-xl px-4 py-8 text-center"
+                                            >
+                                                <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary-700 text-white" aria-hidden="true">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-7 w-7">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 8.5h3.2l1.2-2h7.2l1.2 2H20a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z" />
+                                                        <circle cx="12" cy="13.5" r="3.2" />
+                                                    </svg>
+                                                </span>
+                                                <span class="text-base font-medium text-gray-950">{{ __('waste::waste.camera_start') }}</span>
+                                                <span class="text-sm text-gray-600">{{ __('waste::waste.camera_open_hint') }}</span>
+                                            </button>
+
+                                            <input
+                                                type="file"
+                                                x-ref="gallery"
+                                                data-waste-gallery
+                                                accept="image/*"
+                                                multiple
+                                                class="sr-only"
+                                                @change="pickFromGallery($event)"
+                                            >
+                                            <button
+                                                type="button"
+                                                @click="$refs.gallery.click()"
+                                                :disabled="uploading"
+                                                class="flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-gray-300 bg-white px-4 py-4 text-center hover:bg-gray-50 disabled:opacity-60"
+                                            >
+                                                <span class="text-base font-medium text-gray-950">{{ __('waste::waste.gallery_pick') }}</span>
+                                                <span class="text-sm text-gray-600">{{ __('waste::waste.gallery_hint') }}</span>
+                                            </button>
+                                            <p x-show="uploading" x-cloak class="text-sm text-gray-600">{{ __('waste::waste.camera_uploading') }}</p>
+                                        </div>
 
                                         <div x-show="stream && !previewUrl" x-cloak class="space-y-3">
                                             <video x-ref="video" autoplay playsinline class="aspect-[4/3] w-full rounded-xl bg-black object-cover"></video>
@@ -384,6 +404,64 @@
             }
             this.previewUrl = '';
             this.start();
+        },
+        pickFromGallery(event) {
+            const files = Array.from(event.target.files || []);
+            event.target.value = '';
+            if (! files.length || this.uploading || this.saved >= this.maxPhotos) {
+                this.error = this.saved >= this.maxPhotos ? @js(__('waste::waste.camera_max_error')) : '';
+                return;
+            }
+            this.error = '';
+            this.uploadGalleryFiles(files.slice(0, this.maxPhotos - this.saved));
+        },
+        async uploadGalleryFiles(files) {
+            if (! files.length || this.nextPhoto >= this.maxPhotos) {
+                this.uploading = false;
+                if (this.nextPhoto >= this.maxPhotos && files.length) {
+                    this.error = @js(__('waste::waste.camera_max_error'));
+                }
+                return;
+            }
+            this.uploading = true;
+            this.error = '';
+            const file = await this.prepareImageFile(files[0]);
+            this.$wire.upload(`photos.${eventIndex}.${this.nextPhoto}`, file, () => {
+                this.nextPhoto += 1;
+                this.saved += 1;
+                this.uploadGalleryFiles(files.slice(1));
+            }, () => {
+                this.uploading = false;
+                this.error = @js(__('waste::waste.camera_upload_error'));
+            });
+        },
+        prepareImageFile(file) {
+            const maxWidth = {{ (int) config('waste.camera.max_width', 1600) }};
+            const quality = {{ (float) config('waste.camera.quality', 0.82) }};
+            return new Promise((resolve) => {
+                const url = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    const canvas = this.$refs.canvas;
+                    const scale = Math.min(1, maxWidth / image.naturalWidth);
+                    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url);
+                    canvas.toBlob((blob) => {
+                        if (! blob) {
+                            resolve(file);
+                            return;
+                        }
+                        resolve(new File([blob], `waste-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+                    }, 'image/jpeg', quality);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(file);
+                };
+                image.src = url;
+            });
         },
         usePhoto() {
             if (this.uploading || ! this.previewBlob || this.nextPhoto >= this.maxPhotos) {
