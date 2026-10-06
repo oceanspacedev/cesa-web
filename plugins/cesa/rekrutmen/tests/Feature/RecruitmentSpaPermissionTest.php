@@ -301,6 +301,10 @@ it('hides candidate details and request progress links from collection-only view
         ->assertJsonPath('data.0.id', $manPowerRequest->id)
         ->assertJsonPath('data.0.can_view', false)
         ->assertJsonPath('data.0.requirements_kualifikasi', null)
+        ->assertJsonPath('data.0.job_description', null)
+        ->assertJsonPath('data.0.keterangan', null)
+        ->assertJsonPath('data.0.email_address', null)
+        ->assertJsonPath('data.0.nama_karyawan_replacement', null)
         ->assertJsonPath('data.0.public_progress_url', null);
     $this->getJson('/rekrutmen/api/job-postings')
         ->assertOk()
@@ -308,6 +312,41 @@ it('hides candidate details and request progress links from collection-only view
         ->assertJsonPath('data.0.description', null)
         ->assertJsonPath('data.0.context_description', null)
         ->assertJsonPath('data.0.thumbnail_url', null);
+});
+
+it('returns complete hr fields for manpower request viewers including replacement details', function (): void {
+    app()->setLocale('id');
+
+    $user = User::factory()->create(['is_active' => true, 'resource_permission' => PermissionType::GLOBAL]);
+    grantSpaPermissions(
+        $user,
+        'view_any_rekrutmen_request::man::power',
+        'view_rekrutmen_request::man::power',
+    );
+    $this->actingAs($user);
+
+    $request = createSpaManPowerRequest([
+        'status_kebutuhan'          => StatusKebutuhan::REPLACEMENT,
+        'nama_karyawan_replacement' => 'Bambang Hadi Prayogi',
+        'level_pekerjaan'           => 'Staff',
+        'email_address'             => 'fptk-viewer@example.com',
+        'job_description'           => 'Menjaga target penjualan cabang',
+        'keterangan'                => 'Pergantian Sales tim',
+        'hold_reason'               => null,
+    ]);
+
+    $this->getJson('/rekrutmen/api/requests')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $request->id)
+        ->assertJsonPath('data.0.can_view', true)
+        ->assertJsonPath('data.0.status_kebutuhan', StatusKebutuhan::REPLACEMENT->getLabel())
+        ->assertJsonPath('data.0.raw_status_kebutuhan', StatusKebutuhan::REPLACEMENT->value)
+        ->assertJsonPath('data.0.nama_karyawan_replacement', 'Bambang Hadi Prayogi')
+        ->assertJsonPath('data.0.level_pekerjaan', RequestManPower::getTranslatedLevelPekerjaanOptions()['Staff'])
+        ->assertJsonPath('data.0.email_address', 'fptk-viewer@example.com')
+        ->assertJsonPath('data.0.job_description', 'Menjaga target penjualan cabang')
+        ->assertJsonPath('data.0.keterangan', 'Pergantian Sales tim')
+        ->assertJsonPath('data.0.estimasi_tanggal_join', today()->addMonth()->format('d/m/Y'));
 });
 
 it('authorizes every linked request before changing a posting company', function (): void {

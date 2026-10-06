@@ -56,3 +56,24 @@ it('uses status helpers for the menunggu badge in the request man power view', f
         ->toContain('isApprovedManPowerRequest')
         ->not->toContain("s.includes('tunggu')");
 });
+
+it('renders complete hr fields in the fptk detail drawer', function (): void {
+    $source = file_get_contents(dirname(__DIR__, 2).'/plugins/cesa/rekrutmen/resources/js/views/RequestManPowerView.vue');
+
+    expect($source)
+        ->toContain('Status Kebutuhan')
+        ->toContain('status_kebutuhan')
+        ->toContain('raw_status_kebutuhan')
+        ->toContain('Nama Karyawan yang Akan Digantikan')
+        ->toContain('nama_karyawan_replacement')
+        ->toContain('Level Pekerjaan')
+        ->toContain('level_pekerjaan')
+        ->toContain('Estimasi Tanggal Join')
+        ->toContain('estimasi_tanggal_join')
+        ->toContain('Email Pengaju')
+        ->toContain('email_address')
+        ->toContain('Kualifikasi yang Dibutuhkan')
+        ->toContain('Deskripsi Pekerjaan')
+        ->toContain('job_description')
+        ->toContain('Keterangan Tambahan');
+});

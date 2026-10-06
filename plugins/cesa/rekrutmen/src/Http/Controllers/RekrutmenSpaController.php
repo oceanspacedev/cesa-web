@@ -5,6 +5,7 @@ namespace Cesa\Rekrutmen\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Cesa\Rekrutmen\Enums\RequestManPowerStatus;
+use Cesa\Rekrutmen\Enums\StatusKebutuhan;
 use Cesa\Rekrutmen\Filament\Resources\JobPostingResource;
 use Cesa\Rekrutmen\Filament\Resources\RequestManPowerResource;
 use Cesa\Rekrutmen\Http\Requests\AiSettingsRequest;
@@ -289,10 +290,16 @@ class RekrutmenSpaController extends Controller
                 'branch'                     => $record->lokasi_penempatan ?? '-',
                 'location'                   => $record->lokasi_penempatan ?? '-',
                 'status_kebutuhan'           => $record->status_kebutuhan?->getLabel() ?? (string) $record->status_kebutuhan,
+                'raw_status_kebutuhan'       => $record->status_kebutuhan instanceof StatusKebutuhan
+                    ? $record->status_kebutuhan->value
+                    : (string) $record->status_kebutuhan,
+                'nama_karyawan_replacement'  => $canView ? $record->nama_karyawan_replacement : null,
+                'level_pekerjaan'            => RequestManPower::getTranslatedLevelPekerjaanOptions()[$record->level_pekerjaan] ?? $record->level_pekerjaan,
                 'jumlah_karyawan_dibutuhkan' => $neededCount,
                 'quantity'                   => $neededCount,
                 'fulfilled_count'            => $hiredCount,
                 'estimasi_tanggal_join'      => $record->estimasi_tanggal_join ? $record->estimasi_tanggal_join->format('d/m/Y') : '-',
+                'email_address'              => $canView ? $record->email_address : null,
                 'requirements_kualifikasi'   => $canView ? $record->requirements_kualifikasi : null,
                 'job_description'            => $canView ? $record->job_description : null,
                 'keterangan'                 => $canView ? $record->keterangan : null,

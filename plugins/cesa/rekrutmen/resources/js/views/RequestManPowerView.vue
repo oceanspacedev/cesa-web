@@ -261,6 +261,15 @@
                 >
                   {{ item.status || item.approval_status || 'Pending' }}
                 </FBadge>
+                <FBadge
+                  v-if="item.status_kebutuhan"
+                  :theme="isReplacementRequest(item) ? 'orange' : 'blue'"
+                  variant="subtle"
+                  size="sm"
+                  class="font-semibold"
+                >
+                  {{ item.status_kebutuhan }}
+                </FBadge>
               </div>
 
               <!-- Division, Company, Location & Date Meta -->
@@ -357,7 +366,7 @@
 
     <!-- SLIDE-OVER SHEET: FPTK Detail Drawer -->
     <Sheet :open="!!selectedRequest" @update:open="(val) => { if (!val) selectedRequest = null; }">
-      <SheetContent class="sm:max-w-lg">
+      <SheetContent class="sm:max-w-xl">
         <SheetHeader>
           <div class="flex items-center gap-2">
             <SheetTitle>Detail Permintaan FPTK</SheetTitle>
@@ -398,6 +407,29 @@
             </div>
 
             <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Status Kebutuhan:</span>
+              <span class="font-bold text-ink-gray-9 text-right">{{ selectedRequest.status_kebutuhan || '-' }}</span>
+            </div>
+
+            <div
+              v-if="isReplacementRequest(selectedRequest)"
+              class="flex justify-between items-start pb-2 border-b border-outline-gray-2"
+            >
+              <span class="text-ink-gray-5 font-medium">Nama Karyawan yang Akan Digantikan:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.nama_karyawan_replacement || '-' }}</span>
+            </div>
+
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Level Pekerjaan:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.level_pekerjaan || '-' }}</span>
+            </div>
+
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Estimasi Tanggal Join:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.estimasi_tanggal_join || '-' }}</span>
+            </div>
+
+            <div class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
               <span class="text-ink-gray-5 font-medium">Tanggal Pengajuan:</span>
               <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.tanggal_pengajuan || selectedRequest.submission_date || selectedRequest.created_at || '-' }}</span>
             </div>
@@ -407,10 +439,34 @@
               <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.nama_pengaju }} ({{ selectedRequest.posisi_pengaju || '-' }})</span>
             </div>
 
+            <div v-if="selectedRequest.email_address" class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Email Pengaju:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.email_address }}</span>
+            </div>
+
+            <div v-if="selectedRequest.fulfillment_summary" class="flex justify-between items-start pb-2 border-b border-outline-gray-2">
+              <span class="text-ink-gray-5 font-medium">Progress Pemenuhan:</span>
+              <span class="font-medium text-ink-gray-8 text-right">{{ selectedRequest.fulfillment_summary }}</span>
+            </div>
+
             <div>
-              <span class="text-ink-gray-5 font-medium block mb-1.5">Alasan / Kualifikasi Kebutuhan:</span>
+              <span class="text-ink-gray-5 font-medium block mb-1.5">Kualifikasi yang Dibutuhkan:</span>
               <p class="text-ink-gray-7 leading-relaxed whitespace-pre-line bg-surface-white p-3 rounded-lg border border-outline-gray-2 text-xs shadow-2xs">
-                {{ selectedRequest.requirements_kualifikasi || selectedRequest.keterangan || selectedRequest.reason || selectedRequest.justification || 'Kebutuhan operasional penambahan personil' }}
+                {{ selectedRequest.requirements_kualifikasi || selectedRequest.reason || selectedRequest.justification || '-' }}
+              </p>
+            </div>
+
+            <div>
+              <span class="text-ink-gray-5 font-medium block mb-1.5">Deskripsi Pekerjaan:</span>
+              <p class="text-ink-gray-7 leading-relaxed whitespace-pre-line bg-surface-white p-3 rounded-lg border border-outline-gray-2 text-xs shadow-2xs">
+                {{ selectedRequest.job_description || '-' }}
+              </p>
+            </div>
+
+            <div v-if="selectedRequest.keterangan">
+              <span class="text-ink-gray-5 font-medium block mb-1.5">Keterangan Tambahan:</span>
+              <p class="text-ink-gray-7 leading-relaxed whitespace-pre-line bg-surface-white p-3 rounded-lg border border-outline-gray-2 text-xs shadow-2xs">
+                {{ selectedRequest.keterangan }}
               </p>
             </div>
           </div>
@@ -566,6 +622,11 @@ const getBadgeTheme = (status) => {
   if (s.includes('approv') || s.includes('setuju')) return 'green';
   if (s.includes('reject') || s.includes('tolak')) return 'red';
   return 'orange';
+};
+
+const isReplacementRequest = (req) => {
+  const status = String(req?.raw_status_kebutuhan || req?.status_kebutuhan || '').toLowerCase();
+  return status.includes('replacement') || status.includes('penggantian');
 };
 
 const openRequestDetail = (item) => {

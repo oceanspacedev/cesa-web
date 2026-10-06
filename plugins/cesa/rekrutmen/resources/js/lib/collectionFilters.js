@@ -17,7 +17,7 @@ export function filterManPowerRequests(requests, { search = '', status = 'all' }
       request.division_name, request.department, request.division?.name,
       request.business_entity_name, request.company_name,
       request.lokasi_penempatan, request.branch, request.location,
-      request.nama_pengaju,
+      request.nama_pengaju, request.status_kebutuhan, request.nama_karyawan_replacement,
     ], query);
   });
 }

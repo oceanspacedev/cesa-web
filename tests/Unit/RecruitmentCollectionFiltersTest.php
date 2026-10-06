@@ -40,6 +40,15 @@ for (const search of ['12', 'fptk/2026/123', 'sales', 'promotor', 'konsultan', '
 }
 assert.deepEqual(ids(filterManPowerRequests(rows, { search: 98765 })), [13]);
 JS,
+    'manpower search includes requirement status and replacement employee' => <<<'JS'
+const rows = [
+  { id: 21, status_kebutuhan: 'Penggantian', nama_karyawan_replacement: 'Bambang Hadi Prayogi' },
+  { id: 22, status_kebutuhan: 'Karyawan Baru' },
+];
+assert.deepEqual(ids(filterManPowerRequests(rows, { search: ' penggantian ' })), [21]);
+assert.deepEqual(ids(filterManPowerRequests(rows, { search: ' bambang ' })), [21]);
+assert.deepEqual(ids(filterManPowerRequests(rows, { search: ' karyawan baru ' })), [22]);
+JS,
     'manpower search combines with pending and approved statuses' => <<<'JS'
 const rows = [
   { id: 1, posisi_dibutuhkan: 'Sales', raw_status: 'pending', status: 'Menunggu' },
