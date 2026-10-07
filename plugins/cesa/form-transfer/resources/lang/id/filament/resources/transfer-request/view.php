@@ -12,6 +12,8 @@ return [
         'notifications' => [
             'approval_completed_title'   => 'Approval sudah selesai',
             'approval_completed_body'    => 'Status approval sudah bukan pending.',
+            'reminder_not_needed_title'  => 'Tidak perlu reminder approval',
+            'reminder_not_needed_body'   => 'Reminder hanya untuk approval pending dengan realisasi masih pending. Realisasi partial/done/cancelled tidak dikirim ulang.',
             'no_pending_approver_title'  => 'Tidak ada approver pending',
             'no_pending_approver_body'   => 'Tidak ditemukan approver yang sedang pending.',
             'empty_approver_email_title' => 'Email approver kosong',

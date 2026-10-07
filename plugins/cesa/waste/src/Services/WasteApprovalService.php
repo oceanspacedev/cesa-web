@@ -4,6 +4,7 @@ namespace Cesa\Waste\Services;
 
 use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
+use Cesa\Waste\Models\WasteAccessToken;
 use Cesa\Waste\Models\WasteApproval;
 use Cesa\Waste\Models\WasteReport;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +69,12 @@ class WasteApprovalService
                 'notified_at' => now(),
             ])->save();
 
+            $this->reportService->rememberAccessToken(
+                WasteAccessToken::PURPOSE_APPROVAL,
+                $approval,
+                $token,
+            );
+
             $report->activityLogs()->create([
                 'version_id' => $version->getKey(),
                 'event'      => 'reminder_sent',
@@ -103,10 +110,26 @@ class WasteApprovalService
     protected function decide(string $token, WasteApprovalStatus $decision, ?string $note): array
     {
         $result = DB::transaction(function () use ($token, $decision, $note): array {
+            $tokenHash = $this->reportService->tokenHash($token);
+
             $approval = WasteApproval::query()
-                ->where('token_hash', $this->reportService->tokenHash($token))
+                ->where('token_hash', $tokenHash)
                 ->lockForUpdate()
                 ->first();
+
+            if (! $approval) {
+                $access = WasteAccessToken::query()
+                    ->where('purpose', WasteAccessToken::PURPOSE_APPROVAL)
+                    ->where('token_hash', $tokenHash)
+                    ->first();
+
+                if ($access && $access->tokenable_type === (new WasteApproval)->getMorphClass()) {
+                    $approval = WasteApproval::query()
+                        ->whereKey($access->tokenable_id)
+                        ->lockForUpdate()
+                        ->first();
+                }
+            }
 
             if (! $approval) {
                 throw ValidationException::withMessages(['token' => 'Tautan approval sudah tidak berlaku.']);
@@ -155,6 +178,11 @@ class WasteApprovalService
                     'manage_token_hash'   => $this->reportService->tokenHash($manageToken),
                     'token_version'       => ((int) $report->token_version) + 1,
                 ])->save();
+                $this->reportService->rememberAccessToken(
+                    WasteAccessToken::PURPOSE_PROGRESS,
+                    $report,
+                    $progressToken,
+                );
                 $eventName = 'rejected';
             } else {
                 $next = $version->approvals()
@@ -169,6 +197,11 @@ class WasteApprovalService
                         'status'     => WasteApprovalStatus::Pending,
                         'token_hash' => $this->reportService->tokenHash($nextToken),
                     ])->save();
+                    $this->reportService->rememberAccessToken(
+                        WasteAccessToken::PURPOSE_APPROVAL,
+                        $next,
+                        $nextToken,
+                    );
                     $nextApproval = $next->fresh();
                     $eventName = 'approved_step';
                 } else {

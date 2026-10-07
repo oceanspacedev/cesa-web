@@ -4,6 +4,7 @@ namespace Cesa\Waste\Services;
 
 use Cesa\Waste\Enums\WasteApprovalStatus;
 use Cesa\Waste\Enums\WasteReportStatus;
+use Cesa\Waste\Models\WasteAccessToken;
 use Cesa\Waste\Models\WasteApproval;
 use Cesa\Waste\Models\WasteBrand;
 use Cesa\Waste\Models\WasteCategory;
@@ -15,6 +16,7 @@ use Cesa\Waste\Models\WasteOutlet;
 use Cesa\Waste\Models\WasteReport;
 use Cesa\Waste\Models\WasteReportVersion;
 use Cesa\Waste\Models\WasteUnit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -289,7 +291,7 @@ class WasteReportService
                 $firstToken = $approvalToken;
             }
 
-            $version->approvals()->create([
+            $approval = $version->approvals()->create([
                 'step_order'     => $step['sort_order'],
                 'label'          => $step['label'],
                 'approver_name'  => $step['name'],
@@ -298,6 +300,10 @@ class WasteReportService
                 'token_hash'     => $approvalToken ? $this->tokenHash($approvalToken) : null,
                 'status'         => $index === 0 ? WasteApprovalStatus::Pending : WasteApprovalStatus::Waiting,
             ]);
+
+            if (is_string($approvalToken)) {
+                $this->rememberAccessToken(WasteAccessToken::PURPOSE_APPROVAL, $approval, $approvalToken);
+            }
         }
 
         return $firstToken;
@@ -463,7 +469,7 @@ class WasteReportService
                 if ($approvalToken) {
                     $approvalTokens[$index] = $approvalToken;
                 }
-                $version->approvals()->create([
+                $approval = $version->approvals()->create([
                     'step_order'     => $step['sort_order'],
                     'label'          => $step['label'],
                     'approver_name'  => $step['name'],
@@ -472,7 +478,13 @@ class WasteReportService
                     'token_hash'     => $approvalToken ? $this->tokenHash($approvalToken) : null,
                     'status'         => $index === 0 ? WasteApprovalStatus::Pending : WasteApprovalStatus::Waiting,
                 ]);
+
+                if (is_string($approvalToken)) {
+                    $this->rememberAccessToken(WasteAccessToken::PURPOSE_APPROVAL, $approval, $approvalToken);
+                }
             }
+
+            $this->rememberAccessToken(WasteAccessToken::PURPOSE_PROGRESS, $report, $progressToken);
 
             $report->activityLogs()->create([
                 'version_id' => $version->getKey(),
@@ -776,9 +788,30 @@ class WasteReportService
 
     public function reportForProgressToken(string $token): WasteReport
     {
+        $hash = $this->tokenHash($token);
+        $with = ['brand', 'outlet', 'latestVersion.events.lines', 'latestVersion.events.evidences', 'latestVersion.approvals'];
+
+        $report = WasteReport::query()
+            ->with($with)
+            ->where('progress_token_hash', $hash)
+            ->first();
+
+        if ($report) {
+            return $report;
+        }
+
+        $access = WasteAccessToken::query()
+            ->where('purpose', WasteAccessToken::PURPOSE_PROGRESS)
+            ->where('token_hash', $hash)
+            ->first();
+
+        if (! $access || $access->tokenable_type !== (new WasteReport)->getMorphClass()) {
+            abort(404);
+        }
+
         return WasteReport::query()
-            ->with(['brand', 'outlet', 'latestVersion.events.lines', 'latestVersion.events.evidences', 'latestVersion.approvals'])
-            ->where('progress_token_hash', $this->tokenHash($token))
+            ->with($with)
+            ->whereKey($access->tokenable_id)
             ->firstOrFail();
     }
 
@@ -790,12 +823,47 @@ class WasteReportService
             ->firstOrFail();
     }
 
-    public function approvalForToken(string $token)
+    public function approvalForToken(string $token): WasteApproval
     {
+        $hash = $this->tokenHash($token);
+        $with = ['version.report.brand', 'version.report.outlet', 'version.events.lines', 'version.events.evidences', 'version.approvals'];
+
+        $approval = WasteApproval::query()
+            ->with($with)
+            ->where('token_hash', $hash)
+            ->first();
+
+        if ($approval) {
+            return $approval;
+        }
+
+        $access = WasteAccessToken::query()
+            ->where('purpose', WasteAccessToken::PURPOSE_APPROVAL)
+            ->where('token_hash', $hash)
+            ->first();
+
+        if (! $access || $access->tokenable_type !== (new WasteApproval)->getMorphClass()) {
+            abort(404);
+        }
+
         return WasteApproval::query()
-            ->with(['version.report.brand', 'version.report.outlet', 'version.events.lines', 'version.events.evidences', 'version.approvals'])
-            ->where('token_hash', $this->tokenHash($token))
+            ->with($with)
+            ->whereKey($access->tokenable_id)
             ->firstOrFail();
+    }
+
+    public function rememberAccessToken(string $purpose, Model $tokenable, string $token): void
+    {
+        WasteAccessToken::query()->firstOrCreate(
+            [
+                'token_hash' => $this->tokenHash($token),
+            ],
+            [
+                'purpose'        => $purpose,
+                'tokenable_type' => $tokenable->getMorphClass(),
+                'tokenable_id'   => $tokenable->getKey(),
+            ],
+        );
     }
 
     public function tokenHash(string $token): string

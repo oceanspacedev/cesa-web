@@ -3,7 +3,6 @@
 namespace Cesa\FormTransfer\Filament\Resources\TransferRequestResource\Pages;
 
 use Cesa\FormTransfer\Enums\ApprovalStatus;
-use Cesa\FormTransfer\Enums\TransferRequestApprovalStatus;
 use Cesa\FormTransfer\Enums\TransferRequestRealizationStatus;
 use Cesa\FormTransfer\Filament\Resources\TransferRequestResource;
 use Cesa\FormTransfer\Models\TransferRequest;
@@ -52,10 +51,10 @@ class ViewTransferRequest extends ViewRecord
                 ->action(function (TransferRequest $record): void {
                     Gate::authorize('update', $record);
 
-                    if ($record->approval_status !== TransferRequestApprovalStatus::PENDING) {
+                    if (! $record->needsApprovalReminder()) {
                         Notification::make()
-                            ->title(__('form-transfer::filament/resources/transfer-request/view.transfer_request.notifications.approval_completed_title'))
-                            ->body(__('form-transfer::filament/resources/transfer-request/view.transfer_request.notifications.approval_completed_body'))
+                            ->title(__('form-transfer::filament/resources/transfer-request/view.transfer_request.notifications.reminder_not_needed_title'))
+                            ->body(__('form-transfer::filament/resources/transfer-request/view.transfer_request.notifications.reminder_not_needed_body'))
                             ->warning()
                             ->send();
 
@@ -235,7 +234,7 @@ class ViewTransferRequest extends ViewRecord
 
     protected function hasPendingApprover(TransferRequest $record): bool
     {
-        if ($record->approval_status !== TransferRequestApprovalStatus::PENDING) {
+        if (! $record->needsApprovalReminder()) {
             return false;
         }
 

@@ -757,6 +757,35 @@ class TransferRequest extends Model
     }
 
     /**
+     * Approval reminders only apply while both approval and realization are still pending.
+     * Once realization has started (partial/done) or been cancelled, do not nag approvers.
+     */
+    public function needsApprovalReminder(): bool
+    {
+        $approvalStatus = $this->approval_status instanceof TransferRequestApprovalStatus
+            ? $this->approval_status
+            : TransferRequestApprovalStatus::tryFrom((string) $this->approval_status);
+
+        $realizationStatus = $this->realization_status instanceof TransferRequestRealizationStatus
+            ? $this->realization_status
+            : TransferRequestRealizationStatus::tryFrom((string) $this->realization_status);
+
+        return $approvalStatus === TransferRequestApprovalStatus::PENDING
+            && $realizationStatus === TransferRequestRealizationStatus::PENDING;
+    }
+
+    /**
+     * @param  Builder<TransferRequest>  $query
+     * @return Builder<TransferRequest>
+     */
+    public function scopeNeedsApprovalReminder($query)
+    {
+        return $query
+            ->where('approval_status', TransferRequestApprovalStatus::PENDING)
+            ->where('realization_status', TransferRequestRealizationStatus::PENDING);
+    }
+
+    /**
      * @param  array{amount: mixed, realized_at?: mixed, proof_path?: mixed, notes?: mixed, user_id?: mixed}  $data
      */
     public function recordRealization(array $data): TransferRequestRealization

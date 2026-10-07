@@ -4,6 +4,7 @@ namespace Cesa\FormTransfer\Tests\Feature;
 
 use Cesa\FormTransfer\Enums\ApprovalStatus;
 use Cesa\FormTransfer\Enums\TransferRequestApprovalStatus;
+use Cesa\FormTransfer\Enums\TransferRequestRealizationStatus;
 use Cesa\FormTransfer\Jobs\SendWhatsAppNotification;
 use Cesa\FormTransfer\Models\TransferRequest;
 use Cesa\FormTransfer\Notifications\ApprovalRequestNotification;
@@ -41,7 +42,7 @@ class PendingApprovalReminderTest extends FormTransferTestCase
             ApprovalStatus::PENDING,
         );
 
-        $this->artisan('approvals:send-pending-reminders')->assertSuccessful();
+        $this->artisan('approvals:send-pending-reminders', ['--only' => 'form_transfer'])->assertSuccessful();
 
         Notification::assertSentOnDemandTimes(ApprovalRequestNotification::class, 1);
 
@@ -69,19 +70,82 @@ class PendingApprovalReminderTest extends FormTransferTestCase
             ApprovalStatus::PENDING,
         );
 
-        $this->artisan('approvals:send-pending-reminders')->assertSuccessful();
+        $this->artisan('approvals:send-pending-reminders', ['--only' => 'form_transfer'])->assertSuccessful();
 
         Notification::assertNothingSent();
         Queue::assertNotPushed(SendWhatsAppNotification::class);
     }
 
+    public function test_command_skips_requests_with_done_realization_status(): void
+    {
+        $this->createRequest(
+            TransferRequestApprovalStatus::PENDING,
+            ApprovalStatus::PENDING,
+            TransferRequestRealizationStatus::DONE,
+        );
+
+        $this->artisan('approvals:send-pending-reminders', ['--only' => 'form_transfer'])->assertSuccessful();
+
+        Notification::assertNothingSent();
+        Queue::assertNotPushed(SendWhatsAppNotification::class);
+    }
+
+    public function test_command_skips_requests_with_cancelled_realization_status(): void
+    {
+        $this->createRequest(
+            TransferRequestApprovalStatus::PENDING,
+            ApprovalStatus::PENDING,
+            TransferRequestRealizationStatus::CANCELLED,
+        );
+
+        $this->artisan('approvals:send-pending-reminders', ['--only' => 'form_transfer'])->assertSuccessful();
+
+        Notification::assertNothingSent();
+        Queue::assertNotPushed(SendWhatsAppNotification::class);
+    }
+
+    public function test_command_skips_requests_with_partial_realization_status(): void
+    {
+        $this->createRequest(
+            TransferRequestApprovalStatus::PENDING,
+            ApprovalStatus::PENDING,
+            TransferRequestRealizationStatus::PARTIAL,
+        );
+
+        $this->artisan('approvals:send-pending-reminders', ['--only' => 'form_transfer'])->assertSuccessful();
+
+        Notification::assertNothingSent();
+        Queue::assertNotPushed(SendWhatsAppNotification::class);
+    }
+
+    public function test_needs_approval_reminder_only_when_both_statuses_are_pending(): void
+    {
+        $pending = $this->createRequest(
+            TransferRequestApprovalStatus::PENDING,
+            ApprovalStatus::PENDING,
+            TransferRequestRealizationStatus::PENDING,
+        );
+        $done = $this->createRequest(
+            TransferRequestApprovalStatus::PENDING,
+            ApprovalStatus::PENDING,
+            TransferRequestRealizationStatus::DONE,
+        );
+
+        $this->assertTrue($pending->needsApprovalReminder());
+        $this->assertFalse($done->needsApprovalReminder());
+        $this->assertSame(1, TransferRequest::query()->needsApprovalReminder()->whereKey($pending->getKey())->count());
+        $this->assertSame(0, TransferRequest::query()->needsApprovalReminder()->whereKey($done->getKey())->count());
+    }
+
     protected function createRequest(
         TransferRequestApprovalStatus $requestStatus,
         ApprovalStatus $stepStatus,
+        TransferRequestRealizationStatus $realizationStatus = TransferRequestRealizationStatus::PENDING,
     ): TransferRequest {
         return TransferRequest::factory()->create([
-            'approval_status' => $requestStatus->value,
-            'approvals'       => [
+            'approval_status'    => $requestStatus->value,
+            'realization_status' => $realizationStatus->value,
+            'approvals'          => [
                 [
                     'label'   => 'Approval 1',
                     'name'    => 'First Approver',

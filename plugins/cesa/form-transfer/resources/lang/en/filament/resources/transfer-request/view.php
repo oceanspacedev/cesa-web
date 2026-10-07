@@ -12,6 +12,8 @@ return [
         'notifications' => [
             'approval_completed_title'   => 'Approval already completed',
             'approval_completed_body'    => 'The approval status is no longer pending.',
+            'reminder_not_needed_title'  => 'Approval reminder not needed',
+            'reminder_not_needed_body'   => 'Reminders are only sent when approval is pending and realization is still pending. Partial, done, or cancelled realizations are not resent.',
             'no_pending_approver_title'  => 'No pending approver',
             'no_pending_approver_body'   => 'No approver is currently pending.',
             'empty_approver_email_title' => 'Approver email is empty',

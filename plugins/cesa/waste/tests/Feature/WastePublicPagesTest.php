@@ -451,7 +451,9 @@ it('explains how to revise a rejected report without exposing its private revisi
         ->assertDontSee(route('waste.public.manage', ['token' => $decision['manage_token']]))
         ->assertDontSeeText(__('waste::waste.approval_timeline'));
 
-    $this->get(route('waste.public.progress', ['token' => $result['progress_token']]))->assertNotFound();
+    $this->get(route('waste.public.progress', ['token' => $result['progress_token']]))
+        ->assertSuccessful()
+        ->assertSeeText(__('waste::waste.needs_revision'));
     expect($decision['report']->fresh()->status)->toBe(WasteReportStatus::Rejected);
 });
 

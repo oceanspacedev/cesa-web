@@ -52,6 +52,28 @@ it('does not remind waste reports that are no longer pending', function (): void
     expect($report->notifications()->where('type', 'like', '%_reminder')->count())->toBe(0);
 });
 
+it('can remind only waste when --only=waste is provided', function (): void {
+    $result = twoStepApprovalReport();
+
+    app(WasteApprovalService::class)->approve($result['approval_tokens'][0]);
+
+    $report = $result['report']->fresh(['latestVersion.approvals']);
+
+    $this->artisan('approvals:send-pending-reminders', ['--only' => 'waste'])
+        ->assertSuccessful()
+        ->expectsOutputToContain('Waste approvers reminded: 1')
+        ->doesntExpectOutputToContain('Exit-clearance approvers reminded')
+        ->doesntExpectOutputToContain('Form-transfer approvers reminded');
+
+    expect($report->notifications()->where('type', 'approval_2_reminder')->count())->toBe(2);
+});
+
+it('rejects unknown --only modules', function (): void {
+    $this->artisan('approvals:send-pending-reminders', ['--only' => 'payroll'])
+        ->assertFailed()
+        ->expectsOutputToContain('Invalid --only module');
+});
+
 function twoStepApprovalReport(): array
 {
     $brand = WasteBrand::query()->create(['name' => 'Jchicken', 'code' => 'JCHICKEN', 'is_active' => true]);

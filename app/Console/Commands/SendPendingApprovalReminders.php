@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use Cesa\ExitClearance\Models\Request as ExitClearanceRequest;
 use Cesa\ExitClearance\Services\ExitClearanceNotificationService;
-use Cesa\FormTransfer\Enums\TransferRequestApprovalStatus;
 use Cesa\FormTransfer\Models\TransferRequest;
 use Cesa\FormTransfer\Services\ApprovalWorkflowService;
 use Cesa\FormTransfer\Services\TransferApprovalNotificationService;
@@ -17,9 +16,32 @@ use Throwable;
 
 class SendPendingApprovalReminders extends Command
 {
-    protected $signature = 'approvals:send-pending-reminders';
+    protected $signature = 'approvals:send-pending-reminders
+                            {--only= : Comma-separated modules: waste, exit_clearance, form_transfer}';
 
-    protected $description = 'Send daily reminders to pending approvers of exit-clearance, form-transfer, and waste requests';
+    protected $description = 'Send daily reminders to pending approvers of waste, form-transfer, and exit-clearance';
+
+    /**
+     * @var array<string, string>
+     */
+    protected array $featureAliases = [
+        'waste'          => 'waste',
+        'exit_clearance' => 'exit_clearance',
+        'exit-clearance' => 'exit_clearance',
+        'exit'           => 'exit_clearance',
+        'form_transfer'  => 'form_transfer',
+        'form-transfer'  => 'form_transfer',
+        'transfer'       => 'form_transfer',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected array $featureLabels = [
+        'exit_clearance' => 'Exit-clearance approvers reminded',
+        'form_transfer'  => 'Form-transfer approvers reminded',
+        'waste'          => 'Waste approvers reminded',
+    ];
 
     public function handle(
         ExitClearanceNotificationService $exitClearanceNotifications,
@@ -27,31 +49,79 @@ class SendPendingApprovalReminders extends Command
         ApprovalWorkflowService $approvalWorkflow,
         WasteApprovalService $wasteApprovals,
     ): int {
-        $reminded = [
-            'exit_clearance' => 0,
-            'form_transfer'  => 0,
-            'waste'          => 0,
-        ];
+        try {
+            $features = $this->selectedFeatures($this->option('only'));
+        } catch (\InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
 
-        foreach ([
+            return self::FAILURE;
+        }
+
+        $runners = [
             'exit_clearance' => fn (): int => $this->remindExitClearance($exitClearanceNotifications),
             'form_transfer'  => fn (): int => $this->remindFormTransfer($transferNotifications, $approvalWorkflow),
             'waste'          => fn (): int => $this->remindWaste($wasteApprovals),
-        ] as $feature => $remindFeature) {
+        ];
+
+        $reminded = [];
+
+        foreach ($features as $feature) {
             try {
-                $reminded[$feature] = $remindFeature();
+                $reminded[$feature] = $runners[$feature]();
             } catch (Throwable $exception) {
                 report($exception);
 
                 $this->error("Failed to send {$feature} approval reminders: {$exception->getMessage()}");
+                $reminded[$feature] = 0;
             }
         }
 
-        $this->info("Exit-clearance approvers reminded: {$reminded['exit_clearance']}");
-        $this->info("Form-transfer approvers reminded: {$reminded['form_transfer']}");
-        $this->info("Waste approvers reminded: {$reminded['waste']}");
+        foreach ($reminded as $feature => $count) {
+            $this->info("{$this->featureLabels[$feature]}: {$count}");
+        }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function selectedFeatures(?string $only): array
+    {
+        $all = array_keys($this->featureLabels);
+
+        if (blank($only)) {
+            return $all;
+        }
+
+        $selected = [];
+
+        foreach (preg_split('/\s*,\s*/', $only) ?: [] as $part) {
+            $key = strtolower(trim((string) $part));
+
+            if ($key === '') {
+                continue;
+            }
+
+            if (! isset($this->featureAliases[$key])) {
+                throw new \InvalidArgumentException(
+                    'Invalid --only module ['.$key.']. Allowed: waste, exit_clearance, form_transfer.',
+                );
+            }
+
+            $selected[$this->featureAliases[$key]] = true;
+        }
+
+        if ($selected === []) {
+            throw new \InvalidArgumentException(
+                'Invalid --only module. Allowed: waste, exit_clearance, form_transfer.',
+            );
+        }
+
+        return array_values(array_filter(
+            $all,
+            fn (string $feature): bool => isset($selected[$feature]),
+        ));
     }
 
     protected function remindExitClearance(ExitClearanceNotificationService $notifications): int
@@ -62,8 +132,7 @@ class SendPendingApprovalReminders extends Command
             ->whereRaw('LOWER(form_status) = ?', ['pending'])
             ->where(function ($query): void {
                 $query
-                    ->whereNull('departure_date')
-                    ->orWhereDate('departure_date', '<=', today())
+                    ->whereDate('departure_date', today())
                     ->orWhereDate('departure_date', today()->addDay())
                     ->orWhereDate('departure_date', today()->addDays(7));
             })
@@ -83,9 +152,13 @@ class SendPendingApprovalReminders extends Command
         $notified = 0;
 
         TransferRequest::query()
-            ->where('approval_status', TransferRequestApprovalStatus::PENDING)
+            ->needsApprovalReminder()
             ->chunkById(100, function ($requests) use ($notifications, $workflow, &$notified): void {
                 foreach ($requests as $request) {
+                    if (! $request->needsApprovalReminder()) {
+                        continue;
+                    }
+
                     $approvals = $request->approvals ?? [];
                     $pending = $workflow->getCurrentPendingApproval($approvals);
 
