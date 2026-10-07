@@ -21,6 +21,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DepartmentResource extends ExitClearanceConfigurationResource
 {
@@ -31,6 +32,14 @@ class DepartmentResource extends ExitClearanceConfigurationResource
     protected static ?string $cluster = Configurations::class;
 
     protected static ?int $navigationSort = 1;
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+    }
 
     public static function getNavigationLabel(): string
     {

@@ -77,12 +77,15 @@ class PendingApprovalReminderTest extends ExitClearanceTestCase
         Queue::assertPushed(SendWhatsAppNotification::class, 1);
     }
 
-    public function test_command_reminds_at_h7_h1_and_departure_day_only(): void
+    public function test_command_reminds_at_h7_h1_h_and_up_to_three_days_after_departure(): void
     {
         $schedules = [
-            'h7@example.com' => today()->addDays(7)->toDateString(),
-            'h1@example.com' => today()->addDay()->toDateString(),
-            'h0@example.com' => today()->toDateString(),
+            'h7@example.com'  => today()->addDays(7)->toDateString(),
+            'h1@example.com'  => today()->addDay()->toDateString(),
+            'h0@example.com'  => today()->toDateString(),
+            'h+1@example.com' => today()->subDay()->toDateString(),
+            'h+2@example.com' => today()->subDays(2)->toDateString(),
+            'h+3@example.com' => today()->subDays(3)->toDateString(),
         ];
 
         foreach ($schedules as $email => $departureDate) {
@@ -98,7 +101,7 @@ class PendingApprovalReminderTest extends ExitClearanceTestCase
 
         $this->artisan('approvals:send-pending-reminders', ['--only' => 'exit_clearance'])->assertSuccessful();
 
-        Notification::assertSentOnDemandTimes(ApprovalRequestNotification::class, 3);
+        Notification::assertSentOnDemandTimes(ApprovalRequestNotification::class, 6);
 
         foreach (array_keys($schedules) as $email) {
             Notification::assertSentOnDemand(ApprovalRequestNotification::class, function (
@@ -113,7 +116,7 @@ class PendingApprovalReminderTest extends ExitClearanceTestCase
 
     public function test_command_skips_requests_outside_the_reminder_schedule(): void
     {
-        foreach ([today()->addDays(3), today()->addDays(8), today()->subDays(3)] as $departureDate) {
+        foreach ([today()->addDays(3), today()->addDays(8), today()->subDays(4)] as $departureDate) {
             $request = $this->createRequestWithPendingApprover(
                 ExitClearanceRequestService::FORM_STATUS_PENDING,
                 $departureDate->toDateString(),

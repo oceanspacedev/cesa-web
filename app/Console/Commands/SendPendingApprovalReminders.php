@@ -130,11 +130,17 @@ class SendPendingApprovalReminders extends Command
 
         ExitClearanceRequest::query()
             ->whereRaw('LOWER(form_status) = ?', ['pending'])
+            ->whereNotNull('departure_date')
             ->where(function ($query): void {
+                // H-7, H-1, then H through H+3 (stop reminding after 3 days past departure).
                 $query
-                    ->whereDate('departure_date', today())
+                    ->whereDate('departure_date', today()->addDays(7))
                     ->orWhereDate('departure_date', today()->addDay())
-                    ->orWhereDate('departure_date', today()->addDays(7));
+                    ->orWhere(function ($window): void {
+                        $window
+                            ->whereDate('departure_date', '<=', today())
+                            ->whereDate('departure_date', '>=', today()->subDays(3));
+                    });
             })
             ->chunkById(100, function ($requests) use ($notifications, &$notified): void {
                 foreach ($requests as $request) {
