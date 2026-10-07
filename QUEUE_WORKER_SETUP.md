@@ -6,25 +6,40 @@ Panduan ini dipakai untuk menjalankan queue worker yang aman untuk notifikasi em
 - `exit-clearance`
 - `rekrutmen`
 
-Queue dibagi menjadi tiga:
+Queue yang dipakai produksi:
 
 - `default` untuk job umum
+- `rekrutmen-ai` untuk screening CV (biasanya digabung dengan `default`)
 - `notifications` untuk email notification
 - `whatsapp` untuk WhatsApp notification
+- `cesa-exports` untuk export Filament (exit clearance, dll)
+
+App production path: `/var/www/web-cesa-new`.
+
+Worker systemd system (`web-cesa-queue@.service`) harus memakai path itu.
+Kalau unit masih mengarah ke `/var/www/web-cesa` lama, jalankan:
+
+```bash
+bash scripts/retarget-system-queue-workers.sh
+```
+
+User systemd (akun `developer`, linger enabled) juga menjalankan worker di `~/.config/systemd/user/web-cesa-new-*.service`.
 
 ## Rekomendasi Worker
 
 Gunakan jumlah process berikut:
 
-- `default`: `numprocs=2`
+- `default` + `rekrutmen-ai`: `numprocs=2`
 - `notifications`: `numprocs=1`
 - `whatsapp`: `numprocs=1`
+- `cesa-exports`: `numprocs=1`
 
 Alasan:
 
 - queue `default` boleh lebih longgar karena tidak semua job adalah outbound notification
 - queue `notifications` sengaja dibatasi agar email tidak blast
 - queue `whatsapp` sengaja dibatasi agar pengiriman ke provider tidak terlalu agresif
+- queue `cesa-exports` harus punya worker sendiri; kalau tidak, export Filament akan menumpuk
 
 ## `.env`
 
@@ -63,11 +78,13 @@ WHATSAPP_THROTTLE_KEY=global
 Jalankan worker berikut bila tidak memakai Supervisor:
 
 ```bash
-php artisan queue:work database --queue=default --sleep=1 --tries=3 --backoff=5 --timeout=120 --max-time=3600
+php artisan queue:work database --queue=rekrutmen-ai,default --sleep=1 --tries=3 --backoff=5 --timeout=120 --max-time=3600
 
 php artisan queue:work database --queue=notifications --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
 
 php artisan queue:work database --queue=whatsapp --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
+
+php artisan queue:work database --queue=cesa-exports --sleep=1 --tries=3 --backoff=5 --timeout=300 --max-time=3600
 ```
 
 ## Supervisor Example
@@ -76,8 +93,8 @@ Contoh konfigurasi Supervisor:
 
 ```ini
 [program:web-cesa-default]
-command=php /path/to/web-cesa/artisan queue:work database --queue=default --sleep=1 --tries=3 --backoff=5 --timeout=120 --max-time=3600
-directory=/path/to/web-cesa
+command=php /var/www/web-cesa-new/artisan queue:work database --queue=rekrutmen-ai,default --sleep=1 --tries=3 --backoff=5 --timeout=120 --max-time=3600
+directory=/var/www/web-cesa-new
 user=www-data
 autostart=true
 autorestart=true
@@ -89,8 +106,8 @@ redirect_stderr=true
 stdout_logfile=/var/log/supervisor/web-cesa-default.log
 
 [program:web-cesa-notifications]
-command=php /path/to/web-cesa/artisan queue:work database --queue=notifications --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
-directory=/path/to/web-cesa
+command=php /var/www/web-cesa-new/artisan queue:work database --queue=notifications --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
+directory=/var/www/web-cesa-new
 user=www-data
 autostart=true
 autorestart=true
@@ -102,8 +119,8 @@ redirect_stderr=true
 stdout_logfile=/var/log/supervisor/web-cesa-notifications.log
 
 [program:web-cesa-whatsapp]
-command=php /path/to/web-cesa/artisan queue:work database --queue=whatsapp --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
-directory=/path/to/web-cesa
+command=php /var/www/web-cesa-new/artisan queue:work database --queue=whatsapp --sleep=1 --tries=3 --backoff=10 --timeout=120 --max-time=3600
+directory=/var/www/web-cesa-new
 user=www-data
 autostart=true
 autorestart=true
@@ -113,6 +130,19 @@ numprocs=1
 process_name=%(program_name)s_%(process_num)02d
 redirect_stderr=true
 stdout_logfile=/var/log/supervisor/web-cesa-whatsapp.log
+
+[program:web-cesa-exports]
+command=php /var/www/web-cesa-new/artisan queue:work database --queue=cesa-exports --sleep=1 --tries=3 --backoff=5 --timeout=300 --max-time=3600
+directory=/var/www/web-cesa-new
+user=www-data
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+numprocs=1
+process_name=%(program_name)s_%(process_num)02d
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/web-cesa-exports.log
 ```
 
 ## Apply Changes
