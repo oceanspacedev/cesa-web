@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class WasteEvidenceController
 {
@@ -24,18 +25,7 @@ class WasteEvidenceController
 
     public function __invoke(int $evidence, string $token, WasteReportService $service): Response
     {
-        try {
-            $report = $service->reportForProgressToken($token);
-            $versionId = $report->latest_version_id;
-        } catch (ModelNotFoundException) {
-            try {
-                $report = $service->reportForManageToken($token);
-                $versionId = $report->latest_version_id;
-            } catch (ModelNotFoundException) {
-                $approval = $service->approvalForToken($token);
-                $versionId = $approval->version_id;
-            }
-        }
+        $versionId = $this->versionIdForPublicToken($token, $service);
 
         $evidenceModel = WasteEvidence::query()
             ->whereKey($evidence)
@@ -43,6 +33,27 @@ class WasteEvidenceController
             ->firstOrFail();
 
         return $this->response($evidenceModel);
+    }
+
+    protected function versionIdForPublicToken(string $token, WasteReportService $service): int|string
+    {
+        try {
+            return $service->reportForProgressToken($token)->latest_version_id;
+        } catch (ModelNotFoundException|HttpException) {
+            // Progress lookup may abort(404); keep falling through to manage/approval tokens.
+        }
+
+        try {
+            return $service->reportForManageToken($token)->latest_version_id;
+        } catch (ModelNotFoundException|HttpException) {
+            // Continue to approval token lookup.
+        }
+
+        try {
+            return $service->approvalForToken($token)->version_id;
+        } catch (ModelNotFoundException|HttpException) {
+            abort(404);
+        }
     }
 
     protected function response(WasteEvidence $evidence): Response
