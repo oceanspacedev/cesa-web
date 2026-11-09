@@ -54,6 +54,8 @@ class TransferRequestExporter extends Exporter
                 ->enabledByDefault(false),
             ExportColumn::make('requester_name')
                 ->label('Nama'),
+            ExportColumn::make('requester_whatsapp')
+                ->label('WhatsApp Pemohon'),
             ExportColumn::make('division_name')
                 ->label('Divisi'),
             ExportColumn::make('account_number')

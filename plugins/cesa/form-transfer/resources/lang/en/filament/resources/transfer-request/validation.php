@@ -5,6 +5,8 @@ return [
     'form_transfer_invalid'           => 'The selected Form Transfer is invalid.',
     'requester_name_required'         => 'Requester name is required.',
     'requester_email_required'        => 'Requester email is required.',
+    'requester_whatsapp_required'     => 'Requester WhatsApp number is required.',
+    'requester_whatsapp_invalid'      => 'Invalid WhatsApp number. Use an Indonesian number, for example 081234567890.',
     'account_number_required'         => 'Account number is required.',
     'account_name_required'           => 'Account holder name is required.',
     'transfer_amount_required'        => 'Transfer amount is required.',

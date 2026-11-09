@@ -66,6 +66,7 @@ class FormTransferServiceProvider extends PackageServiceProvider
                 '2026_05_15_010100_add_creator_id_to_form_transfer_support_tables',
                 '2026_06_06_141951_create_form_transfer_public_categories_tables',
                 '2026_06_07_000001_normalize_form_transfer_builtin_public_categories',
+                '2026_11_09_064051_add_requester_whatsapp_to_form_transfer_requests_table',
             ])
             ->runsMigrations()
             ->hasInstallCommand(function (InstallCommand $command): void {

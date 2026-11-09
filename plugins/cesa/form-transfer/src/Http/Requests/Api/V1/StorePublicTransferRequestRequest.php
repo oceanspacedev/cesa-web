@@ -4,6 +4,7 @@ namespace Cesa\FormTransfer\Http\Requests\Api\V1;
 
 use Cesa\FormTransfer\Models\FormTransfer;
 use Cesa\FormTransfer\Models\TransferReferenceNote;
+use Cesa\FormTransfer\Models\TransferRequest;
 use Cesa\FormTransfer\Services\RecaptchaValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -22,8 +23,9 @@ class StorePublicTransferRequestRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'email'          => Str::lower(trim((string) $this->input('email'))),
-            'account_number' => trim((string) $this->input('account_number')),
+            'email'              => Str::lower(trim((string) $this->input('email'))),
+            'account_number'     => trim((string) $this->input('account_number')),
+            'requester_whatsapp' => TransferRequest::normalizeWhatsappNumber($this->input('requester_whatsapp')),
         ]);
     }
 
@@ -51,6 +53,7 @@ class StorePublicTransferRequestRequest extends FormRequest
                     ->whereNull('deleted_at'),
             ],
             'email'                    => ['required', 'email', 'max:191'],
+            'requester_whatsapp'       => ['nullable', 'string', 'max:32', 'regex:'.TransferRequest::WHATSAPP_NUMBER_PATTERN],
             'bank_id'                  => [
                 'required',
                 'integer',
@@ -129,6 +132,7 @@ class StorePublicTransferRequestRequest extends FormRequest
             'division_id.exists'              => __('form-transfer::filament/resources/transfer-request/validation.division_invalid'),
             'email.required'                  => __('form-transfer::filament/resources/transfer-request/validation.requester_email_required'),
             'email.email'                     => 'Email harus menggunakan format yang valid.',
+            'requester_whatsapp.regex'        => __('form-transfer::filament/resources/transfer-request/validation.requester_whatsapp_invalid'),
             'bank_id.required'                => __('form-transfer::filament/resources/transfer-request/validation.bank_invalid'),
             'bank_id.exists'                  => __('form-transfer::filament/resources/transfer-request/validation.bank_invalid'),
             'account_number.required'         => __('form-transfer::filament/resources/transfer-request/validation.account_number_required'),

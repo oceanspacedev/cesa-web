@@ -5,6 +5,7 @@ return [
     'division'                     => 'Division',
     'requester_name'               => 'Requester Name',
     'email'                        => 'Email Address',
+    'requester_whatsapp'           => 'Requester WhatsApp',
     'bank_name'                    => 'Destination Bank',
     'account_number'               => 'Account Number',
     'account_name'                 => 'Account Holder Name',

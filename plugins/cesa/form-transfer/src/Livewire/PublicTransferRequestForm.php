@@ -144,12 +144,29 @@ class PublicTransferRequestForm extends SimplePage
                 ->email()
                 ->placeholder(__('form-transfer::public.form.placeholders.email'))
                 ->maxLength(191)
-                ->required(),
+                ->required()
+                ->autocomplete('email'),
             TextInput::make('requester_name')
                 ->label(__('form-transfer::filament/resources/transfer-request/fields.requester_name'))
                 ->required()
                 ->placeholder(__('form-transfer::public.form.placeholders.requester_name'))
-                ->maxLength(191),
+                ->maxLength(191)
+                ->autocomplete('name'),
+            TextInput::make('requester_whatsapp')
+                ->label(__('form-transfer::filament/resources/transfer-request/fields.requester_whatsapp'))
+                ->tel()
+                ->required()
+                ->placeholder(__('form-transfer::public.form.placeholders.requester_whatsapp'))
+                ->helperText(__('form-transfer::public.form.helpers.requester_whatsapp'))
+                ->maxLength(32)
+                ->autocomplete('tel')
+                ->mutateStateForValidationUsing(fn (mixed $state): ?string => TransferRequest::normalizeWhatsappNumber($state))
+                ->dehydrateStateUsing(fn (mixed $state): ?string => TransferRequest::normalizeWhatsappNumber($state))
+                ->regex(TransferRequest::WHATSAPP_NUMBER_PATTERN)
+                ->validationMessages([
+                    'required' => __('form-transfer::filament/resources/transfer-request/validation.requester_whatsapp_required'),
+                    'regex'    => __('form-transfer::filament/resources/transfer-request/validation.requester_whatsapp_invalid'),
+                ]),
             Select::make('division_id')
                 ->label(__('form-transfer::filament/resources/transfer-request/fields.division'))
                 ->options(fn (Get $get): array => $this->transferRequestService->getDivisionOptions(
@@ -376,6 +393,7 @@ class PublicTransferRequestForm extends SimplePage
                 'division_name'           => $division?->name,
                 'division_id'             => $division?->getKey(),
                 'email'                   => Arr::get($state, 'email'),
+                'requester_whatsapp'      => Arr::get($state, 'requester_whatsapp'),
                 'account_number'          => Arr::get($state, 'account_number'),
                 'account_name'            => $accountName,
                 'bank_id'                 => $bank->getKey(),

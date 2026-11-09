@@ -188,6 +188,17 @@ class TransferRequestResource extends FormTransferResource
                                 ->label(__('form-transfer::filament/resources/transfer-request/fields.requester_name'))
                                 ->required()
                                 ->maxLength(191),
+                            TextInput::make('requester_whatsapp')
+                                ->label(__('form-transfer::filament/resources/transfer-request/fields.requester_whatsapp'))
+                                ->tel()
+                                ->maxLength(32)
+                                ->placeholder(__('form-transfer::public.form.placeholders.requester_whatsapp'))
+                                ->mutateStateForValidationUsing(fn (mixed $state): ?string => TransferRequest::normalizeWhatsappNumber($state))
+                                ->dehydrateStateUsing(fn (mixed $state): ?string => TransferRequest::normalizeWhatsappNumber($state))
+                                ->regex(TransferRequest::WHATSAPP_NUMBER_PATTERN)
+                                ->validationMessages([
+                                    'regex' => __('form-transfer::filament/resources/transfer-request/validation.requester_whatsapp_invalid'),
+                                ]),
                             Select::make('division_id')
                                 ->label(__('form-transfer::filament/resources/transfer-request/fields.division'))
                                 ->options(fn (Get $get): array => static::getDivisionOptions($get('form_transfer_id')))
@@ -396,6 +407,13 @@ class TransferRequestResource extends FormTransferResource
                                             TextEntry::make('email')
                                                 ->label(__('form-transfer::filament/resources/transfer-request/fields.email'))
                                                 ->icon('heroicon-o-envelope')
+                                                ->placeholder('—'),
+                                            TextEntry::make('requester_whatsapp')
+                                                ->label(__('form-transfer::filament/resources/transfer-request/fields.requester_whatsapp'))
+                                                ->icon('heroicon-o-phone')
+                                                ->url(fn (?string $state): ?string => filled($state) ? 'https://wa.me/'.$state : null)
+                                                ->openUrlInNewTab()
+                                                ->copyable()
                                                 ->placeholder('—'),
                                             TextEntry::make('division_name')
                                                 ->label(__('form-transfer::filament/resources/transfer-request/fields.division'))
@@ -638,6 +656,12 @@ class TransferRequestResource extends FormTransferResource
                     ->label(__('form-transfer::filament/resources/transfer-request/table.email'))
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('requester_whatsapp')
+                    ->label(__('form-transfer::filament/resources/transfer-request/table.requester_whatsapp'))
+                    ->searchable()
+                    ->copyable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('bank_display_name')
                     ->label(__('form-transfer::filament/resources/transfer-request/table.bank_name'))
                     ->formatStateUsing(fn ($record): ?string => $record->bank_display_name),

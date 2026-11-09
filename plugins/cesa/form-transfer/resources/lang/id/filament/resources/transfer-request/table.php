@@ -8,6 +8,7 @@ return [
     'division'                     => 'Divisi',
     'bank_name'                    => 'Bank',
     'email'                        => 'Email',
+    'requester_whatsapp'           => 'WhatsApp',
     'transfer_amount'              => 'Nominal Transfer',
     'handler'                      => 'Penanggung Jawab',
     'submission_status'            => 'Status Pengajuan',

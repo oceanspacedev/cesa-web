@@ -5,6 +5,8 @@ return [
     'form_transfer_invalid'           => 'Form transfer tidak valid.',
     'requester_name_required'         => 'Nama pemohon wajib diisi.',
     'requester_email_required'        => 'Email pemohon wajib diisi.',
+    'requester_whatsapp_required'     => 'Nomor WhatsApp pemohon wajib diisi.',
+    'requester_whatsapp_invalid'      => 'Nomor WhatsApp tidak valid. Gunakan nomor Indonesia, contoh 081234567890.',
     'account_number_required'         => 'Nomor rekening wajib diisi.',
     'account_name_required'           => 'Nama pemilik rekening wajib diisi.',
     'transfer_amount_required'        => 'Nominal transfer wajib diisi.',

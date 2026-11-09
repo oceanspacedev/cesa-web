@@ -31,6 +31,8 @@ class TransferRequest extends Model
 {
     use HasChatter, HasFactory, HasNullableCreator, SoftDeletes;
 
+    public const WHATSAPP_NUMBER_PATTERN = '/^628\d{7,11}$/';
+
     protected $table = 'form_transfer_requests';
 
     /**
@@ -52,6 +54,7 @@ class TransferRequest extends Model
         'division_name',
         'division_id',
         'email',
+        'requester_whatsapp',
         'account_number',
         'account_name',
         'bank_id',
@@ -203,6 +206,52 @@ class TransferRequest extends Model
     public function setTransferAmountAttribute(mixed $value): void
     {
         $this->attributes['transfer_amount'] = static::normalizeTransferAmount($value);
+    }
+
+    public function setRequesterWhatsappAttribute(mixed $value): void
+    {
+        $this->attributes['requester_whatsapp'] = static::normalizeWhatsappNumber($value);
+    }
+
+    /**
+     * Normalize an Indonesian WhatsApp number into the 62xxxxxxxxxx format.
+     */
+    public static function normalizeWhatsappNumber(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $value);
+
+        if (! is_string($digits) || $digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '620')) {
+            return '62'.substr($digits, 3);
+        }
+
+        if (str_starts_with($digits, '62')) {
+            return $digits;
+        }
+
+        if (str_starts_with($digits, '0')) {
+            return '62'.substr($digits, 1);
+        }
+
+        if (str_starts_with($digits, '8')) {
+            return '62'.$digits;
+        }
+
+        return $digits;
+    }
+
+    public static function isValidWhatsappNumber(mixed $value): bool
+    {
+        $normalized = static::normalizeWhatsappNumber($value);
+
+        return $normalized !== null && preg_match(static::WHATSAPP_NUMBER_PATTERN, $normalized) === 1;
     }
 
     public static function formatTransferAmountForForm(mixed $value): ?string

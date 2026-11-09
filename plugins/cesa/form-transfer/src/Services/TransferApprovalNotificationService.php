@@ -267,27 +267,36 @@ HTML;
 
     public function notifyRequester(TransferRequest $request, string $statusLabel): void
     {
-        if (! $request->email) {
-            return;
-        }
+        $shouldSendMail = filled($request->email) && config('form-transfer.notifications.mail.enabled', true);
+        $shouldSendWhatsApp = filled($request->requester_whatsapp);
 
-        if (! config('form-transfer.notifications.mail.enabled', true)) {
+        if (! $shouldSendMail && ! $shouldSendWhatsApp) {
             return;
         }
 
         $summary = $this->getRequestSummary($request);
         $progressUrl = $this->buildProgressUrl($request);
-        $mailContent = $this->buildRequesterMailContent($request, $statusLabel, $summary, $progressUrl);
 
-        $notification = new RequestStatusNotification($request, $statusLabel, $progressUrl, $summary, $mailContent);
-        $delaySeconds = app(MailThrottleService::class)->getDispatchDelaySeconds();
+        if ($shouldSendMail) {
+            $mailContent = $this->buildRequesterMailContent($request, $statusLabel, $summary, $progressUrl);
 
-        if ($delaySeconds > 0) {
-            $notification->delay(now()->addSeconds($delaySeconds));
+            $notification = new RequestStatusNotification($request, $statusLabel, $progressUrl, $summary, $mailContent);
+            $delaySeconds = app(MailThrottleService::class)->getDispatchDelaySeconds();
+
+            if ($delaySeconds > 0) {
+                $notification->delay(now()->addSeconds($delaySeconds));
+            }
+
+            Notification::route('mail', $request->email)
+                ->notify($notification);
         }
 
-        Notification::route('mail', $request->email)
-            ->notify($notification);
+        if ($shouldSendWhatsApp) {
+            $this->sendWhatsApp(
+                $request->requester_whatsapp,
+                $this->buildRequesterWhatsappMessage($summary, $statusLabel, $progressUrl),
+            );
+        }
     }
 
     public function notifyRequesterNow(TransferRequest $request, string $statusLabel): void
@@ -392,6 +401,30 @@ HTML;
             '',
             '*Tautan persetujuan:*',
             $actionUrl,
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     */
+    protected function buildRequesterWhatsappMessage(array $summary, string $statusLabel, string $progressUrl): string
+    {
+        $lines = [
+            '*📣 '.Str::upper($summary['title']).' - '.$summary['uid'].'*',
+            '',
+            'Halo '.$summary['requester_name'].',',
+            'Status pengajuan transfer Anda: *'.$statusLabel.'*',
+            '',
+            '*Bank Tujuan:* '.$summary['bank'],
+            '*Nomor Rekening:* '.$summary['account_number'],
+            '*Nama Pemilik Rekening:* '.$summary['account_name'],
+            '*Jumlah Transfer:* Rp '.$summary['transfer_amount'],
+            '*Keperluan:* '.$summary['purpose'],
+            '',
+            '*Pantau progres pengajuan:*',
+            $progressUrl,
         ];
 
         return implode("\n", $lines);

@@ -112,11 +112,58 @@
             @endif
             <script>
                 document.addEventListener('alpine:init', () => {
+                    const requesterStorageKey = 'cesa.form-transfer.requester';
+                    const requesterFields = {
+                        email: 'data.email',
+                        name: 'data.requester_name',
+                        whatsapp: 'data.requester_whatsapp',
+                    };
+
                     Alpine.data('transferRecaptchaForm', ({ enabled, siteKey, action }) => ({
                         enabled,
                         siteKey,
                         action,
                         isProcessing: false,
+                        init() {
+                            this.restoreRequester();
+                        },
+                        restoreRequester() {
+                            let saved = null;
+
+                            try {
+                                saved = JSON.parse(window.localStorage.getItem(requesterStorageKey) || 'null');
+                            } catch (error) {
+                                saved = null;
+                            }
+
+                            if (! saved || typeof saved !== 'object' || Array.isArray(saved)) {
+                                return;
+                            }
+
+                            Object.entries(requesterFields).forEach(([field, path]) => {
+                                const value = typeof saved[field] === 'string' ? saved[field].trim() : '';
+                                const current = this.$wire.get(path);
+
+                                if (value !== '' && (current === null || current === undefined || String(current).trim() === '')) {
+                                    this.$wire.$set(path, value, false);
+                                }
+                            });
+                        },
+                        rememberRequester() {
+                            const requester = {};
+
+                            Object.entries(requesterFields).forEach(([field, path]) => {
+                                const value = this.$wire.get(path);
+
+                                requester[field] = typeof value === 'string' ? value.trim() : '';
+                            });
+
+                            try {
+                                window.localStorage.setItem(requesterStorageKey, JSON.stringify(requester));
+                            } catch (error) {
+                                // Browser storage can be unavailable in private mode or when it is full.
+                            }
+                        },
                         handleErrorsPresented() {
                             this.isProcessing = false;
 
@@ -135,6 +182,8 @@
                             if (this.isProcessing) {
                                 return;
                             }
+
+                            this.rememberRequester();
 
                             if (! this.enabled || ! this.siteKey) {
                                 this.isProcessing = true;

@@ -8,6 +8,7 @@ return [
     'division'                     => 'Division',
     'bank_name'                    => 'Bank',
     'email'                        => 'Email',
+    'requester_whatsapp'           => 'WhatsApp',
     'transfer_amount'              => 'Transfer Amount',
     'handler'                      => 'Handled By',
     'submission_status'            => 'Submission Status',

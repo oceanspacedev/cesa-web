@@ -5,6 +5,7 @@ return [
     'division'                     => 'Divisi',
     'requester_name'               => 'Nama Pemohon',
     'email'                        => 'Email',
+    'requester_whatsapp'           => 'WhatsApp Pemohon',
     'bank_name'                    => 'Bank Tujuan',
     'account_number'               => 'Nomor Rekening',
     'account_name'                 => 'Nama Pemilik Rekening',

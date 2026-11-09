@@ -44,6 +44,13 @@ class TransferRequestFactory extends Factory
         ];
     }
 
+    public function withRequesterWhatsapp(?string $number = null): static
+    {
+        return $this->state(fn (): array => [
+            'requester_whatsapp' => $number ?? '628'.$this->faker->numerify('##########'),
+        ]);
+    }
+
     protected function buildApprovals(): array
     {
         $states = collect(ApprovalStatus::cases())

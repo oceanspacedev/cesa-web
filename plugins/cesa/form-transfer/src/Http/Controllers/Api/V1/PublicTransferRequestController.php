@@ -144,6 +144,7 @@ class PublicTransferRequestController extends Controller
                     'division_name'           => $division?->name,
                     'division_id'             => $division?->getKey(),
                     'email'                   => $validated['email'],
+                    'requester_whatsapp'      => $validated['requester_whatsapp'] ?? null,
                     'account_number'          => $validated['account_number'],
                     'account_name'            => $validated['account_name'],
                     'bank_id'                 => $bank->getKey(),
